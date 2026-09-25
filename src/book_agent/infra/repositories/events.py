@@ -149,6 +149,8 @@ def emit_event(
 
 logger = logging.getLogger(__name__)
 _PENDING_LLM_EVENTS = "book_agent.pending_llm_events"
+# The key other code (the pilot repair loop) may take the pending events from before a rollback.
+PENDING_LLM_EVENTS = _PENDING_LLM_EVENTS
 
 
 @sa_event.listens_for(Session, "after_commit")

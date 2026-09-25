@@ -8,7 +8,8 @@ docs/agent-upgrade/08-pilot-quality-gate.md §7. ``pilot_repairs`` has one row p
 ``pilot_repair_attempts`` one per repair it tried (classification, tool, parameters, metrics before
 and after, kept or reverted, cost), ``pilot_defect_tickets`` one per systemic defect it found. The
 lessons ledger (Q6) reads the attempts. Questions for the reader are ``approvals`` rows (kind
-``pilot_question``), the inbox the UI already shows.
+``pilot_question``), the inbox the UI already shows. Structure edits gain ``override_metadata``: the
+repair's reading-copy overrides of one block (hide it, set a figure's crop, give a table its cells).
 """
 
 from alembic import op
@@ -96,10 +97,15 @@ CREATE TABLE pilot_repair_attempts (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_pilot_repair_attempts_repair ON pilot_repair_attempts (repair_id, ordinal);
-CREATE INDEX idx_pilot_repair_attempts_document ON pilot_repair_attempts (document_id, check_id)
+CREATE INDEX idx_pilot_repair_attempts_document ON pilot_repair_attempts (document_id, check_id);
+ALTER TABLE structure_edits DROP CONSTRAINT ck_structure_edits_kind;
+ALTER TABLE structure_edits ADD CONSTRAINT ck_structure_edits_kind CHECK (kind IN ('relabel_block', 'split_block', 'merge_blocks', 'link_caption', 'override_metadata'))
 """
 
 DOWNGRADE_SQL = """
+DELETE FROM structure_edits WHERE kind = 'override_metadata';
+ALTER TABLE structure_edits DROP CONSTRAINT ck_structure_edits_kind;
+ALTER TABLE structure_edits ADD CONSTRAINT ck_structure_edits_kind CHECK (kind IN ('relabel_block', 'split_block', 'merge_blocks', 'link_caption'));
 DROP TABLE IF EXISTS pilot_repair_attempts;
 DROP TABLE IF EXISTS pilot_defect_tickets;
 DROP TABLE IF EXISTS pilot_repairs

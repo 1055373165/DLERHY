@@ -265,7 +265,11 @@ class _Loaded:
             self.pages.close()
 
 
-def load_pilot_inputs(session: Session, document_id: str, chapter_ids: Sequence[str]) -> _Loaded:
+def load_pilot_inputs(
+    session: Session, document_id: str, chapter_ids: Sequence[str], *, use_export_file: bool = True
+) -> _Loaded:
+    """``use_export_file=False`` judges what the export would write now (the repair loop's view,
+    before it re-exports), not the reading copy last written to disk."""
     from book_agent.services.export import ExportService
 
     document = session.get(Document, document_id)
@@ -303,7 +307,7 @@ def load_pilot_inputs(session: Session, document_id: str, chapter_ids: Sequence[
     packets = _packet_by_sentence(session, list(sentences_by_id))
 
     # The exported reading copy: its sections, and which figures have a picture in it.
-    reading_copy = _latest_reading_copy(session, document_id)
+    reading_copy = _latest_reading_copy(session, document_id) if use_export_file else None
     exported: list[ExportedChapter] | None
     pictures_by_chapter: dict[str, list[tuple[str, bool]]] = {}
     pictures_by_block: dict[str, bool] = {}
@@ -404,7 +408,12 @@ def load_pilot_inputs(session: Session, document_id: str, chapter_ids: Sequence[
             logger.warning("pilot QA: cannot open %s", document.source_path, exc_info=True)
     health = HealthInputs(
         chapters=health_chapters,
-        blocks=[block for block in health_blocks if block.chapter_id in wanted],
+        # A block a repair hid from the reading copy (a running header, a figure's label) is not the reader's.
+        blocks=[
+            block
+            for block in health_blocks
+            if block.chapter_id in wanted and not block.source_span_json.get("repair_hidden_from_export")
+        ],
         is_pdf=is_pdf,
         outline=pages.outline() if pages else (),
         document_title=document.title_src or document.title,
@@ -434,16 +443,29 @@ class PilotQualityService:
         # Pluggable reviewers (a vision pass over figures, a sampled model read); none by default.
         self.extra_checks = tuple(extra_checks)
 
-    def run(self, document_id: str, *, run: DocumentRun | None = None, trigger: str = "manual") -> PilotQualityReport:
-        started = time.monotonic()
-        chapter_ids = pilot_chapter_ids(self.session, document_id, run)
-        if not chapter_ids:
-            raise NoPilotChapters("这本书没有试译章节，无法做试译质检。")
-        loaded = load_pilot_inputs(self.session, document_id, chapter_ids)
+    def evaluate(
+        self, document_id: str, chapter_ids: Sequence[str], *, use_export_file: bool = True
+    ) -> tuple[list[dict[str, Any]], str]:
+        """The layers of a QA run on these chapters, not kept: (layers, export source)."""
+        loaded = load_pilot_inputs(self.session, document_id, chapter_ids, use_export_file=use_export_file)
         try:
-            layers = pilot_qa.run_layers(loaded.inputs, self.extra_checks)
+            return pilot_qa.run_layers(loaded.inputs, self.extra_checks), loaded.export_source
         finally:
             loaded.close()
+
+    def run(
+        self,
+        document_id: str,
+        *,
+        run: DocumentRun | None = None,
+        trigger: str = "manual",
+        chapter_ids: Sequence[str] | None = None,
+    ) -> PilotQualityReport:
+        started = time.monotonic()
+        chapter_ids = list(chapter_ids or pilot_chapter_ids(self.session, document_id, run))
+        if not chapter_ids:
+            raise NoPilotChapters("这本书没有试译章节，无法做试译质检。")
+        layers, export_source = self.evaluate(document_id, chapter_ids)
         summary = pilot_qa.summarize(layers)
         report = PilotQualityReport(
             document_id=document_id,
@@ -455,7 +477,7 @@ class PilotQualityService:
             minor_count=summary["counts"]["minor"],
             chapter_ids_json=list(chapter_ids),
             layers_json=layers,
-            export_source=loaded.export_source,
+            export_source=export_source,
             duration_ms=int((time.monotonic() - started) * 1000),
             # Set here, not by the database: SQLite's now() has whole seconds, and "latest" must be exact.
             created_at=datetime.now(timezone.utc),

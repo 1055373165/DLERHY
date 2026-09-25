@@ -204,7 +204,9 @@ def resolve_artifact_group_context_ids(
         candidate_ids = [
             str(candidate).strip()
             for candidate in list(metadata.get("artifact_group_context_block_ids") or [])
-            if isinstance(candidate, str) and str(candidate).strip() in blocks_by_id
+            if isinstance(candidate, str)
+            and str(candidate).strip() in blocks_by_id
+            and not _block_metadata(blocks_by_id[str(candidate).strip()]).get("artifact_group_context_excluded")
         ]
         if candidate_ids:
             explicit[block_id] = candidate_ids
@@ -380,6 +382,9 @@ def _infer_adjacent_group_context_ids(
         candidate_role = str(candidate_metadata.get("pdf_block_role") or "").strip().casefold()
         if candidate_role in {"header", "footer", "toc_entry", "footnote"}:
             continue
+        # A repair (or a person) said this paragraph is body text, not the artifact's note.
+        if candidate_metadata.get("artifact_group_context_excluded"):
+            break
         if candidate_role in {"caption", "image", "figure", "table_like", "equation", "heading"}:
             break
         if getattr(candidate, "block_type", None) not in {BlockType.PARAGRAPH, BlockType.QUOTE, BlockType.LIST_ITEM}:
