@@ -866,7 +866,9 @@ def check_figures(inputs: PilotQaInputs) -> list[CheckRun]:
             if not captioned and block.has_image is not False:
                 no_caption.findings.append(_block_finding("L2.figure_without_caption", block, "这张图没有图注"))
             continue
-        if block.block_type in {"caption", "paragraph"} and _FIGURE_CAPTION_RE.match(block.source_text or ""):
+        label = _FIGURE_CAPTION_RE.match(block.source_text or "") if block.block_type in {"caption", "paragraph"} else None
+        # "Figure 1.4 shows the two techniques ..." is a body sentence about the figure, not its caption.
+        if label and not re.match(r"\s*[a-z]", (block.source_text or "")[label.end() :]):
             if len(block.source_text.split()) <= CAPTION_MAX_WORDS:
                 orphan.findings.append(
                     _block_finding(
