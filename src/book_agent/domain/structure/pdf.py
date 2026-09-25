@@ -1248,6 +1248,10 @@ class PdfStructureRecoveryService:
             if zone != "bottom":
                 return "heading"
         if _looks_like_table(raw_block.line_count, raw_block.line_texts) or _looks_like_numeric_table_fragment(raw_block.line_texts):
+            # A listing set only in a code font reads as a table to the numeric heuristics
+            # (``model="gpt-5-mini"`` has a header cue and a number on each line): it is code.
+            if self._is_monospace_code_listing(raw_block):
+                return "code_like"
             return "table_like"
         if _looks_like_equation(text, raw_block.line_count, raw_block.bbox, page.width):
             return "equation"
@@ -1276,6 +1280,16 @@ class PdfStructureRecoveryService:
         ):
             return "code_like"
         return "body"
+
+    def _is_monospace_code_listing(self, raw_block: PdfTextBlock) -> bool:
+        """Every font of the block is a code font, and its lines (not the joined text) read as code."""
+        return bool(
+            raw_block.font_names
+            and raw_block.line_count >= 2
+            and _has_monospace_font(raw_block.font_names)
+            and not _has_prose_body_font(raw_block.font_names)
+            and _looks_like_code("\n".join(raw_block.line_texts) or raw_block.text, raw_block.line_count)
+        )
 
     def _block_type_for_role(self, role: str) -> BlockType:
         if role == "heading":
