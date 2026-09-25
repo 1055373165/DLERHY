@@ -1825,11 +1825,26 @@ def should_restore_pdf_paragraph_breaks(
 _SECTION_NUMBER_ONLY = re.compile(r"^\s*(?:\d+(?:\.\d+)*\.?|[A-Z]\.\d+(?:\.\d+)*)\s*$")
 
 
+_CJK_CHAR = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+
+
+def _latin_cjk_seam(previous: str, current: str) -> bool:
+    previous, current = previous.rstrip(), current.lstrip()
+    if not previous or not current:
+        return False
+    return bool(
+        (re.match(r"[A-Za-z0-9]", previous[-1]) and _CJK_CHAR.match(current[0]))
+        or (_CJK_CHAR.match(previous[-1]) and re.match(r"[A-Za-z0-9]", current[0]))
+    )
+
+
 def inline_join_target_text(target_texts: list[str]) -> str:
     merged = target_texts[0]
     for segment in target_texts[1:]:
         # A heading's number translated as its own segment ("1.4.1" + "需要 LLM 的任务") keeps its space.
-        if _SECTION_NUMBER_ONLY.match(merged) or needs_ascii_sentence_gap(merged, segment):
+        # Two segments meeting as Latin and Chinese ("OpenAI API" + "在本书中") get the space a
+        # translator writes between them inside a segment.
+        if _SECTION_NUMBER_ONLY.match(merged) or needs_ascii_sentence_gap(merged, segment) or _latin_cjk_seam(merged, segment):
             merged = f"{merged} {segment}"
         else:
             merged = f"{merged}{segment}"

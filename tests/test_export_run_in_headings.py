@@ -53,6 +53,8 @@ class RunInHeadingMergeTests(unittest.TestCase):
         # The Agent book: "1.4.1" and "需要 LLM 的任务" came back as two segments of one heading.
         self.assertEqual(inline_join_target_text(["1.4.1", "需要 LLM 的任务"]), "1.4.1 需要 LLM 的任务")
         self.assertEqual(inline_join_target_text(["第一句。", "第二句。"]), "第一句。第二句。")
+        # Segments meeting as Latin and Chinese keep a space, as inside a segment.
+        self.assertEqual(inline_join_target_text(["本书的选择：OpenAI API", "在本书中我们使用它。"]), "本书的选择：OpenAI API 在本书中我们使用它。")
 
     def test_english_fragments_never_glue_two_words(self) -> None:
         self.assertEqual(merge_render_text_fragments("over time.", "how it works"), "over time. how it works")
