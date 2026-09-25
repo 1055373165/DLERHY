@@ -330,6 +330,7 @@ export interface DocumentChapterWorklistDetailResponse {
   chapter_id: string;
   ordinal: number;
   title_src?: string | null;
+  title?: string | null;
   chapter_status: string;
   packet_count: number;
   translated_packet_count: number;
@@ -712,6 +713,7 @@ export interface IssueChapterPressureEntryResponse {
   chapter_id: string;
   ordinal: number;
   title_src?: string | null;
+  title?: string | null;
   chapter_status: string;
   issue_count: number;
   open_issue_count: number;
@@ -725,6 +727,7 @@ export interface IssueChapterQueueEntryResponse {
   chapter_id: string;
   ordinal: number;
   title_src?: string | null;
+  title?: string | null;
   chapter_status: string;
   issue_count: number;
   open_issue_count: number;
@@ -888,6 +891,8 @@ export interface ProviderCredentialCreate {
   input_cost_per_1m_tokens?: number | null;
   input_cache_hit_cost_per_1m_tokens?: number | null;
   output_cost_per_1m_tokens?: number | null;
+  peak_price_multiplier?: number | null;
+  off_peak_window_utc?: string | null;
   request_overrides?: Record<string, unknown>;
   api_key?: string | null;
   activate?: boolean;
@@ -906,6 +911,8 @@ export interface ProviderCredentialRead {
   input_cost_per_1m_tokens?: number | null;
   input_cache_hit_cost_per_1m_tokens?: number | null;
   output_cost_per_1m_tokens?: number | null;
+  peak_price_multiplier?: number | null;
+  off_peak_window_utc?: string | null;
   request_overrides?: Record<string, unknown>;
   id: string;
   is_active: boolean;
@@ -932,6 +939,8 @@ export interface ProviderCredentialUpdate {
   input_cost_per_1m_tokens?: number | null;
   input_cache_hit_cost_per_1m_tokens?: number | null;
   output_cost_per_1m_tokens?: number | null;
+  peak_price_multiplier?: number | null;
+  off_peak_window_utc?: string | null;
   request_overrides?: Record<string, unknown> | null;
 }
 
@@ -1064,6 +1073,10 @@ export interface RunWorkItemSummaryResponse {
 }
 
 export type SourceType = "epub" | "pdf_text" | "pdf_scan" | "pdf_mixed" | "web";
+
+export interface StartPilotRequest {
+  fast_reading?: boolean;
+}
 
 export interface StoredChapterQualitySummaryResponse {
   issue_count: number;

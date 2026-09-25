@@ -92,6 +92,47 @@ class ProviderSettingsTests(unittest.TestCase):
         cleared = self.client.patch(f"/v1/providers/{body['id']}", json={"request_overrides": {}})
         self.assertEqual(cleared.json()["request_overrides"], {})
 
+    def test_peak_hours_cost_the_multiplier_and_off_peak_hours_the_listed_price(self) -> None:
+        from datetime import datetime, timezone
+
+        from book_agent.workers.providers import openai_compatible
+        from book_agent.workers.providers.pricing import price_multiplier_at
+
+        # DeepSeek V4 Flash: $0.15 / $0.60 per 1M off-peak, twice that at peak; off-peak 16:30-00:30 UTC.
+        created = self._create(
+            input_cost_per_1m_tokens=0.15,
+            input_cache_hit_cost_per_1m_tokens=0.003,
+            output_cost_per_1m_tokens=0.6,
+            peak_price_multiplier=2,
+            off_peak_window_utc="16:30-00:30",
+        )
+        self.assertEqual(created.status_code, 201, created.text)
+        self.assertEqual((created.json()["peak_price_multiplier"], created.json()["off_peak_window_utc"]), (2.0, "16:30-00:30"))
+        with self.session_factory() as session:
+            worker = build_worker_from_credential(
+                session.get(ProviderCredential, created.json()["id"]), Settings(_env_file=None, translation_backend="echo")
+            )
+
+        def cost_at(hour: int, minute: int = 0) -> float:
+            moment = datetime(2026, 9, 25, hour, minute, tzinfo=timezone.utc)
+            with patch.object(openai_compatible, "datetime", type("Clock", (), {"now": staticmethod(lambda tz=None: moment)})):
+                return worker.client._estimate_cost_usd(
+                    token_in=1_000_000, token_out=1_000_000, prompt_cache_hit_tokens=0, prompt_cache_miss_tokens=1_000_000
+                )
+
+        self.assertAlmostEqual(cost_at(17), 0.75, places=6)  # off-peak
+        self.assertAlmostEqual(cost_at(0, 15), 0.75, places=6)  # the window wraps past midnight
+        self.assertAlmostEqual(cost_at(0, 30), 1.5, places=6)  # peak from 00:30
+        self.assertAlmostEqual(cost_at(8), 1.5, places=6)
+        # Without a window every call costs the listed price.
+        self.assertEqual(price_multiplier_at(datetime.now(timezone.utc), peak_multiplier=2, off_peak_window_utc=None), 1.0)
+
+        bad = self.client.patch(f"/v1/providers/{created.json()['id']}", json={"off_peak_window_utc": "25:00-01:00"})
+        self.assertEqual(bad.status_code, 422)
+        cleared = self.client.patch(f"/v1/providers/{created.json()['id']}", json={"off_peak_window_utc": None})
+        self.assertIsNone(cleared.json()["off_peak_window_utc"])
+        self.assertEqual(cleared.json()["peak_price_multiplier"], 2.0)
+
     def test_overrides_cannot_replace_fields_the_client_builds(self) -> None:
         refused = self._create(request_overrides={"messages": [], "temperature": 0.2})
         self.assertIn(refused.status_code, (409, 422))

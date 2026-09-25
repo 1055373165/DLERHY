@@ -22,6 +22,7 @@ from book_agent.domain.models.provider_credential import ProviderCredential
 from book_agent.services.secrets import decrypt_secret, encrypt_secret
 from book_agent.translation.contracts import TranslationUsage
 from book_agent.workers.llm_calls import CALL_KIND_PROVIDER_TEST, observed_llm_call, record_llm_usage
+from book_agent.workers.providers.pricing import parse_off_peak_window
 from book_agent.workers.providers.openai_compatible import (
     OpenAICompatibleTranslationClient,
     ProviderHTTPError,
@@ -98,7 +99,13 @@ def check_provider_base_url(base_url: str, provider_kind: ProviderKind) -> None:
     ensure_public_http_url(base_url)
 
 
-PRICE_FIELDS = ("input_cost_per_1m_tokens", "input_cache_hit_cost_per_1m_tokens", "output_cost_per_1m_tokens")
+PRICE_FIELDS = (
+    "input_cost_per_1m_tokens",
+    "input_cache_hit_cost_per_1m_tokens",
+    "output_cost_per_1m_tokens",
+    "peak_price_multiplier",
+    "off_peak_window_utc",
+)
 # Request fields the client builds itself; overriding them would break prompts, tools or parsing.
 RESERVED_REQUEST_FIELDS = frozenset(
     {"model", "messages", "input", "tools", "tool_choice", "stream", "response_format", "text", "max_tokens"}
@@ -116,10 +123,16 @@ def validate_request_overrides(overrides: dict | None) -> dict:
     return dict(overrides)
 
 
-def _set_prices(record: ProviderCredential, prices: dict[str, float | None]) -> None:
+def _set_prices(record: ProviderCredential, prices: dict[str, float | str | None]) -> None:
     for field_name, value in prices.items():
         if field_name not in PRICE_FIELDS:
             raise ValueError(f"unknown price field: {field_name}")
+        if field_name == "off_peak_window_utc":
+            window = str(value).strip() if value is not None else ""
+            if window:
+                parse_off_peak_window(window)
+            record.off_peak_window_utc = window or None
+            continue
         if value is not None and value < 0:
             raise ValueError(f"{field_name} must be >= 0")
         setattr(record, field_name, None if value is None else Decimal(str(value)))

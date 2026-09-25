@@ -29,6 +29,8 @@ type Draft = {
   input_cost: string;
   cache_hit_cost: string;
   output_cost: string;
+  peak_multiplier: string;
+  off_peak_window: string;
   thinking_off: boolean;
   overrides: string;
 };
@@ -43,6 +45,8 @@ const EMPTY: Draft = {
   input_cost: "",
   cache_hit_cost: "",
   output_cost: "",
+  peak_multiplier: "",
+  off_peak_window: "",
   thinking_off: false,
   overrides: "",
 };
@@ -67,6 +71,8 @@ function draftFrom(provider: Provider): Draft {
     input_cost: price(provider.input_cost_per_1m_tokens),
     cache_hit_cost: price(provider.input_cache_hit_cost_per_1m_tokens),
     output_cost: price(provider.output_cost_per_1m_tokens),
+    peak_multiplier: price(provider.peak_price_multiplier),
+    off_peak_window: provider.off_peak_window_utc ?? "",
     thinking_off: thinkingOff,
     overrides: Object.keys(overrides).length ? JSON.stringify(overrides, null, 2) : "",
   };
@@ -104,15 +110,29 @@ function payloadFrom(draft: Draft): Omit<ProviderCreate, "activate"> {
     input_cost_per_1m_tokens: price("输入单价", draft.input_cost),
     input_cache_hit_cost_per_1m_tokens: price("缓存命中单价", draft.cache_hit_cost),
     output_cost_per_1m_tokens: price("输出单价", draft.output_cost),
+    peak_price_multiplier: price("高峰倍数", draft.peak_multiplier),
+    off_peak_window_utc: offPeakWindow(draft.off_peak_window),
     request_overrides: overrides,
   };
+}
+
+function offPeakWindow(value: string): string | null {
+  const window = value.trim();
+  if (!window) return null;
+  if (!/^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/.test(window)) {
+    throw new Error("优惠时段要写成 16:30-00:30 这样的格式（UTC）");
+  }
+  return window;
 }
 
 function priceLine(provider: Provider): string {
   const input = provider.input_cost_per_1m_tokens;
   const output = provider.output_cost_per_1m_tokens;
   if (input === null || input === undefined || output === null || output === undefined) return "未设置单价，花费无法计算";
-  return `输入 $${input} / 输出 $${output} 每百万 token`;
+  const line = `输入 $${input} / 输出 $${output} 每百万 token`;
+  const multiplier = provider.peak_price_multiplier;
+  if (!multiplier || !provider.off_peak_window_utc) return line;
+  return `${line}（优惠时段 UTC ${provider.off_peak_window_utc}，其余时段 ×${multiplier}）`;
 }
 
 export function ProvidersPage() {
@@ -281,13 +301,23 @@ export function ProvidersPage() {
             <label htmlFor="provider-max-tokens">最大输出 token</label>
             <input id="provider-max-tokens" className={s.input} inputMode="numeric" {...field("max_output_tokens")} />
             <fieldset className={s.prices}>
-              <legend>单价（美元 / 百万 token，用于花费统计与预算）</legend>
+              <legend>单价（美元 / 百万 token，用于花费统计与预算；分时段计价时填优惠时段的单价）</legend>
               <label htmlFor="provider-input-cost">输入</label>
               <input id="provider-input-cost" className={s.input} inputMode="decimal" {...field("input_cost")} />
               <label htmlFor="provider-cache-cost">缓存命中</label>
               <input id="provider-cache-cost" className={s.input} inputMode="decimal" {...field("cache_hit_cost")} />
               <label htmlFor="provider-output-cost">输出</label>
               <input id="provider-output-cost" className={s.input} inputMode="decimal" {...field("output_cost")} />
+              <label htmlFor="provider-peak-multiplier">高峰倍数</label>
+              <input
+                id="provider-peak-multiplier"
+                className={s.input}
+                inputMode="decimal"
+                placeholder="不分时段就留空"
+                {...field("peak_multiplier")}
+              />
+              <label htmlFor="provider-off-peak">优惠时段（UTC）</label>
+              <input id="provider-off-peak" className={s.input} placeholder="16:30-00:30" {...field("off_peak_window")} />
             </fieldset>
             <label className={s.checkbox}>
               <input

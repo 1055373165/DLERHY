@@ -37,7 +37,7 @@ def _openai_compatible_worker(
     max_output_tokens: int,
     streaming: bool,
     runtime_config: dict[str, Any],
-    prices: dict[str, float | None] | None = None,
+    prices: dict[str, Any] | None = None,
     request_overrides: dict[str, Any] | None = None,
 ) -> LLMTranslationWorker:
     # Connection parameters, prices and request overrides come from the caller (a stored
@@ -47,6 +47,8 @@ def _openai_compatible_worker(
     def price(name: str) -> float | None:
         value = prices.get(name)
         return float(value) if value is not None else getattr(settings, f"translation_{name}")
+
+    off_peak_window = prices.get("off_peak_window_utc") or settings.translation_off_peak_window_utc
 
     overrides = dict(request_overrides) if request_overrides else dict(settings.translation_openai_request_overrides)
     client = OpenAICompatibleTranslationClient(
@@ -59,6 +61,8 @@ def _openai_compatible_worker(
         input_cache_hit_cost_per_1m_tokens=price("input_cache_hit_cost_per_1m_tokens"),
         input_cost_per_1m_tokens=price("input_cost_per_1m_tokens"),
         output_cost_per_1m_tokens=price("output_cost_per_1m_tokens"),
+        peak_price_multiplier=price("peak_price_multiplier"),
+        off_peak_window_utc=off_peak_window,
         streaming=streaming,
         request_overrides=overrides,
         structured_output_mode=settings.translation_openai_structured_output_mode,
@@ -147,6 +151,8 @@ def build_worker_from_credential(record: ProviderCredential, settings: Settings)
             "input_cost_per_1m_tokens": record.input_cost_per_1m_tokens,
             "input_cache_hit_cost_per_1m_tokens": record.input_cache_hit_cost_per_1m_tokens,
             "output_cost_per_1m_tokens": record.output_cost_per_1m_tokens,
+            "peak_price_multiplier": record.peak_price_multiplier,
+            "off_peak_window_utc": record.off_peak_window_utc,
         },
         request_overrides=dict(record.request_overrides_json or {}),
     )

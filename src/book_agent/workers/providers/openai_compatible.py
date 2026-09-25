@@ -37,6 +37,7 @@ from book_agent.translation.contracts import (
     TranslationWorkerOutput,
     TranslationWorkerResult,
 )
+from book_agent.workers.providers.pricing import price_multiplier_at
 from book_agent.workers.translator import TranslationModelClient, TranslationPromptRequest
 
 # HTTP statuses worth another attempt: request timeout, conflict, too early,
@@ -386,6 +387,8 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
     input_cache_hit_cost_per_1m_tokens: float | None = None
     input_cost_per_1m_tokens: float | None = None
     output_cost_per_1m_tokens: float | None = None
+    peak_price_multiplier: float | None = None
+    off_peak_window_utc: str | None = None
     transport: JSONTransport = field(default_factory=shared_transport)
     extra_headers: dict[str, str] = field(default_factory=dict)
     # Some OpenAI-compatible endpoints (notably NVIDIA NIM serving
@@ -1063,7 +1066,12 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         input_cost = (prompt_cache_hit_tokens / 1_000_000) * cache_hit_price
         input_cost += (prompt_cache_miss_tokens / 1_000_000) * miss_price
         output_cost = (token_out / 1_000_000) * self.output_cost_per_1m_tokens
-        return round(input_cost + output_cost, 8)
+        multiplier = price_multiplier_at(
+            datetime.now(timezone.utc),
+            peak_multiplier=self.peak_price_multiplier,
+            off_peak_window_utc=self.off_peak_window_utc,
+        )
+        return round((input_cost + output_cost) * multiplier, 8)
 
     def _prompt_cache_tokens(self, raw_usage: dict[str, Any], *, token_in: int) -> tuple[int, int]:
         """Split prompt tokens into (cache hits, cache misses).
