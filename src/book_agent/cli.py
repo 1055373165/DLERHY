@@ -129,6 +129,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     heal.add_argument("--document-id", required=True)
 
+    reaudit = subparsers.add_parser(
+        "reaudit-pilot-exports",
+        help="Audit a pilot's reading copies again on the pilot chapters only (resolves whole-book export QA issues)",
+    )
+    reaudit.add_argument("--document-id", required=True)
+
     action = subparsers.add_parser("execute-action", help="Execute a planned issue action")
     action.add_argument("--action-id", required=True)
     action.add_argument("--run-followup", action="store_true")
@@ -227,6 +233,12 @@ def main(argv: list[str] | None = None) -> int:
             from book_agent.services.pilot_repair import heal_alignment
 
             _dump(heal_alignment(session, service, args.document_id))
+            session.commit()
+            return 0
+        if args.command == "reaudit-pilot-exports":
+            from book_agent.services.pilot_repair import reaudit_pilot_exports
+
+            _dump(reaudit_pilot_exports(session, args.document_id))
             session.commit()
             return 0
         if args.command == "summary":

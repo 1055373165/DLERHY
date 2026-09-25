@@ -1570,7 +1570,7 @@ class DocumentRunExecutor:
                     session.commit()
                     raise
                 self._run_execution_service(session).assert_lease_held(lease_token=claimed.lease_token)
-            qa_summary = self._audit_export(document_id, export_type, result)
+            qa_summary = self._audit_export(document_id, export_type, result, chapter_ids=chapter_ids)
             return {
                 "document_id": document_id,
                 "export_type": export_type.value,
@@ -1608,8 +1608,13 @@ class DocumentRunExecutor:
             lease_seconds=self.lease_seconds,
         )
 
-    def _audit_export(self, document_id: str, export_type: ExportType, result) -> dict[str, Any] | None:
-        """Export QA after a successful export; a QA problem is recorded, never raised."""
+    def _audit_export(
+        self, document_id: str, export_type: ExportType, result, *, chapter_ids: list[str] | None = None
+    ) -> dict[str, Any] | None:
+        """Export QA after a successful export; a QA problem is recorded, never raised.
+
+        A scoped export (a pilot's chapters) is judged on those chapters only.
+        """
         if export_type not in AUDITED_EXPORT_TYPES:
             return None
         artifacts: list[tuple[str | None, Path]] = (
@@ -1619,7 +1624,7 @@ class DocumentRunExecutor:
         )
         try:
             with session_scope(self.session_factory) as session:
-                return ExportQaService(session).audit(document_id, export_type, artifacts).to_json()
+                return ExportQaService(session).audit(document_id, export_type, artifacts, chapter_ids=chapter_ids).to_json()
         except Exception as exc:  # the export already succeeded
             logger.exception("Export QA failed for document %s (%s)", document_id, export_type.value)
             return {"export_type": export_type.value, "error": f"{type(exc).__name__}: {str(exc)[:300]}"}

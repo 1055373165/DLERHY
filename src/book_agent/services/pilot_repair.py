@@ -644,13 +644,23 @@ class PilotRepairService:
             try:
                 self.session.commit()
                 self._begin_write()
-                workflow.export_document(
+                result = workflow.export_document(
                     ctx.document_id,
                     export_type,
                     auto_execute_followup_on_gate=False,
                     chapter_ids=list(ctx.chapter_ids),
                     despite_gate=True,
                 )
+                self.session.commit()
+                # The export QA judges the new reading copy (on the pilot's chapters only).
+                from book_agent.services.export_qa import ExportQaService
+
+                artifacts = (
+                    [(chapter.chapter_id, Path(chapter.file_path)) for chapter in result.chapter_results]
+                    if result.chapter_results
+                    else ([(None, Path(result.file_path))] if result.file_path else [])
+                )
+                ExportQaService(self.session).audit(ctx.document_id, export_type, artifacts, chapter_ids=list(ctx.chapter_ids))
                 self.session.commit()
             except Exception:
                 logger.exception("pilot repair: re-export %s of %s failed", export_type.value, ctx.document_id)
@@ -1139,3 +1149,35 @@ def heal_alignment(session: Session, workflow: Any, document_id: str) -> dict[st
         ).all()
     ]
     return {"healed": healed, "needs_retranslation": skipped, "open_alignment_issues": still_open}
+
+
+def reaudit_pilot_exports(session: Session, document_id: str) -> dict[str, Any]:
+    """Audit the pilot's reading copies again on the pilot's chapters (resolves whole-book false issues).
+
+    The latest merged export and the pilot chapters' bilingual files next to it; nothing is exported.
+    """
+    from book_agent.domain.enums import ExportStatus
+    from book_agent.domain.models.review import Export
+    from book_agent.services.export_qa import ExportQaService
+
+    chapter_ids = pilot_chapter_ids(session, document_id)
+    merged = session.scalars(
+        select(Export)
+        .where(Export.document_id == document_id, Export.export_type == ExportType.MERGED_HTML, Export.status == ExportStatus.SUCCEEDED)
+        .order_by(Export.updated_at.desc(), Export.id.desc())
+        .limit(1)
+    ).first()
+    if merged is None or not merged.file_path or not Path(merged.file_path).is_file():
+        return {"error": "no merged export file to audit", "chapter_ids": chapter_ids}
+    merged_path = Path(merged.file_path)
+    service = ExportQaService(session)
+    results = [
+        service.audit(document_id, ExportType.MERGED_HTML, [(None, merged_path)], chapter_ids=chapter_ids).to_json(),
+        service.audit(
+            document_id,
+            ExportType.BILINGUAL_HTML,
+            [(chapter_id, merged_path.parent / f"bilingual-{chapter_id}.html") for chapter_id in chapter_ids],
+            chapter_ids=chapter_ids,
+        ).to_json(),
+    ]
+    return {"chapter_ids": chapter_ids, "audits": results}
