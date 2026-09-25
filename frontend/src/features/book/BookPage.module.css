@@ -139,6 +139,40 @@
   font-weight: 500;
 }
 
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+  flex: 1 1 18rem;
+}
+
+/* A question's page picture: small, one click to the full page. */
+.evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+
+.evidenceLink {
+  display: block;
+  line-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-panel);
+}
+
+.evidenceImage {
+  display: block;
+  width: 7.5rem;
+  height: auto;
+  max-height: 10rem;
+  object-fit: cover;
+  object-position: top;
+}
+
 /* Four stops fit a phone: three tabs and 更多. Nothing scrolls sideways. */
 .tabs {
   display: flex;
@@ -247,6 +281,61 @@
 .free {
   color: var(--green);
   font-weight: var(--weight-semibold);
+}
+
+/* The pilot's quality in one place: verdict, layers, what was repaired, what waits on the reader. */
+.pilotSummary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-left: 3px solid var(--green);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--bg-panel-alt);
+  font-size: var(--text-sm);
+}
+
+.pilotSummary[data-status="warnings"] {
+  border-left-color: var(--amber);
+}
+
+.pilotSummary[data-status="blocking"] {
+  border-left-color: var(--red);
+}
+
+.pilotVerdict {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.pilotRepair,
+.pilotAsk {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.pilotRepair strong {
+  color: var(--green);
+  font-weight: var(--weight-semibold);
+}
+
+.pilotRepairKinds {
+  color: var(--text-muted);
+}
+
+.pilotAsk {
+  color: var(--text-primary);
+}
+
+.pilotAsk a {
+  font-weight: var(--weight-semibold);
+}
+
+.pilotLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
 }
 
 .pilotProblems {

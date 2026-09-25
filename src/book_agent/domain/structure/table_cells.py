@@ -135,3 +135,50 @@ def translate_cell(cell: str, translations: Mapping[str, str] | None) -> str:
     if not translations:
         return cell
     return translations.get(" ".join(str(cell).split()), cell)
+
+
+def _translated_grid(text: str) -> list[list[str]] | None:
+    rows = []
+    for line in str(text or "").splitlines():
+        if not line.strip():
+            continue
+        cells = split_table_candidate_line(line)
+        if cells is None or "|" not in line:
+            return None
+        if not is_table_separator_row(cells):
+            rows.append([cell.strip() for cell in cells])
+    return rows or None
+
+
+def split_shared_cell_translations(grid: list[list[str]] | None, translations: Mapping[str, str]) -> dict[str, str]:
+    """Cells that came back from the model as one translated table, split back cell by cell.
+
+    The model sometimes answers a table's cells with one segment holding the whole translated
+    grid ("| 策略 | 描述 |\\n| 生成 | ... |"); every cell then maps to that whole text and the
+    reader sees the grid in each cell. When such a shared text is a grid of the same shape as the
+    source rows its cells come from, each cell takes the translation at its own position.
+    """
+    result = dict(translations)
+    if not grid:
+        return result
+    sources_by_text: dict[str, set[str]] = {}
+    for source, target in translations.items():
+        sources_by_text.setdefault(target, set()).add(source)
+    for target, sources in sources_by_text.items():
+        if len(sources) < 2:
+            continue
+        translated = _translated_grid(target)
+        if not translated:
+            continue
+        # The rows those cells come from, or the whole table when the model translated all of it.
+        rows = [row for row in grid if any(" ".join(cell.split()) in sources for cell in row)]
+        if len(rows) != len(translated):
+            rows = list(grid)
+        if len(rows) != len(translated) or any(len(row) != len(cells) for row, cells in zip(rows, translated)):
+            continue
+        for row, cells in zip(rows, translated):
+            for source_cell, target_cell in zip(row, cells):
+                key = " ".join(source_cell.split())
+                if key in sources and target_cell:
+                    result[key] = target_cell
+    return result

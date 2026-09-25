@@ -46,6 +46,21 @@ _ORDINAL_SHIFT_OFFSET = 2_000_000
 SPLIT_OF_KEY = "structure_split_of"
 MIN_SPLIT_MARKER = 3
 LINK_CAPTION = "link_caption"
+OVERRIDE_METADATA = "override_metadata"
+# Block metadata an override may set: what the reading copy shows of a block, not what the parser read.
+# repair_hidden_from_export hides a block (a running header, a figure's own label kept as text);
+# source_bbox_json / figure_region set a figure's crop by hand; table_markdown gives a table its cells;
+# artifact_group_context_excluded keeps a paragraph out of the figure or table next to it.
+OVERRIDABLE_METADATA_KEYS = frozenset(
+    {
+        "repair_hidden_from_export",
+        "source_bbox_json",
+        "figure_region",
+        "figure_region_override",
+        "table_markdown",
+        "artifact_group_context_excluded",
+    }
+)
 
 # Types an edit may give or take away. Tables, figures and images carry extracted artifacts
 # (cells, image files) that a relabel cannot create or remove.
@@ -278,6 +293,45 @@ class StructureEditService:
         )
         return EditOutcome(edit_id=edit.id, kind=LINK_CAPTION, block_ids=[caption.id, artifact.id])
 
+    def override_metadata(
+        self,
+        document_id: str,
+        block_id: str,
+        updates: dict[str, Any],
+        *,
+        actor_id: str,
+        reason: str,
+        turn_id: str | None = None,
+    ) -> EditOutcome:
+        """Set reading-copy metadata of one block (``OVERRIDABLE_METADATA_KEYS``); None removes a key.
+
+        The text does not change, so nothing is re-segmented or retranslated. The previous values are
+        logged, and a refresh replays the override while the block's text stays the same.
+        """
+        block = self._active_block(document_id, block_id)
+        unknown = sorted(set(updates) - OVERRIDABLE_METADATA_KEYS)
+        if unknown:
+            raise StructureEditRejected(
+                f"cannot override {', '.join(unknown)}; allowed: {', '.join(sorted(OVERRIDABLE_METADATA_KEYS))}"
+            )
+        span = dict(block.source_span_json or {})
+        previous = {key: span.get(key) for key in updates}
+        if all(previous[key] == value for key, value in updates.items()):
+            raise StructureEditRejected("the block already has this metadata")
+        snapshot = [_snapshot(block)]
+        self._apply_metadata(block, updates)
+        edit = self._log(
+            document_id,
+            OVERRIDE_METADATA,
+            {"block_id": block.id, "updates": dict(updates), "previous": previous},
+            snapshot,
+            fork=None,
+            actor_id=actor_id,
+            reason=reason,
+            turn_id=turn_id,
+        )
+        return EditOutcome(edit_id=edit.id, kind=OVERRIDE_METADATA, block_ids=[block.id])
+
     # --- replay -----------------------------------------------------------------------
 
     def replay(self, document_id: str, *, actor_id: str = "services.structure_edits") -> ReplayResult:
@@ -400,6 +454,16 @@ class StructureEditService:
             ):
                 return "stale", []
             self._apply_link(caption, artifact)
+            return "reapplied", []
+        if edit.kind == OVERRIDE_METADATA:
+            block = blocks[args["block_id"]]
+            updates = dict(args.get("updates") or {})
+            span = block.source_span_json or {}
+            if all(span.get(key) == value for key, value in updates.items()):
+                return None
+            if block.status != ArtifactStatus.ACTIVE or _fingerprint(block.source_text) != before[block.id]["text_sha1"]:
+                return "stale", []
+            self._apply_metadata(block, updates)
             return "reapplied", []
         return "stale", []
 
@@ -674,6 +738,17 @@ class StructureEditService:
         caption.source_span_json = {**(caption.source_span_json or {}), "caption_for_block_id": artifact.id}
         artifact.updated_at = now
         caption.updated_at = now
+        self.session.flush()
+
+    def _apply_metadata(self, block: Block, updates: dict[str, Any]) -> None:
+        span = dict(block.source_span_json or {})
+        for key, value in updates.items():
+            if value is None:
+                span.pop(key, None)
+            else:
+                span[key] = value
+        block.source_span_json = span
+        block.updated_at = _utcnow()
         self.session.flush()
 
     def _fork(self, document_id: str, block_ids: list[str], *, reason: str, actor_id: str) -> ForkResult:

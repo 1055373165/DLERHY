@@ -38,6 +38,7 @@ from book_agent.domain.enums import (
 from book_agent.domain.models.review import Export, ReviewIssue
 from book_agent.domain.structure import web as web_page
 from book_agent.domain.structure.artifact_grouping import resolve_artifact_group_context_ids
+from book_agent.domain.structure.table_cells import split_shared_cell_translations, table_grid
 from book_agent.domain.structure.epub import (
     _parse_xml_document,
 )
@@ -1875,7 +1876,10 @@ class ExportService:
                     if text.strip():
                         cell_translations[" ".join(sentence.source_text.split())] = text.strip()
                 if cell_translations:
-                    source_metadata["table_cell_translations"] = cell_translations
+                    # One translated grid answered for several cells: back to one translation per cell.
+                    source_metadata["table_cell_translations"] = split_shared_cell_translations(
+                        table_grid(block.source_text, source_metadata), cell_translations
+                    )
                 block_sentences = [sentence for sentence in block_sentences if sentence not in cell_sentences]
             target_ids = alignment.target_ids_for_block_sentences(block_sentences, sentence_targets, target_map)
             if bool(source_metadata.get("repair_hidden_from_export")):

@@ -57,6 +57,7 @@ PIPELINE_STAGES = (
     "web_html",
     "export_review",
     "pilot_qa",
+    "pilot_repair",
 )
 # Agent stages map a pipeline key to the agent kind carried in the work item bundle.
 AGENT_STAGE_KINDS: dict[str, str] = {
@@ -202,6 +203,8 @@ class StageStatusCalculator:
             return self._export_stage_evidence(run_id, ExportType(stage), stage)
         if stage == "pilot_qa":
             return self._pilot_qa_evidence(run_id)
+        if stage == "pilot_repair":
+            return self._pilot_repair_evidence(run_id)
         raise ValueError(f"unknown pipeline stage: {stage!r}")
 
     def _pilot_qa_evidence(self, run_id: str) -> StageEvidence:
@@ -219,6 +222,33 @@ class StageStatusCalculator:
             succeeded_work_items=0,
             failed_work_items=0,
             running_work_items=0,
+        )
+
+    def _pilot_repair_evidence(self, run_id: str) -> StageEvidence:
+        """The pilot's repair loop: running while its latest row runs, done once it finished or
+        recorded an error (a repair failure is shown to the reader, it does not fail the pilot)."""
+        from book_agent.domain.models.review import PilotRepair
+
+        status = self._session.scalar(
+            select(PilotRepair.status)
+            .where(PilotRepair.run_id == run_id)
+            .order_by(PilotRepair.created_at.desc(), PilotRepair.id.desc())
+            .limit(1)
+        )
+        derived = (
+            StageStatus.NOT_STARTED
+            if status is None
+            else StageStatus.RUNNING
+            if status == "running"
+            else StageStatus.SUCCEEDED
+        )
+        return StageEvidence(
+            stage="pilot_repair",
+            status=derived,
+            total_work_items=0,
+            succeeded_work_items=0,
+            failed_work_items=0,
+            running_work_items=1 if derived == StageStatus.RUNNING else 0,
         )
 
     def _agent_stage_evidence(self, run_id: str, agent_kind: str, stage_key: str) -> StageEvidence:

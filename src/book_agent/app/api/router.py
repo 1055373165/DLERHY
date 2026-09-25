@@ -10,6 +10,7 @@ from book_agent.app.api.routes import (
     health,
     orgs,
     overview,
+    pilot_repair,
     providers,
     run_cost,
     run_stream,
@@ -28,6 +29,8 @@ api_router.include_router(harness.approvals_router, prefix="/approvals", tags=["
 api_router.include_router(overview.documents_router, prefix="/documents", tags=["overview"], dependencies=_protected)
 api_router.include_router(overview.inbox_router, prefix="/inbox", tags=["overview"], dependencies=_protected)
 api_router.include_router(overview.overviews_router, prefix="/overviews", tags=["overview"], dependencies=_protected)
+api_router.include_router(pilot_repair.documents_router, prefix="/documents", tags=["pilot"], dependencies=_protected)
+api_router.include_router(pilot_repair.defects_router, prefix="/pilot-defects", tags=["pilot"], dependencies=_protected)
 api_router.include_router(actions.router, prefix="/actions", tags=["actions"], dependencies=_protected)
 api_router.include_router(issues.documents_router, prefix="/documents", tags=["issues"], dependencies=_protected)
 api_router.include_router(issues.issues_router, prefix="/issues", tags=["issues"], dependencies=_protected)

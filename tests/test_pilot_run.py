@@ -66,7 +66,7 @@ class PilotPlanTests(unittest.TestCase):
         self.assertEqual((plan.chapter_ids, plan.packet_ids), (frozenset({"c1", "c2"}), frozenset({"p1", "p2", "p3"})))
         # The full pipeline: terminology (whole book), translate, model review, review, exports, then the layered QA.
         self.assertEqual(
-            plan.stages, ("terminology", "translate", "model_review", "review", "bilingual_html", "merged_html", "pilot_qa")
+            plan.stages, ("terminology", "translate", "model_review", "review", "bilingual_html", "merged_html", "pilot_qa", "pilot_repair")
         )
 
     def test_a_whole_book_plan_is_unscoped_and_can_skip_what_a_pilot_reviewed(self) -> None:
@@ -363,7 +363,8 @@ class PilotRunTests(unittest.TestCase):
         self.assertEqual(overview["pilot"]["state"], "ready")
         self.assertGreaterEqual(overview["pilot"]["problems"]["blocking"], 1)
         self.assertIn("OMISSION", [entry["type"] for entry in overview["pilot"]["problems"]["by_type"]])
-        self.assertIn("个问题没有解决", overview["headline"])
+        # After the repair loop the headline says what is still blocking; the card lists it.
+        self.assertRegex(overview["headline"], "个严重问题需要你看|个问题没有解决")
         stages = terminal["status_detail_json"]["pipeline"]
         review = (stages.get("_cached_pipeline_stages") or stages.get("stages") or {}).get("review") or {}
         self.assertGreaterEqual(int(review.get("blockers_left_for_reader") or 0), 1)

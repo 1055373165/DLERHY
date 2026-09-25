@@ -429,8 +429,24 @@ def looks_like_single_line_codeish_text(text: str) -> bool:
     if any(token in normalized for token in ("(", ")", "{", "}", "[", "]")) and any(
         token in normalized for token in ("=", ":", "->")
     ):
+        if _reads_as_prose_with_parenthesis(normalized):
+            return False
         return len(normalized.split()) <= 28
     return False
+
+
+def _reads_as_prose_with_parenthesis(normalized: str) -> bool:
+    """"... five strategies (table 1.1), each covered in this book:" is a sentence, not a call.
+
+    No call ("name("), assignment, braces, brackets or arrow; eight words or more, many of them
+    the small words prose is made of.
+    """
+    if re.search(r"\w\(|[=\[\]{}]|->", normalized):
+        return False
+    tokens = re.findall(r"[A-Za-z][A-Za-z'-]*", normalized.casefold())
+    if len(tokens) < 8:
+        return False
+    return sum(1 for token in tokens if token in _PROSE_ARTIFACT_STOPWORDS) >= max(3, len(tokens) // 5)
 
 
 def looks_like_structured_output_intro_prose_line(text: str) -> bool:

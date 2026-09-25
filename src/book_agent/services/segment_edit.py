@@ -15,6 +15,7 @@ for the source (the output guardrail's bounds) is refused.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -65,6 +66,15 @@ class SegmentEditResult:
     previous_text: str
     new_text: str
     closed_model_issue_ids: list[str]
+
+
+@dataclass(slots=True)
+class PacketRewriteResult:
+    translation_run_id: str
+    attempt: int
+    packet_id: str
+    changed_segment_count: int
+    changed_sentence_ids: list[str]
 
 
 def _utcnow() -> datetime:
@@ -242,6 +252,164 @@ class SegmentEditService:
             closed_model_issue_ids=closed,
         )
 
+    def rewrite_packet(
+        self,
+        packet_id: str,
+        transform: Callable[[str, list[str]], str | None],
+        *,
+        reason: str,
+        actor_id: str,
+        actor_type: ActorType = ActorType.MODEL,
+        run_id: str | None = None,
+    ) -> PacketRewriteResult | None:
+        """Apply a deterministic correction to every segment of a packet's latest translation, as one new attempt.
+
+        ``transform(text, sentence_ids)`` returns a segment's corrected text, or None to keep it. Used
+        for mechanical fixes the whole packet shares (spacing, punctuation, a leaked program note, one
+        rendering of a term); the same guards as ``edit_sentence`` apply to each changed segment.
+        Returns None when nothing changed.
+        """
+        run = self.session.scalars(
+            select(TranslationRun)
+            .where(TranslationRun.packet_id == packet_id, TranslationRun.status == RunStatus.SUCCEEDED)
+            .order_by(TranslationRun.attempt.desc())
+            .limit(1)
+        ).first()
+        if run is None:
+            return None
+        segments = list(
+            self.session.scalars(
+                select(TargetSegment).where(TargetSegment.translation_run_id == run.id).order_by(TargetSegment.ordinal)
+            ).all()
+        )
+        if not segments:
+            return None
+        edges = list(
+            self.session.scalars(
+                select(AlignmentEdge).where(AlignmentEdge.target_segment_id.in_([item.id for item in segments]))
+            ).all()
+        )
+        sentences_by_segment: dict[str, list[str]] = {}
+        for edge in edges:
+            sentences_by_segment.setdefault(edge.target_segment_id, []).append(edge.sentence_id)
+        changes: dict[str, str] = {}
+        for segment in segments:
+            covered = sorted(sentences_by_segment.get(segment.id, []))
+            new_text = transform(segment.text_zh or "", covered)
+            if new_text is None or not new_text.strip() or new_text == (segment.text_zh or ""):
+                continue
+            if covered:
+                sentence = self.session.get(Sentence, covered[0])
+                if sentence is not None:
+                    # A mechanical correction must not break a locked term; one the text already broke stays its own problem.
+                    self._check_locked_terms(
+                        sentence, self._covered_sources(sentence, covered), new_text, previous_text=segment.text_zh or ""
+                    )
+            changes[segment.id] = new_text
+        if not changes:
+            return None
+        now = _utcnow()
+        attempt = self.translations.next_attempt(run.packet_id)
+        new_run = TranslationRun(
+            id=stable_id("translation-run", run.packet_id, attempt),
+            packet_id=run.packet_id,
+            model_name=run.model_name,
+            model_config_json={
+                **(run.model_config_json or {}),
+                "worker": "segment_edit",
+                "edited_from_run_id": run.id,
+                "edited_segment_ordinals": sorted(segment.ordinal for segment in segments if segment.id in changes),
+                "edit_reason": reason,
+                "edit_actor": actor_id,
+            },
+            prompt_version=run.prompt_version,
+            attempt=attempt,
+            status=RunStatus.SUCCEEDED,
+            output_json={"edited_from_run_id": run.id},
+            token_in=0,
+            token_out=0,
+            cost_usd=0,
+            latency_ms=0,
+            created_at=now,
+            updated_at=now,
+        )
+        self.session.add(new_run)
+        self.session.flush()
+        new_segment_ids: dict[str, str] = {}
+        for old in segments:
+            new_id = stable_id("target-segment", new_run.id, old.ordinal)
+            new_segment_ids[old.id] = new_id
+            self.session.add(
+                TargetSegment(
+                    id=new_id,
+                    chapter_id=old.chapter_id,
+                    translation_run_id=new_run.id,
+                    ordinal=old.ordinal,
+                    text_zh=changes.get(old.id, old.text_zh),
+                    segment_type=old.segment_type,
+                    confidence=old.confidence,
+                    final_status=TargetSegmentStatus.DRAFT,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            old.final_status = TargetSegmentStatus.SUPERSEDED
+            old.updated_at = now
+        self.session.flush()
+        for edge in edges:
+            self.session.add(
+                AlignmentEdge(
+                    id=stable_id("alignment-edge", edge.sentence_id, new_segment_ids[edge.target_segment_id]),
+                    sentence_id=edge.sentence_id,
+                    target_segment_id=new_segment_ids[edge.target_segment_id],
+                    relation_type=edge.relation_type,
+                    confidence=edge.confidence,
+                    created_by=edge.created_by,
+                )
+            )
+        changed_sentences = sorted({sentence_id for segment_id in changes for sentence_id in sentences_by_segment.get(segment_id, [])})
+        self.session.add(
+            AuditEvent(
+                object_type="translation_run",
+                object_id=new_run.id,
+                action="target_segment.edited",
+                actor_type=actor_type,
+                actor_id=actor_id,
+                payload_json={
+                    "reason": reason,
+                    "packet_id": run.packet_id,
+                    "changes": [
+                        {"previous_segment_id": segment_id, "previous_text": next(s.text_zh for s in segments if s.id == segment_id), "new_text": text}
+                        for segment_id, text in changes.items()
+                    ],
+                },
+            )
+        )
+        emit_event(
+            self.session,
+            kind=TRANSLATION_SEGMENT_EDITED,
+            run_id=run_id,
+            chapter_id=segments[0].chapter_id,
+            packet_id=run.packet_id,
+            actor_kind="user" if actor_type == ActorType.HUMAN else "agent" if actor_type == ActorType.MODEL else "system",
+            actor_id=actor_id,
+            payload={
+                "translation_run_id": new_run.id,
+                "attempt": attempt,
+                "sentence_ids": changed_sentences,
+                "segment_count": len(changes),
+                "reason": reason,
+            },
+        )
+        self.session.flush()
+        return PacketRewriteResult(
+            translation_run_id=new_run.id,
+            attempt=attempt,
+            packet_id=run.packet_id,
+            changed_segment_count=len(changes),
+            changed_sentence_ids=changed_sentences,
+        )
+
     def _latest_translation(
         self, sentence: Sentence
     ) -> tuple[TranslationRun, TargetSegment, list[TargetSegment], list[AlignmentEdge]]:
@@ -289,9 +457,13 @@ class SegmentEditService:
             for item in self.session.scalars(select(Sentence).where(Sentence.id.in_(covered or [sentence.id]))).all()
         ]
 
-    def _check_locked_terms(self, sentence: Sentence, sources: list[str], new_text: str) -> None:
+    def _check_locked_terms(self, sentence: Sentence, sources: list[str], new_text: str, *, previous_text: str | None = None) -> None:
         locked = GlossaryService(self.session).locked_terms_for_chapter(sentence.document_id, sentence.chapter_id)
         violations = find_term_violations([(sentence.id, " ".join(sources), new_text)], locked)
+        if previous_text is not None and violations:
+            # Only what the edit breaks: a term the previous text did not keep either is not this edit's doing.
+            before = {item.source_term for item in find_term_violations([(sentence.id, " ".join(sources), previous_text)], locked)}
+            violations = [item for item in violations if item.source_term not in before]
         if violations:
             detail = "; ".join(
                 f'"{item.source_term}" must be rendered as {" / ".join(item.accepted_renderings)}' for item in violations

@@ -138,6 +138,7 @@ STEPS: tuple[tuple[str, str], ...] = (
     ("web_html", "生成中文网页"),
     ("export_review", "检查导出"),
     ("pilot_qa", "试译质检"),
+    ("pilot_repair", "自动修复试译"),
 )
 STEP_LABELS = dict(STEPS)
 
@@ -232,9 +233,41 @@ def _approval_title(approval: Approval) -> str:
     return str((approval.payload_json or {}).get("tool") or approval.kind)
 
 
+def _question_item(document: Document, approval: Approval) -> dict[str, Any]:
+    """A problem the pilot repair could not fix (services/pilot_repair.py): one yes/no question, with its evidence."""
+    payload = approval.payload_json or {}
+    evidence = payload.get("evidence") or []
+    pages = sorted({item["page"] for item in evidence if isinstance(item.get("page"), int)})
+    where = f"第 {'、'.join(str(page) for page in pages[:4])} 页，" if pages else ""
+    sample = next((str(item.get("source")) for item in evidence if item.get("source")), "")
+    detail = f"{payload.get('title') or ''}：{where}共 {payload.get('finding_count') or len(evidence)} 处，自动修复没有解决。"
+    if sample:
+        detail += f"原文：「{sample[:80]}」"
+    return {
+        "kind": "question",
+        "id": approval.id,
+        "title": str(payload.get("question") or payload.get("title") or "试译里有一个问题需要你决定"),
+        "detail": detail,
+        "images": [
+            f"/documents/{document.id}/pilot-repair/evidence/{name}" for name in (payload.get("images") or [])
+        ],
+        "action": {
+            "kind": "approve",
+            "approve_label": (payload.get("answers") or {}).get("yes") or "是",
+            "reject_label": (payload.get("answers") or {}).get("no") or "否",
+            "target": f"/books/{document.id}/progress#pilot-quality",
+            "label": "看质检报告",
+        },
+    }
+
+
 def _needs_you(session: Session, document: Document, translation_run: DocumentRun | None) -> list[dict[str, Any]]:
+    from book_agent.services.pilot_repair import QUESTION_KIND
+
     items: list[dict[str, Any]] = [
-        {
+        _question_item(document, approval)
+        if approval.kind == QUESTION_KIND
+        else {
             "kind": "approval",
             "id": approval.id,
             "title": _approval_title(approval),
@@ -320,6 +353,8 @@ def _pilot(session: Session, document: Document, pilot_run: DocumentRun | None, 
     from book_agent.services.billing_category import paid_by_us
     from book_agent.services.pilot_quality import latest_report as latest_quality_report
     from book_agent.services.pilot_quality import overview_summary as quality_summary
+    from book_agent.services.pilot_repair import latest_repair
+    from book_agent.services.pilot_repair import overview_summary as repair_summary
 
     if pilot_run is not None:
         request = (pilot_run.status_detail_json or {}).get(RUN_REQUEST_KEY) or {}
@@ -370,6 +405,8 @@ def _pilot(session: Session, document: Document, pilot_run: DocumentRun | None, 
         "problems": _pilot_problems(session, document.id, chapter_ids) if pilot_run is not None else None,
         # The layered QA (L1–L7) of the pilot's chapters: its verdict and each layer's counts.
         "quality": quality_summary(latest_quality_report(session, document.id)),
+        # The repair loop after the QA: what it repaired, what is left, the questions it asked.
+        "repair": repair_summary(session, latest_repair(session, document.id)) if pilot_run is not None else None,
         # What the pilot's model calls cost us; the reader is never charged for them.
         "cost_usd": round(cost_usd, 4),
         "finished_at": pilot_run.finished_at.isoformat() if pilot_run is not None and pilot_run.finished_at else None,
@@ -427,8 +464,10 @@ def _headline(
 ) -> str:
     state = translation["state"]
     on_pilot = translation.get("scope") == "pilot"
-    if needs_you:
-        return f"有 {len(needs_you)} 件事等你处理，处理后{'试译' if on_pilot else '翻译'}会继续。"
+    # A question the pilot repair left does not hold anything up: the pilot is there to read.
+    blocking = [item for item in needs_you if item.get("kind") != "question"]
+    if blocking:
+        return f"有 {len(blocking)} 件事等你处理，处理后{'试译' if on_pilot else '翻译'}会继续。"
     if state in {"queued", "running", "draining"}:
         current = next((step for step in steps if step["status"] in {"running", "pending"}), None)
         progress = translation["progress"]
@@ -445,6 +484,11 @@ def _headline(
             return translation.get("stop_reason_text") or ("试译没有完成。" if state == "failed" else "试译已取消。")
         return translation.get("stop_reason_text") or ("翻译失败了。" if state == "failed" else "翻译已取消。")
     if pilot["state"] == "ready":
+        repair = pilot.get("repair") or {}
+        if repair.get("status") == "finished":
+            # The card below says what was repaired and what is left; the headline says only what needs the reader.
+            blocking = int((repair.get("remaining") or {}).get("blocking") or 0)
+            return "试译完成：前两章可以阅读了。" + (f"还有 {blocking} 个严重问题需要你看。" if blocking else "")
         problems = pilot.get("problems") or {}
         left = int(problems.get("open") or 0)
         return "试译完成：前两章可以阅读了。" + (f"还有 {left} 个问题没有解决，列在下面。" if left else "")
@@ -463,7 +507,7 @@ def _primary_action(
     state = translation["state"]
     run_id = translation.get("run_id")
     on_pilot = translation.get("scope") == "pilot"
-    if needs_you:
+    if any(item.get("kind") != "question" for item in needs_you):
         return {"kind": "handle", "label": "去处理"}
     if state in {"queued", "running", "draining"} and translation.get("stalled"):
         return {"kind": "retry", "label": "重试", "run_id": run_id}

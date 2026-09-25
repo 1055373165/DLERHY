@@ -92,6 +92,8 @@ export function AppLayout() {
   const [openedAt] = useState(() => new Date().toISOString());
   const inbox = useQuery({ queryKey: ["inbox"], queryFn: () => getInbox(openedAt), refetchInterval: 30_000, retry: false });
   const pendingCount = inbox.data?.count ?? 0;
+  // A pilot repair's question holds nothing up: the pilot is already there to read.
+  const onlyQuestions = pendingCount > 0 && (inbox.data?.items ?? []).every((item) => item.kind === "question");
   const navigate = useNavigate();
   const seen = useRef<Set<string>>(loadSeen());
   useEffect(() => {
@@ -193,7 +195,7 @@ export function AppLayout() {
             </div>
             {pendingCount > 0 && !location.pathname.startsWith("/inbox") && (
               <NavLink to="/inbox" className={s.pendingNotice} role="status">
-                有 {pendingCount} 件事等你处理，处理后翻译会继续 →
+                {onlyQuestions ? `试译有 ${pendingCount} 个问题等你回答 →` : `有 ${pendingCount} 件事等你处理，处理后翻译会继续 →`}
               </NavLink>
             )}
           </div>

@@ -15,6 +15,7 @@ from book_agent.domain.enums import (
     SentenceStatus,
 )
 from book_agent.domain.structure.geometry import horizontal_overlap_ratio
+from book_agent.domain.structure.table_cells import table_grid
 from book_agent.export import code_text
 from book_agent.export.common import (
     _APPENDIX_TITLE_PATTERN,
@@ -1067,6 +1068,9 @@ def merge_render_text_fragments(previous_text: str, current_text: str) -> str:
     curr_char = current_clean[0]
     if re.match(r"[A-Za-z0-9]", prev_char) and re.match(r"[A-Za-z0-9]", curr_char):
         return f"{previous_clean} {current_clean}"
+    # "over time." + "how the loop ..." is two words, not "time.how" (Chinese joins as it is).
+    if needs_ascii_sentence_gap(previous_clean, current_clean) or _latin_cjk_seam(previous_clean, current_clean):
+        return f"{previous_clean} {current_clean}"
     return previous_clean + current_clean
 
 
@@ -1259,6 +1263,11 @@ def merge_code_blocks_across_inline_artifact(
     return replace(merged, source_metadata=merged_metadata)
 
 
+_SENTENCE_END = (".", "!", "?", ".”", "?”", "!”")
+# A period that ends an abbreviation does not end the sentence.
+_ABBREVIATION_ENDINGS = ("e.g.", "i.e.", "etc.", "vs.", "cf.", "al.", "Fig.", "fig.", "No.")
+
+
 def should_merge_adjacent_book_paragraph_fragments(
     previous: MergedRenderBlock,
     current: MergedRenderBlock,
@@ -1291,7 +1300,10 @@ def should_merge_adjacent_book_paragraph_fragments(
     previous_flags = set(str(flag) for flag in list(previous.source_metadata.get("recovery_flags") or []))
     current_flags = set(str(flag) for flag in list(current.source_metadata.get("recovery_flags") or []))
     if current_text[:1].islower():
-        return True
+        # After a finished sentence a lowercase start is a run-in heading ("how the agent loop
+        # works The loop is ..."), not the rest of a sentence broken by the page.
+        previous_text = _normalize_render_text(previous.source_text)
+        return not (previous_text.endswith(_SENTENCE_END) and not previous_text.endswith(_ABBREVIATION_ENDINGS))
     if "export_book_heading_demoted" in previous_flags or "export_book_heading_demoted" in current_flags:
         return not previous.source_text.rstrip().endswith(_TERMINAL_PUNCTUATION)
     return False
@@ -1622,6 +1634,9 @@ def is_translatable_prose_artifact_block(
     if effective_block_type == BlockType.CODE:
         return False
     effective_source_text = source_text if source_text is not None else block.source_text
+    if effective_block_type == BlockType.TABLE and table_grid(effective_source_text, source_metadata):
+        # Rows of "|"-delimited cells are a table, however long its cells read: it renders as a grid.
+        return False
     if code_text.looks_like_mixed_code_prose_artifact_text(effective_source_text):
         return False
     if not code_text.looks_like_prose_artifact_text(
@@ -1807,10 +1822,29 @@ def should_restore_pdf_paragraph_breaks(
     return False
 
 
+_SECTION_NUMBER_ONLY = re.compile(r"^\s*(?:\d+(?:\.\d+)*\.?|[A-Z]\.\d+(?:\.\d+)*)\s*$")
+
+
+_CJK_CHAR = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+
+
+def _latin_cjk_seam(previous: str, current: str) -> bool:
+    previous, current = previous.rstrip(), current.lstrip()
+    if not previous or not current:
+        return False
+    return bool(
+        (re.match(r"[A-Za-z0-9]", previous[-1]) and _CJK_CHAR.match(current[0]))
+        or (_CJK_CHAR.match(previous[-1]) and re.match(r"[A-Za-z0-9]", current[0]))
+    )
+
+
 def inline_join_target_text(target_texts: list[str]) -> str:
     merged = target_texts[0]
     for segment in target_texts[1:]:
-        if needs_ascii_sentence_gap(merged, segment):
+        # A heading's number translated as its own segment ("1.4.1" + "需要 LLM 的任务") keeps its space.
+        # Two segments meeting as Latin and Chinese ("OpenAI API" + "在本书中") get the space a
+        # translator writes between them inside a segment.
+        if _SECTION_NUMBER_ONLY.match(merged) or needs_ascii_sentence_gap(merged, segment) or _latin_cjk_seam(merged, segment):
             merged = f"{merged} {segment}"
         else:
             merged = f"{merged}{segment}"

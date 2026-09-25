@@ -152,20 +152,16 @@ export function PilotQualityPanel({ documentId, summary }: { documentId: string;
   );
 }
 
-/** The pilot result's one-line view of the QA: each layer's verdict, and where the full report is. */
-export function PilotQualityStrip({ documentId, summary }: { documentId: string; summary: PilotQualitySummary }) {
+/** Each layer's verdict as a chip: the pilot result's line of the QA (the report itself is on 进度). */
+export function LayerChips({ summary }: { summary: PilotQualitySummary }) {
   return (
-    <div className={s.qualityStrip} data-status={summary.status} aria-label="试译质检结果">
-      <div className={s.qualityStripHead}>{qualityHeadline(summary)}</div>
-      <ul className={s.layerChips}>
-        {summary.layers.map((layer) => (
-          <li key={layer.layer} className={s.layerChip} data-status={layer.status}>
-            {layer.name}
-            <span>{layer.status === "passed" ? "通过" : layer.status === "blocking" ? `严重 ${layer.counts.blocking}` : `一般 ${layer.counts.major}`}</span>
-          </li>
-        ))}
-      </ul>
-      <Link to={`/books/${documentId}/progress#pilot-quality`}>看质检报告</Link>
-    </div>
+    <ul className={s.layerChips} aria-label="试译质检结果">
+      {summary.layers.map((layer) => (
+        <li key={layer.layer} className={s.layerChip} data-status={layer.status}>
+          {layer.name}
+          <span>{layer.status === "passed" ? "通过" : layer.status === "blocking" ? `严重 ${layer.counts.blocking}` : `一般 ${layer.counts.major}`}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -69,5 +69,38 @@ class GuardrailLockedTermTests(unittest.TestCase):
         self.assertTrue(report.ok)
 
 
+class LiteralTermTests(unittest.TestCase):
+    """The Agent book's terminology locked identifiers as-is ("@tool", "step()", "Event"): 200 false violations."""
+
+    TERMS = [
+        LockedTerm("@tool", ("@tool",)),
+        LockedTerm("step()", ("step()",)),
+        LockedTerm("Event", ("Event",)),
+        LockedTerm("LLM", ("LLM",)),
+        LockedTerm("agent", ("智能体",)),
+    ]
+
+    def violated(self, source: str, target: str) -> list[str]:
+        return [item.source_term for item in find_term_violations([("u", source, target)], self.TERMS)]
+
+    def test_an_identifier_or_a_word_kept_as_it_is_applies_only_where_the_source_spells_it(self) -> None:
+        self.assertEqual(self.violated("Did a tool return an event at each step?", "工具在每一步都返回事件吗？"), [])
+        self.assertEqual(
+            self.violated("Decorate it with @tool and emit an Event from step().", "用装饰器标记它，并发出事件。"),
+            ["@tool", "step()", "Event"],
+        )
+        self.assertEqual(self.violated("Two LLMs disagree.", "两个大模型意见不一。"), ["LLM"])
+
+    def test_a_lowercase_word_kept_as_it_is_is_a_name_in_code(self) -> None:
+        terms = [LockedTerm("execute", ("execute",))]
+        check = lambda source, target: [item.source_term for item in find_term_violations([("u", source, target)], terms)]  # noqa: E731
+        self.assertEqual(check("The LLM executes each step.", "大语言模型逐步执行。"), [])
+        self.assertEqual(check("Call `execute` on the tool.", "对工具调用执行。"), ["execute"])
+
+    def test_words_still_match_by_their_forms(self) -> None:
+        self.assertEqual(self.violated("Agents act on their own.", "代理自主行动。"), ["agent"])
+        self.assertEqual(self.violated("Agents act on their own.", "智能体自主行动。"), [])
+
+
 if __name__ == "__main__":
     unittest.main()

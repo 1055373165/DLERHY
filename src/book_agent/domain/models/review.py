@@ -282,3 +282,147 @@ class PilotQualityReport(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     export_source: Mapped[str] = mapped_column(Text, nullable=False, default="none")
     error_text: Mapped[str | None] = mapped_column(Text)
     duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class PilotRepair(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """One run of the pilot repair loop (services/pilot_repair.py) after the pilot's layered QA.
+
+    docs/agent-upgrade/08-pilot-quality-gate.md §7. The loop takes the QA report's blocking and major
+    findings, tries repairs from a closed toolbox, keeps a repair only when the same checks say it
+    helped and nothing else got worse, and stops after three rounds or twice the pilot's cost. What
+    it tried is in ``pilot_repair_attempts``; systemic defects it found are ``pilot_defect_tickets``;
+    what it could not repair becomes one "需要你处理" question per issue class (an ``approvals`` row
+    of kind ``pilot_question``). ``after_report_id`` is the QA report of the re-exported pilot.
+    """
+
+    __tablename__ = "pilot_repairs"
+    __table_args__ = (
+        CheckConstraint("status IN ('running', 'finished', 'error')", name="ck_pilot_repairs_status"),
+        Index("idx_pilot_repairs_document", "document_id", "created_at"),
+        Index("idx_pilot_repairs_run", "run_id"),
+    )
+
+    document_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    run_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), ForeignKey("document_runs.id", ondelete="SET NULL"))
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    # passed (no blocking finding left) | escalated (some left, asked the reader) | nothing_to_do | error
+    outcome: Mapped[str | None] = mapped_column(Text)
+    # clean | max_rounds | budget | time | exhausted (every path tried)
+    stop_reason: Mapped[str | None] = mapped_column(Text)
+    rounds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    before_report_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("pilot_quality_reports.id", ondelete="SET NULL")
+    )
+    after_report_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("pilot_quality_reports.id", ondelete="SET NULL")
+    )
+    repaired_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    escalated_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    remaining_blocking: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    remaining_major: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    budget_usd: Mapped[float | None] = mapped_column(Numeric(12, 6))
+    cost_usd: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False, default=0)
+    summary_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
+    error_text: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PilotDefectTicket(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """A systemic defect the pilot repair found (§7.3): evidence for the dev-side coding agent.
+
+    The repair loop never changes code. For a problem whose cause is a generic rule (§7.1 rules 1–3)
+    it gives the book a workaround from the toolbox and files a ticket here: the check, the pages,
+    blocks and sample text, the suspected cause and the component to fix. Shown on the admin side,
+    never to readers.
+    """
+
+    __tablename__ = "pilot_defect_tickets"
+    __table_args__ = (
+        CheckConstraint("status IN ('open', 'fixed', 'wontfix')", name="ck_pilot_defect_tickets_status"),
+        Index("idx_pilot_defect_tickets_document", "document_id", "created_at"),
+        Index("idx_pilot_defect_tickets_check", "check_id", "status"),
+    )
+
+    document_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    repair_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), ForeignKey("pilot_repairs.id", ondelete="SET NULL"))
+    check_id: Mapped[str] = mapped_column(Text, nullable=False)
+    layer: Mapped[str] = mapped_column(Text, nullable=False)
+    # The generic cause's id ("L7.cjk_latin_spacing" or "L2.figure_regions:page_furniture").
+    issue_class: Mapped[str] = mapped_column(Text, nullable=False)
+    classification_rule: Mapped[int] = mapped_column(Integer, nullable=False)
+    # parser | export | translation
+    component: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    suspected_cause: Mapped[str] = mapped_column(Text, nullable=False)
+    reproduction: Mapped[str] = mapped_column(Text, nullable=False)
+    # Samples: page, block and sentence ids, source and target text, finding keys.
+    evidence_json: Mapped[list[dict[str, Any]]] = mapped_column(JsonDocument, nullable=False, default=list)
+    # How much of the pilot it touched: findings, pages, chapters.
+    impact_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
+    # The book's workaround: the tool, whether it was kept, the attempts.
+    workaround_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="open")
+
+
+class PilotRepairAttempt(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    """One repair the pilot repair loop tried: what, why, with which tool, and whether it was kept.
+
+    Complete on purpose: the lessons ledger (Q6) learns from these rows which path worked for which
+    problem on which kind of book.
+    """
+
+    __tablename__ = "pilot_repair_attempts"
+    __table_args__ = (
+        CheckConstraint(
+            "outcome IN ('kept', 'reverted', 'failed', 'skipped')", name="ck_pilot_repair_attempts_outcome"
+        ),
+        CheckConstraint(
+            "classification IN ('systemic', 'book_specific')", name="ck_pilot_repair_attempts_classification"
+        ),
+        Index("idx_pilot_repair_attempts_repair", "repair_id", "ordinal"),
+        Index("idx_pilot_repair_attempts_document", "document_id", "check_id"),
+    )
+
+    repair_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("pilot_repairs.id", ondelete="CASCADE"), nullable=False)
+    document_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    round: Mapped[int] = mapped_column(Integer, nullable=False)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    check_id: Mapped[str] = mapped_column(Text, nullable=False)
+    layer: Mapped[str] = mapped_column(Text, nullable=False)
+    severity: Mapped[str] = mapped_column(Text, nullable=False)
+    # The findings this attempt repairs (their stable keys).
+    finding_keys_json: Mapped[list[str]] = mapped_column(JsonDocument, nullable=False, default=list)
+    classification: Mapped[str] = mapped_column(Text, nullable=False)
+    # Which rule of §7.1 decided it (1–4), and the generic cause for a systemic one.
+    classification_rule: Mapped[int] = mapped_column(Integer, nullable=False)
+    classification_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    # The toolbox entry (§7.2) and the concrete path within it ("structure_edit" / "split_caption").
+    tool: Mapped[str] = mapped_column(Text, nullable=False)
+    path: Mapped[str] = mapped_column(Text, nullable=False)
+    params_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
+    # rule (deterministic) | agent (a model chose the parameters)
+    decided_by: Mapped[str] = mapped_column(Text, nullable=False, default="rule")
+    # What the attempt touched: retranslated packets and changed blocks.
+    packet_ids_json: Mapped[list[str]] = mapped_column(JsonDocument, nullable=False, default=list)
+    block_ids_json: Mapped[list[str]] = mapped_column(JsonDocument, nullable=False, default=list)
+    # Metrics before and after: severity counts, per-check counts, which target keys were present.
+    before_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
+    after_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
+    resolved_keys_json: Mapped[list[str]] = mapped_column(JsonDocument, nullable=False, default=list)
+    outcome: Mapped[str] = mapped_column(Text, nullable=False)
+    # Why it was reverted, failed or skipped ("not_improved", "worse:L6.negation_lost", an error).
+    reason: Mapped[str | None] = mapped_column(Text)
+    ticket_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("pilot_defect_tickets.id", ondelete="SET NULL")
+    )
+    token_in: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    token_out: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cost_usd: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False, default=0)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

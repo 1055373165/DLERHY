@@ -11,7 +11,8 @@ A TRANSLATE_FULL run may be scoped to a few chapters (``scope: "pilot"``, the
 free two-chapter pilot of services/pilot.py): the same stages, but translate,
 rule review and exports own only those chapters, while the terminology stage
 still samples the whole book. A pilot ends with its layered QA
-(``pilot_qa``, services/pilot_quality.py); a whole-book run has no such stage.
+(``pilot_qa``, services/pilot_quality.py) and the repair loop that follows it
+(``pilot_repair``, services/pilot_repair.py); a whole-book run has neither.
 Who pays for it is the run's billing category, not part of the plan.
 """
 
@@ -61,6 +62,10 @@ FULL_PIPELINE_STAGES: tuple[str, ...] = (
 EXPORT_STAGE_KEYS: frozenset[str] = frozenset(export_type.value for export_type in ExportType)
 # Pilot runs only, after their exports: the layered QA (L1–L7) of the pilot's chapters.
 PILOT_QA_STAGE = "pilot_qa"
+# Pilot runs only, after the QA: the repair loop (services/pilot_repair.py). Run request
+# ``pilot_repair: "off"`` leaves it out.
+PILOT_REPAIR_STAGE = "pilot_repair"
+PILOT_REPAIR_REQUEST_KEY = "pilot_repair"
 # Run request flag: approve the terminology agent's term locks without asking (see RunPlan.fast_reading).
 FAST_READING_REQUEST_KEY = "fast_reading"
 # Web page documents also get the Chinese page in the original layout, right after the reading copy.
@@ -180,6 +185,8 @@ def plan_for_run(run_type: DocumentRunType | str, status_detail_json: Mapping[st
             stages = (*stages[:at], WEB_EXPORT_STAGE, *stages[at:])
         if pilot:
             stages = (*stages, PILOT_QA_STAGE)
+            if str(request.get(PILOT_REPAIR_REQUEST_KEY) or "on").strip().lower() not in {"off", "false", "0", "no"}:
+                stages = (*stages, PILOT_REPAIR_STAGE)
         return RunPlan(
             run_type=run_type,
             stages=stages,

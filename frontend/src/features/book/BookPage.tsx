@@ -7,7 +7,7 @@ import { rememberBook } from "../../lib/currentBook";
 import { NotifyMe } from "../../components/NotifyMe";
 import { PilotResult, pilotChapterTitles } from "./PilotResult";
 import { StartDialog, type StartMode } from "./StartDialog";
-import { createRun, decideApproval, pauseRun, resumeRun, retryRun, startPilot } from "../../lib/api";
+import { apiImageUrl, createRun, decideApproval, pauseRun, resumeRun, retryRun, startPilot } from "../../lib/api";
 import { decideAutoStart, decideBookStart } from "../../lib/autoStart";
 import { type BookOverview, type NeedsYouItem, getOverview, usd } from "../../lib/overview";
 import { autoStartCapUsd, fastReadingPreferred } from "../../lib/preferences";
@@ -411,24 +411,30 @@ function NeedsYou({ documentId, items }: { documentId: string; items: NeedsYouIt
     onSettled: () => refresh(documentId),
   });
   return (
-    <section className={s.needs} aria-label="需要你处理">
+    <section className={s.needs} aria-label="需要你处理" id="needs-you">
       <h2 className={s.needsTitle}>需要你处理</h2>
       {items.map((item) => (
         <div key={item.id} className={s.card}>
-          <div>
+          <div className={s.cardBody}>
             <div className={s.cardTitle}>{item.title}</div>
             {item.detail && <div className={s.note}>{item.detail}</div>}
+            {(item.images ?? []).length > 0 && <EvidenceImages images={item.images ?? []} />}
           </div>
           <div className={s.row}>
             {item.action.kind === "approve" && (
               <>
                 <button className="btn btn-sm btn-approve" disabled={decide.isPending} onClick={() => decide.mutate({ id: item.id, approved: true })}>
-                  批准
+                  {item.action.approve_label ?? "批准"}
                 </button>
                 <button className="btn btn-sm btn-reject" disabled={decide.isPending} onClick={() => decide.mutate({ id: item.id, approved: false })}>
-                  拒绝
+                  {item.action.reject_label ?? "拒绝"}
                 </button>
               </>
+            )}
+            {item.kind === "question" && item.action.target && (
+              <Link className="btn btn-sm" to={item.action.target}>
+                {item.action.label ?? "看质检报告"}
+              </Link>
             )}
             {item.action.kind === "link" && item.action.target && (
               <Link className="btn btn-sm" to={item.action.target}>
@@ -445,6 +451,19 @@ function NeedsYou({ documentId, items }: { documentId: string; items: NeedsYouIt
       ))}
       {(decide.isError || resume.isError) && <div className={s.errorText}>操作失败，请重试。</div>}
     </section>
+  );
+}
+
+/** The page a question is about, with the problem outlined: a small picture that opens full size. */
+export function EvidenceImages({ images }: { images: string[] }) {
+  return (
+    <div className={s.evidence}>
+      {images.map((path) => (
+        <a key={path} href={apiImageUrl(path)} target="_blank" rel="noreferrer" className={s.evidenceLink}>
+          <img src={apiImageUrl(path)} alt="原书这一页，问题处用红框标出" className={s.evidenceImage} loading="lazy" />
+        </a>
+      ))}
+    </div>
   );
 }
 

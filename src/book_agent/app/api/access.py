@@ -36,7 +36,8 @@ from book_agent.domain.models.review import Export, IssueAction, ReviewIssue
 from book_agent.services.api_keys import ApiKeyService
 
 _ROLE_RANK = {"viewer": 0, "editor": 1, "admin": 2}
-_ADMIN_PATH_PREFIXES = ("/providers", "/api-keys")
+# Defect tickets are the dev side's work list, not a reader's.
+_ADMIN_PATH_PREFIXES = ("/providers", "/api-keys", "/pilot-defects")
 _READ_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
@@ -63,7 +64,8 @@ def _presented_key(request: Request) -> str | None:
         return authorization[7:].strip()
     if request.headers.get("x-api-key"):
         return request.headers["x-api-key"].strip()
-    if request.method == "GET" and request.url.path.endswith("/stream"):
+    # EventSource and <img> cannot send headers: the run stream and a pilot question's page image take a query key.
+    if request.method == "GET" and (request.url.path.endswith("/stream") or "/pilot-repair/evidence/" in request.url.path):
         return request.query_params.get("access_token")
     return None
 
