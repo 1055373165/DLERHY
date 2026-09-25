@@ -10,12 +10,17 @@ Every failed check becomes a non-blocking ``EXPORT_QA_FAILURE`` issue
 ``ReviewRepository.sync_issues``; a later audit that passes resolves it, and
 human decisions stay. A JSON report is written next to the export. QA never
 fails the run: it is a sensor for people and agents, not a gate.
+
+An export scoped to some chapters (a pilot's two) is judged on those chapters only: the
+untranslated share, the image count and the expected chapter sections of the document-level
+checks come from ``chapter_ids``, not from the whole book.
 """
 
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from collections.abc import Collection
 from pathlib import Path
 from typing import Any
 
@@ -86,8 +91,14 @@ class ExportQaService:
         document_id: str,
         export_type: ExportType,
         artifacts: list[tuple[str | None, Path]],
+        *,
+        chapter_ids: Collection[str] | None = None,
     ) -> QaAuditResult:
-        """``artifacts`` are (chapter_id or None for the whole document, html path)."""
+        """``artifacts`` are (chapter_id or None for the whole document, html path).
+
+        ``chapter_ids``: the chapters the export holds when it is scoped (a pilot); None is the whole book.
+        """
+        scope = [str(chapter_id) for chapter_id in chapter_ids] if chapter_ids is not None else None
         result = QaAuditResult(export_type=export_type.value)
         if export_type not in AUDITED_EXPORT_TYPES:
             return result
@@ -97,7 +108,7 @@ class ExportQaService:
             if not html_path.is_file():
                 continue
             audited_scopes.append(chapter_id)
-            checks = self._checks(document_id, chapter_id, export_type, html_path.read_text(encoding="utf-8"))
+            checks = self._checks(document_id, chapter_id, export_type, html_path.read_text(encoding="utf-8"), scope)
             report_path = html_path.with_name(html_path.stem + ".qa.json")
             atomic_write_text(
                 report_path,
@@ -142,8 +153,15 @@ class ExportQaService:
         result.resolved_issue_ids = [issue.id for issue in sync.resolved]
         return result
 
-    def _checks(self, document_id: str, chapter_id: str | None, export_type: ExportType, html: str) -> list[QaCheck]:
-        image_blocks = self._image_block_count(document_id, chapter_id)
+    def _checks(
+        self,
+        document_id: str,
+        chapter_id: str | None,
+        export_type: ExportType,
+        html: str,
+        scope: list[str] | None = None,
+    ) -> list[QaCheck]:
+        image_blocks = self._image_block_count(document_id, chapter_id, scope)
         report = audit_html(
             html,
             max_h2=_MAX_H2_BY_TYPE.get(export_type, 60),
@@ -157,20 +175,21 @@ class ExportQaService:
             checks.append(coverage)
         checks.append(heading_hierarchy_check(html))
         checks.append(empty_block_check(html))
-        translatable, untranslated = self._untranslated(document_id, chapter_id)
+        translatable, untranslated = self._untranslated(document_id, chapter_id, scope)
         checks.append(untranslated_ratio_check(translatable, untranslated))
         if export_type == ExportType.MERGED_HTML and chapter_id is None:
-            checks.append(self._chapter_sections(document_id, html))
+            checks.append(self._chapter_sections(document_id, html, scope))
         return checks
 
-    def _chapter_sections(self, document_id: str, html: str) -> QaCheck:
+    def _chapter_sections(self, document_id: str, html: str, scope: list[str] | None = None) -> QaCheck:
         """The merged book folds continuation fragments into the chapter before them; a real chapter must not be."""
         from book_agent.export import titles
 
         expected: list[Chapter] = []
-        for chapter in self.session.scalars(
-            select(Chapter).where(Chapter.document_id == document_id).order_by(Chapter.ordinal)
-        ).all():
+        statement = select(Chapter).where(Chapter.document_id == document_id).order_by(Chapter.ordinal)
+        if scope is not None:
+            statement = statement.where(Chapter.id.in_(scope or ["-"]))
+        for chapter in self.session.scalars(statement).all():
             source_title = str(chapter.title_src or "").strip()
             chapter_like = (
                 titles.extract_main_chapter_number(source_title) is not None
@@ -187,9 +206,13 @@ class ExportQaService:
         missing = [str(chapter.title_src) for chapter in expected if f"id='chapter-{chapter.id}'" not in html]
         return chapter_sections_check(missing, len(expected))
 
-    def _image_block_count(self, document_id: str, chapter_id: str | None) -> int:
+    def _image_block_count(self, document_id: str, chapter_id: str | None, scope: list[str] | None = None) -> int:
+        """Pictures a reader should see: inline icons, hairline fragments and blocks a repair hid
+        are not rendered on purpose, so they do not count against the export."""
+        from book_agent.domain.structure.parse_health import HealthBlock, image_fragment_kind, is_inline_icon
+
         stmt = (
-            select(Block.id)
+            select(Block)
             .join(Chapter, Chapter.id == Block.chapter_id)
             .where(
                 Chapter.document_id == document_id,
@@ -199,9 +222,23 @@ class ExportQaService:
         )
         if chapter_id:
             stmt = stmt.where(Block.chapter_id == chapter_id)
-        return len(self.session.scalars(stmt).all())
+        elif scope is not None:
+            stmt = stmt.where(Block.chapter_id.in_(scope or ["-"]))
+        count = 0
+        for block in self.session.scalars(stmt).all():
+            span = dict(block.source_span_json or {})
+            if span.get("repair_hidden_from_export"):
+                continue
+            bbox = HealthBlock(
+                id=block.id, chapter_id=block.chapter_id, ordinal=block.ordinal, block_type=block.block_type.value,
+                source_text=block.source_text or "", source_span_json=span,
+            ).bbox
+            if bbox is not None and (is_inline_icon(bbox) or image_fragment_kind(bbox) is not None):
+                continue
+            count += 1
+        return count
 
-    def _untranslated(self, document_id: str, chapter_id: str | None) -> tuple[int, int]:
+    def _untranslated(self, document_id: str, chapter_id: str | None, scope: list[str] | None = None) -> tuple[int, int]:
         stmt = select(Sentence.id).where(
             Sentence.document_id == document_id,
             Sentence.translatable.is_(True),
@@ -209,6 +246,8 @@ class ExportQaService:
         )
         if chapter_id:
             stmt = stmt.where(Sentence.chapter_id == chapter_id)
+        elif scope is not None:
+            stmt = stmt.where(Sentence.chapter_id.in_(scope or ["-"]))
         sentence_ids = list(self.session.scalars(stmt).all())
         translated = active_target_texts(self.session, sentence_ids)
         return len(sentence_ids), sum(1 for sentence_id in sentence_ids if sentence_id not in translated)

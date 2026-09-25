@@ -50,6 +50,7 @@ from book_agent.domain.enums import (
     MemoryStatus,
     PacketSentenceRole,
     PacketStatus,
+    RunStatus,
     SnapshotType,
 )
 from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
@@ -72,6 +73,7 @@ from book_agent.domain.terminology.matching import SourceTermIndex, source_term_
 from book_agent.infra.repositories.agent import AgentLedgerRepository
 from book_agent.infra.repositories.ops import OpsRepository
 from book_agent.infra.repositories.review import active_target_texts
+from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.services.glossary_service import GlossaryService
 from book_agent.services.segment_edit import SegmentEditService
 from book_agent.services.structure_edits import StructureEditService
@@ -294,12 +296,16 @@ class PilotRepairToolbox:
             if packet.status != PacketStatus.BUILT:
                 continue
             watermark = int(self.session.scalar(select(func.coalesce(func.max(Event.id), 0))) or 0)
-            translation.execute_packet(
+            artifacts = translation.execute_packet(
                 packet_id,
                 rerun_hints=tuple(hint for hint in hints if hint)[:8],
                 auto_commit_memory=False,
                 run_id=self.ctx.run_id,
             )
+            # The new attempt is the packet's translation; older attempts must not stay active
+            # (repositories/translation.py: supersede_other_attempts).
+            if artifacts.translation_run.status == RunStatus.SUCCEEDED:
+                TranslationRepository(self.session).supersede_other_attempts(packet_id, artifacts.translation_run.id)
             self.ctx.budget.packets += 1
             # Charged as it is spent, so the next packet is checked against it (the loop settles the attempt).
             self.ctx.budget.charge(

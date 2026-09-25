@@ -379,6 +379,7 @@ class PilotRepairService:
         self.session.commit()
         self._begin_write()
         before = QaSnapshot.from_layers(layers)
+        misaligned_before = alignment_anomalies(self.session, ctx.chapter_ids)
         chapter_ids_before = list(ctx.chapter_ids)
         spent_before = ctx.budget.spent_usd
         result: ToolResult | None = None
@@ -393,6 +394,12 @@ class PilotRepairService:
             after = QaSnapshot.from_layers(new_layers)
             verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings})
             outcome = _AttemptOutcome("kept" if verdict.keep else "reverted", None if verdict.keep else verdict.reason, new_layers, verdict.resolved_keys)
+            # A repair must not leave translations the export cannot align (ALIGNMENT_FAILURE).
+            misaligned_after = alignment_anomalies(self.session, ctx.chapter_ids)
+            if verdict.keep and misaligned_after > misaligned_before:
+                outcome = _AttemptOutcome(
+                    "reverted", f"worse:alignment ({misaligned_before} -> {misaligned_after} misaligned targets)", new_layers
+                )
         except NotApplicable as exc:
             outcome = _AttemptOutcome("skipped", f"not_applicable: {exc}"[:500])
         except BudgetExhausted as exc:
@@ -637,13 +644,23 @@ class PilotRepairService:
             try:
                 self.session.commit()
                 self._begin_write()
-                workflow.export_document(
+                result = workflow.export_document(
                     ctx.document_id,
                     export_type,
                     auto_execute_followup_on_gate=False,
                     chapter_ids=list(ctx.chapter_ids),
                     despite_gate=True,
                 )
+                self.session.commit()
+                # The export QA judges the new reading copy (on the pilot's chapters only).
+                from book_agent.services.export_qa import ExportQaService
+
+                artifacts = (
+                    [(chapter.chapter_id, Path(chapter.file_path)) for chapter in result.chapter_results]
+                    if result.chapter_results
+                    else ([(None, Path(result.file_path))] if result.file_path else [])
+                )
+                ExportQaService(self.session).audit(ctx.document_id, export_type, artifacts, chapter_ids=list(ctx.chapter_ids))
                 self.session.commit()
             except Exception:
                 logger.exception("pilot repair: re-export %s of %s failed", export_type.value, ctx.document_id)
@@ -834,6 +851,24 @@ class PilotRepairService:
                 for state in classes.values()
             ],
         }
+
+
+def alignment_anomalies(session: Session, chapter_ids: Sequence[str]) -> int:
+    """Alignment breakage the export's check would flag in these chapters (export/alignment.py):
+    translation segments no sentence renders, and sentences whose only translations are inactive.
+
+    Sentences with no translation at all are left out: that is the QA's untranslated check, and
+    retranslating them is what a repair does.
+    """
+    from book_agent.export.alignment import build_export_misalignment_evidence
+    from book_agent.infra.repositories.export import ExportRepository
+
+    repository = ExportRepository(session)
+    total = 0
+    for chapter_id in chapter_ids:
+        evidence = build_export_misalignment_evidence(repository.load_chapter_bundle(chapter_id))
+        total += len(evidence.sentence_ids_with_only_inactive_targets) + len(evidence.orphan_target_segment_ids)
+    return total
 
 
 def spacing_convention(session: Session, chapter_ids: Sequence[str]) -> str | None:
@@ -1033,3 +1068,116 @@ def question_payload(approval: Approval) -> dict[str, Any]:
 
 def document_is_pdf(document: Document | None) -> bool:
     return document is not None and document.source_type in {SourceType.PDF_TEXT, SourceType.PDF_MIXED, SourceType.PDF_SCAN}
+
+
+def heal_alignment(session: Session, workflow: Any, document_id: str) -> dict[str, Any]:
+    """Heal translations left misaligned (ALIGNMENT_FAILURE, export_time_misalignment) and re-check.
+
+    For each packet an open export ALIGNMENT_FAILURE names: when its latest successful attempt
+    translates every current sentence of the packet, the other attempts' active segments are
+    superseded (what the repair and the fork now do as they go). Then each chapter's export gate
+    runs again, which resolves the issues it no longer finds. A packet whose latest attempt does
+    not cover it is left alone and reported: it needs a retranslation.
+    """
+    from book_agent.domain.enums import IssueStatus, PacketSentenceRole, RootCauseLayer, RunStatus, TargetSegmentStatus
+    from book_agent.domain.models import Sentence
+    from book_agent.domain.models.review import ReviewIssue
+    from book_agent.domain.models.translation import AlignmentEdge, PacketSentenceMap, TargetSegment, TranslationRun
+    from book_agent.infra.repositories.translation import TranslationRepository
+
+    issues = session.scalars(
+        select(ReviewIssue).where(
+            ReviewIssue.document_id == document_id,
+            ReviewIssue.issue_type == "ALIGNMENT_FAILURE",
+            ReviewIssue.root_cause_layer == RootCauseLayer.EXPORT,
+            ReviewIssue.status.in_((IssueStatus.OPEN, IssueStatus.TRIAGED)),
+        )
+    ).all()
+    healed: list[dict[str, Any]] = []
+    skipped: list[str] = []
+    chapters: set[str] = set()
+    for issue in issues:
+        if not issue.packet_id:
+            continue
+        chapters.add(str(issue.chapter_id))
+        latest = session.scalars(
+            select(TranslationRun)
+            .where(TranslationRun.packet_id == issue.packet_id, TranslationRun.status == RunStatus.SUCCEEDED)
+            .order_by(TranslationRun.attempt.desc())
+            .limit(1)
+        ).first()
+        current = set(
+            session.scalars(
+                select(Sentence.id)
+                .join(PacketSentenceMap, PacketSentenceMap.sentence_id == Sentence.id)
+                .where(
+                    PacketSentenceMap.packet_id == issue.packet_id,
+                    PacketSentenceMap.role == PacketSentenceRole.CURRENT,
+                    Sentence.translatable.is_(True),
+                    Sentence.retired_by_revision_id.is_(None),
+                )
+            ).all()
+        )
+        covered = (
+            set(
+                session.scalars(
+                    select(AlignmentEdge.sentence_id)
+                    .join(TargetSegment, TargetSegment.id == AlignmentEdge.target_segment_id)
+                    .where(TargetSegment.translation_run_id == latest.id, TargetSegment.final_status != TargetSegmentStatus.SUPERSEDED)
+                ).all()
+            )
+            if latest is not None
+            else set()
+        )
+        if latest is None or not current <= covered:
+            skipped.append(str(issue.packet_id))
+            continue
+        superseded = TranslationRepository(session).supersede_other_attempts(str(issue.packet_id), latest.id)
+        healed.append({"packet_id": str(issue.packet_id), "kept_attempt": latest.attempt, "superseded_segments": superseded})
+    session.flush()
+    for chapter_id in sorted(chapters):
+        workflow._revalidate_export_gate(chapter_id)
+    session.flush()
+    still_open = [
+        str(issue.id)
+        for issue in session.scalars(
+            select(ReviewIssue).where(
+                ReviewIssue.document_id == document_id,
+                ReviewIssue.issue_type == "ALIGNMENT_FAILURE",
+                ReviewIssue.status.in_((IssueStatus.OPEN, IssueStatus.TRIAGED)),
+            )
+        ).all()
+    ]
+    return {"healed": healed, "needs_retranslation": skipped, "open_alignment_issues": still_open}
+
+
+def reaudit_pilot_exports(session: Session, document_id: str) -> dict[str, Any]:
+    """Audit the pilot's reading copies again on the pilot's chapters (resolves whole-book false issues).
+
+    The latest merged export and the pilot chapters' bilingual files next to it; nothing is exported.
+    """
+    from book_agent.domain.enums import ExportStatus
+    from book_agent.domain.models.review import Export
+    from book_agent.services.export_qa import ExportQaService
+
+    chapter_ids = pilot_chapter_ids(session, document_id)
+    merged = session.scalars(
+        select(Export)
+        .where(Export.document_id == document_id, Export.export_type == ExportType.MERGED_HTML, Export.status == ExportStatus.SUCCEEDED)
+        .order_by(Export.updated_at.desc(), Export.id.desc())
+        .limit(1)
+    ).first()
+    if merged is None or not merged.file_path or not Path(merged.file_path).is_file():
+        return {"error": "no merged export file to audit", "chapter_ids": chapter_ids}
+    merged_path = Path(merged.file_path)
+    service = ExportQaService(session)
+    results = [
+        service.audit(document_id, ExportType.MERGED_HTML, [(None, merged_path)], chapter_ids=chapter_ids).to_json(),
+        service.audit(
+            document_id,
+            ExportType.BILINGUAL_HTML,
+            [(chapter_id, merged_path.parent / f"bilingual-{chapter_id}.html") for chapter_id in chapter_ids],
+            chapter_ids=chapter_ids,
+        ).to_json(),
+    ]
+    return {"chapter_ids": chapter_ids, "audits": results}

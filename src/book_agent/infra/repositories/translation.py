@@ -169,6 +169,37 @@ class TranslationRepository:
                 chapter.status = ChapterStatus.TRANSLATED
                 self.session.merge(chapter)
 
+    def supersede_other_attempts(self, packet_id: str, keep_run_id: str) -> int:
+        """Mark every active segment of the packet's other attempts superseded; returns how many.
+
+        An attempt that translates (or carries, or corrects) the packet's current sentences is the
+        packet's translation. Older attempts left active are harmless only while their sentences
+        stay live: once a parse revision fork retires some of them, the export ranks the old
+        attempt current for the retired sentences and its other segments become orphans
+        (ALIGNMENT_FAILURE, export_time_misalignment).
+        """
+        from datetime import datetime, timezone
+
+        run_ids = [
+            run_id
+            for run_id in self.session.scalars(select(TranslationRun.id).where(TranslationRun.packet_id == packet_id)).all()
+            if run_id != keep_run_id
+        ]
+        if not run_ids:
+            return 0
+        segments = self.session.scalars(
+            select(TargetSegment).where(
+                TargetSegment.translation_run_id.in_(run_ids),
+                TargetSegment.final_status != TargetSegmentStatus.SUPERSEDED,
+            )
+        ).all()
+        now = datetime.now(timezone.utc)
+        for segment in segments:
+            segment.final_status = TargetSegmentStatus.SUPERSEDED
+            segment.updated_at = now
+        self.session.flush()
+        return len(segments)
+
     def _merge_collection(self, collection: list[object]) -> None:
         for item in collection:
             self.session.merge(item)

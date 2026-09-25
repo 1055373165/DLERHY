@@ -52,6 +52,7 @@ from book_agent.domain.structure.sentence_alignment import SentenceLink, align_s
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
 from book_agent.infra.repositories.events import emit_event
 from book_agent.infra.repositories.review import ReviewRepository
+from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.services.bootstrap import SegmentationService
 from book_agent.services.rebuild import TargetedRebuildService
 
@@ -451,6 +452,12 @@ class ParseRevisionForkService:
                             )
                         )
                         covered.add(sentence_id)
+                # The carried attempt is now the packet's translation: every older attempt's segments
+                # go, not only the one carried from (an older attempt left active is ranked current
+                # at export for sentences this fork retired, and its other segments become orphans).
+                TranslationRepository(self.session).supersede_other_attempts(packet.id, new_run.id)
+            else:
+                # Nothing carried: every edge of the latest attempt was to a retired sentence.
                 for segment in segments:
                     segment.final_status = TargetSegmentStatus.SUPERSEDED
                     segment.updated_at = now

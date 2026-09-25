@@ -402,6 +402,7 @@ class SegmentEditService:
             },
         )
         self.session.flush()
+        self.translations.supersede_other_attempts(run.packet_id, new_run.id)
         return PacketRewriteResult(
             translation_run_id=new_run.id,
             attempt=attempt,
