@@ -6,6 +6,7 @@ import { NotifyMe } from "../../components/NotifyMe";
 import { Surface } from "../../components/Surface";
 import { decideApproval, resumeRun } from "../../lib/api";
 import { getInbox } from "../../lib/overview";
+import { EvidenceImages } from "../book/BookPage";
 import s from "../book/Tabs.module.css";
 
 /** Everything that waits on you, across books, each with the one thing to do about it. */
@@ -44,16 +45,25 @@ export function InboxPage() {
                 <Link to={`/books/${item.document_id}`}>{item.document_title ?? "未命名"}</Link>
                 <span> · {item.title}</span>
                 {item.detail && <div className={s.meta}>{item.detail}</div>}
+                {(item.images ?? []).length > 0 && <EvidenceImages images={item.images ?? []} />}
               </span>
               <span>
                 {item.action.kind === "approve" && (
                   <>
                     <button className="btn btn-sm btn-approve" disabled={decide.isPending} onClick={() => decide.mutate({ id: item.id, approved: true })}>
-                      批准
+                      {item.action.approve_label ?? "批准"}
                     </button>{" "}
                     <button className="btn btn-sm btn-reject" disabled={decide.isPending} onClick={() => decide.mutate({ id: item.id, approved: false })}>
-                      拒绝
+                      {item.action.reject_label ?? "拒绝"}
                     </button>
+                  </>
+                )}
+                {item.kind === "question" && item.action.target && (
+                  <>
+                    {" "}
+                    <Link className="btn btn-sm" to={item.action.target}>
+                      {item.action.label ?? "看质检报告"}
+                    </Link>
                   </>
                 )}
                 {item.action.kind === "link" && item.action.target && (

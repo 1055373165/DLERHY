@@ -193,7 +193,8 @@ describe("Pilot quality report", () => {
       "忠实度通过",
       "排版与纯净通过",
     ]);
-    expect(within(strip).getByRole("link", { name: "看质检报告" })).toHaveAttribute("href", `/books/${ID}/progress#pilot-quality`);
+    const summary = screen.getByRole("region", { name: "试译质量" });
+    expect(within(summary).getByRole("link", { name: "看质检报告" })).toHaveAttribute("href", `/books/${ID}/progress#pilot-quality`);
   });
 
   it("opens the reading copy at the finding's chapter", async () => {

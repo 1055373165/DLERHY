@@ -470,6 +470,13 @@ export function runStreamUrl(runId: string): string {
   return withApiBase(`/runs/${encodeURIComponent(runId)}/stream${query}`);
 }
 
+/** An API path an <img> can load: it cannot send the key header, so the key goes in the query. */
+export function apiImageUrl(path: string): string {
+  const apiKey = getStoredApiKey();
+  const query = apiKey ? `${path.includes("?") ? "&" : "?"}access_token=${encodeURIComponent(apiKey)}` : "";
+  return withApiBase(`${path}${query}`);
+}
+
 function withApiBase(path: string): string {
   if (path.startsWith("http://") || path.startsWith("https://")) {
     return path;

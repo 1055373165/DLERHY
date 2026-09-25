@@ -74,6 +74,7 @@ function installFetchMock(overview: () => BookOverview) {
         return json({ document_id: ID, title: "Agents", title_src: "Agents", source_type: "epub", status: "active", chapters: [] });
       }
       if (url.includes("/v1/inbox")) return json({ count: 0, items: [] });
+      if (/\/v1\/approvals\/[^/]+\/(approve|reject)$/.test(url)) return json({ approval_id: "a1", status: "approved" });
       return notFound();
     }),
   );
@@ -136,9 +137,10 @@ describe("The free pilot", () => {
     expect(screen.getByRole("tab", { name: "中文版" })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Markdown" })).not.toBeInTheDocument();
     const result = screen.getByRole("group", { name: "试译结果" });
-    expect(result).toHaveTextContent("还有 3 个问题，其中 1 个严重");
-    expect(result).toHaveTextContent("漏译 2 处（1 处严重）");
-    expect(result).toHaveTextContent("文风不一致 1 处");
+    // One summary: the verdict, and the review's findings one link away.
+    const summary = within(result).getByRole("region", { name: "试译质量" });
+    expect(summary).toHaveTextContent("还有 1 个严重问题，试译照常可以读。");
+    expect(within(summary).getByRole("link", { name: "审校意见 3 条（1 条严重）" })).toHaveAttribute("href", `/books/${ID}/issues`);
     // Above the auto-start cap ($1), 翻译全书 asks first, with the rest of the book's cost.
     const user = userEvent.setup();
     await user.click(within(result).getByRole("button", { name: "翻译全书（约 $2.50）" }));
@@ -146,6 +148,86 @@ describe("The free pilot", () => {
     expect(dialog).toHaveTextContent("试译过的两章不再翻译、不再收费");
     await user.click(within(dialog).getByRole("button", { name: "翻译全书" }));
     await waitFor(() => expect(posted(calls, "/v1/runs")).toHaveLength(1));
+  });
+
+  it("says in one place what the repair fixed, the layers, and what waits on the reader", async () => {
+    const repaired = (): BookOverview => {
+      const book = ready();
+      return {
+        ...book,
+        headline: "试译完成：前两章可以阅读了。自动修复了 7 个问题，还有 3 个需要你看（1 个问题等你回答）。",
+        pilot: {
+          ...(book.pilot as PilotOverview),
+          problems: { open: 41, blocking: 0, by_type: [] },
+          quality: {
+            report_id: "q2",
+            status: "blocking",
+            checked_at: null,
+            counts: { blocking: 1, major: 2, minor: 4 },
+            layers: [
+              { layer: "L1", name: "结构", status: "passed", counts: { blocking: 0, major: 0, minor: 0 } },
+              { layer: "L2", name: "图表", status: "blocking", counts: { blocking: 1, major: 0, minor: 0 } },
+              { layer: "L5", name: "术语", status: "warnings", counts: { blocking: 0, major: 2, minor: 0 } },
+            ],
+          },
+          repair: {
+            repair_id: "r1",
+            status: "finished",
+            outcome: "escalated",
+            repaired_kinds: ["同一术语用了几种译法", "中英文之间的空格与全书习惯不一致", "页眉被当成了正文或脚注", "图片裁剪不对"],
+            stop_reason: "exhausted",
+            rounds: 2,
+            repaired: 7,
+            remaining: { blocking: 1, major: 2 },
+            questions: 1,
+            attempts: 9,
+            cost_usd: 0.02,
+            text: "自动修复了 7 个问题，还有 3 个需要你看（1 个问题等你回答）。",
+            finished_at: null,
+          },
+        },
+        parse_health: { report_id: "h1", status: "blocking", needs_attention: true, checked_at: null, counts: { blocking: 1, major: 0, minor: 0 }, checks: [] } as unknown as BookOverview["parse_health"],
+        needs_you: [
+          {
+            kind: "question",
+            id: "a1",
+            title: "第 12 页的图片自动裁剪不干净，修正了几次没有成功。要把这张图所在的页面区域原样截取、保留成图片吗？",
+            detail: "图片裁剪不对：第 12 页，共 1 处，自动修复没有解决。",
+            images: [`/documents/${ID}/pilot-repair/evidence/L2-figure_regions-p12.png`],
+            action: { kind: "approve", approve_label: "是", reject_label: "否", target: `/books/${ID}/progress#pilot-quality`, label: "看质检报告" },
+          },
+        ],
+      };
+    };
+    const calls = installFetchMock(repaired);
+    renderBook(`/books/${ID}/read`);
+    const result = await screen.findByRole("group", { name: "试译结果" });
+    const summary = within(result).getByRole("region", { name: "试译质量" });
+    // One verdict, one line of layers, what was repaired, what is asked: no separate notice boxes.
+    expect(summary).toHaveTextContent("还有 1 处严重问题（图表），试译照常可以读。");
+    expect([...within(summary).getByLabelText("试译质检结果").querySelectorAll("li")].map((chip) => chip.textContent)).toEqual([
+      "结构通过",
+      "图表严重 1",
+      "术语一般 2",
+    ]);
+    expect(summary).toHaveTextContent("自动修复了 7 个问题：同一术语用了几种译法、中英文之间的空格与全书习惯不一致、页眉被当成了正文或脚注");
+    expect(within(summary).getByRole("link", { name: "去回答" })).toHaveAttribute("href", "#needs-you");
+    expect(within(summary).getByRole("link", { name: "审校意见 41 条" })).toBeInTheDocument();
+    expect(within(summary).getByRole("link", { name: "解析体检有严重问题" })).toBeInTheDocument();
+    expect(result.querySelectorAll("[class*='attention'], [class*='pilotProblems']")).toHaveLength(0);
+    // The pilot does not wait on the question: 翻译全书 is still the choice.
+    expect(within(result).getByRole("button", { name: "翻译全书（约 $2.50）" })).toBeEnabled();
+
+    // The question: 是 / 否, with the page it is about.
+    const needs = screen.getByRole("region", { name: "需要你处理" });
+    expect(needs).toHaveTextContent("要把这张图所在的页面区域原样截取、保留成图片吗？");
+    expect(within(needs).getByRole("img", { name: /原书这一页/ })).toHaveAttribute(
+      "src",
+      `/v1/documents/${ID}/pilot-repair/evidence/L2-figure_regions-p12.png`,
+    );
+    await userEvent.setup().click(within(needs).getByRole("button", { name: "是" }));
+    await waitFor(() => expect(posted(calls, "/v1/approvals/a1/approve")).toHaveLength(1));
+    expect(within(needs).getByRole("button", { name: "否" })).toBeInTheDocument();
   });
 
   it("starts the whole book at once when it costs no more than the auto-start cap", async () => {

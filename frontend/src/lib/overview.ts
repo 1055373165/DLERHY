@@ -24,11 +24,21 @@ export interface OverviewStep {
 }
 
 export interface NeedsYouItem {
-  kind: "approval" | "paused";
+  /** question: a problem the pilot's repair could not fix, asked as one yes/no question. */
+  kind: "approval" | "paused" | "question";
   id: string;
   title: string;
   detail: string | null;
-  action: { kind: "approve" | "resume" | "link"; target?: string; label?: string };
+  /** Pictures of the page with the problem outlined (API paths). */
+  images?: string[];
+  action: {
+    kind: "approve" | "resume" | "link";
+    target?: string;
+    label?: string;
+    /** A question's answers (是 / 否) instead of 批准 / 拒绝. */
+    approve_label?: string;
+    reject_label?: string;
+  };
 }
 
 export interface InboxItem extends NeedsYouItem {
@@ -57,6 +67,26 @@ export interface PilotProblems {
   by_type: { type: string; count: number; blocking: number }[];
 }
 
+/** The repair loop after the pilot's QA (services/pilot_repair.py): what it repaired, what is left. */
+export interface PilotRepairSummary {
+  repair_id: string;
+  status: "running" | "finished" | "error";
+  outcome: "passed" | "escalated" | "nothing_to_do" | "error" | null;
+  /** What kinds of problem it repaired, most first. */
+  repaired_kinds?: string[];
+  stop_reason: string | null;
+  rounds: number;
+  repaired: number;
+  remaining: { blocking: number; major: number };
+  /** Questions left in 需要你处理. */
+  questions: number;
+  attempts: number;
+  cost_usd: number;
+  /** In words: "自动修复了 N 个问题，还有 M 个需要你看。" */
+  text: string;
+  finished_at: string | null;
+}
+
 export interface PilotOverview {
   available: boolean;
   unavailable_reason: string | null;
@@ -74,6 +104,8 @@ export interface PilotOverview {
   finished_at: string | null;
   /** The pilot's layered QA (L1–L7); null before it ran, absent from older servers. */
   quality?: PilotQualitySummary | null;
+  /** The repair loop after the QA; null before it ran, absent from older servers. */
+  repair?: PilotRepairSummary | null;
 }
 
 export interface BookOverview {
