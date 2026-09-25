@@ -127,6 +127,9 @@ class Settings(BaseSettings):
     translation_input_cache_hit_cost_per_1m_tokens: float | None = None
     translation_input_cost_per_1m_tokens: float | None = None
     translation_output_cost_per_1m_tokens: float | None = None
+    # The prices above are off-peak prices when both are set (see workers/providers/pricing.py).
+    translation_peak_price_multiplier: float | None = None
+    translation_off_peak_window_utc: str | None = None
     # Prepaid organisations are charged the provider cost of their calls times this
     # (1.0 passes the cost through; 1.5 adds a 50% margin).
     billing_price_multiplier: float = Field(default=1.0, gt=0)

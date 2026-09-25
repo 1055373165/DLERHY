@@ -23,6 +23,12 @@ class ProviderCredentialBase(BaseModel):
         default=None, ge=0, description="Price per million cached input tokens (prompt cache hits)."
     )
     output_cost_per_1m_tokens: float | None = Field(default=None, ge=0, description="Price per million output tokens.")
+    peak_price_multiplier: float | None = Field(
+        default=None, gt=0, description="Outside the off-peak window prices are this many times the prices above."
+    )
+    off_peak_window_utc: str | None = Field(
+        default=None, max_length=11, description='Off-peak hours in UTC, e.g. "16:30-00:30"; may wrap past midnight.'
+    )
     request_overrides: dict[str, Any] = Field(
         default_factory=dict,
         description='Extra request fields for every call, e.g. {"thinking": {"type": "disabled"}}.',
@@ -51,6 +57,8 @@ class ProviderCredentialUpdate(BaseModel):
     input_cost_per_1m_tokens: float | None = Field(default=None, ge=0)
     input_cache_hit_cost_per_1m_tokens: float | None = Field(default=None, ge=0)
     output_cost_per_1m_tokens: float | None = Field(default=None, ge=0)
+    peak_price_multiplier: float | None = Field(default=None, gt=0)
+    off_peak_window_utc: str | None = Field(default=None, max_length=11)
     request_overrides: dict[str, Any] | None = None
 
 
