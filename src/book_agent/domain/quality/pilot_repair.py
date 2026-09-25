@@ -462,6 +462,8 @@ def escalation_question(check_id: str, findings: Sequence[Mapping[str, Any]]) ->
     sample = next((str((finding.get("evidence") or {}).get("source") or "") for finding in findings if (finding.get("evidence") or {}).get("source")), "")
     sample = sample if len(sample) <= 40 else sample[:39] + "…"
     lead = f"{where}{'的' if where else ''}"
+    markers = sorted({str((finding.get("evidence") or {}).get("marker") or "") for finding in findings} - {""})
+    marker_text = "程序提示" + (f"（{'、'.join(f'「{marker}」' for marker in markers[:3])}）" if markers else "")
     questions = {
         "L2.figure_regions": f"{lead}图片自动裁剪不干净，修正了几次没有成功。要把这张图所在的页面区域原样截取、保留成图片吗？",
         "L2.figure_without_image": f"{lead}图在中文版里没有图片，自动修复没有成功。要把原书这一页的图直接截图放进中文版吗？",
@@ -473,7 +475,7 @@ def escalation_question(check_id: str, findings: Sequence[Mapping[str, Any]]) ->
         "L1.chapter_folded": f"「{sample}」应当是单独的一章，自动拆分没有成功。要按书签把它拆成单独一章吗？",
         "L1.export_chapter_missing": "中文版里有一章没有单独成章。要在全书翻译前先由我们修复导出再继续吗？",
         "L6.untranslated_sentence": f"{lead}有 {count} 句没有译文，重译后仍然缺失。要在中文版里先显示这几句的原文吗？",
-        "L7.leaked_marker": f"{lead}译文里混进了程序提示，自动清除没有成功。要在全书翻译前先由我们修复再继续吗？",
+        "L7.leaked_marker": f"{lead}译文里混进了{marker_text}，自动清除没有成功。要在全书翻译前先由我们修复再继续吗？",
         "L7.stray_glyph": f"{lead}有异常字符（如 ¡），是原书字体解码的问题。要在全书翻译前先由我们修复解析再继续吗？",
         "L4.code_translated": f"{lead}有代码被翻译了，重译后仍然如此。要把这些代码块改为原样保留、不翻译吗？",
     }

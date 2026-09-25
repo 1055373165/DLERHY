@@ -396,7 +396,16 @@ class PilotRepairToolbox:
     def _segment_edit__strip_leaked_markers(self, item: WorkItem) -> ToolResult:
         packets = self._block_packets(item.findings)
         markers = sorted({str((finding.get("evidence") or {}).get("marker") or "") for finding in item.findings} - {""})
-        changed = self._rewrite(packets, lambda text, _ids: fixes.strip_leaked_markers(text), "去掉译文里的程序提示")
+        convention = self.ctx.spacing_convention
+
+        def transform(text: str, _ids: list[str]) -> str:
+            fixed = fixes.strip_leaked_markers(text)
+            # "使用**LLM**的" becomes "使用LLM的": the words the marks separated take the book's spacing.
+            if fixed != text and convention in {"spaced", "unspaced"}:
+                fixed = fixes.fix_cjk_latin_spacing(fixed, convention)
+            return fixed
+
+        changed = self._rewrite(packets, transform, "去掉译文里的程序提示")
         return ToolResult(params={"markers": markers}, edited_packet_ids=changed)
 
     def _segment_edit__cjk_latin_spacing(self, item: WorkItem) -> ToolResult:
