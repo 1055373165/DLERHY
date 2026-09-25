@@ -47,6 +47,13 @@ class RunInHeadingMergeTests(unittest.TestCase):
         after_abbreviation = replace(previous, source_text="Tools extend what an agent can do, e.g.")
         self.assertTrue(should_merge_adjacent_book_paragraph_fragments(after_abbreviation, rest))
 
+    def test_a_heading_number_translated_on_its_own_keeps_its_space(self) -> None:
+        from book_agent.export.render_repair import inline_join_target_text
+
+        # The Agent book: "1.4.1" and "需要 LLM 的任务" came back as two segments of one heading.
+        self.assertEqual(inline_join_target_text(["1.4.1", "需要 LLM 的任务"]), "1.4.1 需要 LLM 的任务")
+        self.assertEqual(inline_join_target_text(["第一句。", "第二句。"]), "第一句。第二句。")
+
     def test_english_fragments_never_glue_two_words(self) -> None:
         self.assertEqual(merge_render_text_fragments("over time.", "how it works"), "over time. how it works")
         self.assertEqual(merge_render_text_fragments("pre-", "trained"), "pre-trained")

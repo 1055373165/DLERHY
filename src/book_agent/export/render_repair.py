@@ -1822,10 +1822,14 @@ def should_restore_pdf_paragraph_breaks(
     return False
 
 
+_SECTION_NUMBER_ONLY = re.compile(r"^\s*(?:\d+(?:\.\d+)*\.?|[A-Z]\.\d+(?:\.\d+)*)\s*$")
+
+
 def inline_join_target_text(target_texts: list[str]) -> str:
     merged = target_texts[0]
     for segment in target_texts[1:]:
-        if needs_ascii_sentence_gap(merged, segment):
+        # A heading's number translated as its own segment ("1.4.1" + "需要 LLM 的任务") keeps its space.
+        if _SECTION_NUMBER_ONLY.match(merged) or needs_ascii_sentence_gap(merged, segment):
             merged = f"{merged} {segment}"
         else:
             merged = f"{merged}{segment}"
