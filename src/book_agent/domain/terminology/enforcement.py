@@ -57,12 +57,16 @@ def _needs_literal_source(term: LockedTerm) -> bool:
     if _CODE_CHARS.search(source):
         return True
     kept_as_is = any(rendering.strip() == source for rendering in term.renderings)
-    return kept_as_is and any(char.isupper() for char in source)
+    return kept_as_is
 
 
 def _literal_in(term: str, source_text: str) -> bool:
+    term = term.strip()
+    if term.islower() and not _CODE_CHARS.search(term):
+        # A lowercase word kept as it is ("execute") is a name in code: "execute(" or `execute`.
+        return re.search(rf"`{re.escape(term)}`|(?<![\w@]){re.escape(term)}\(", source_text) is not None
     # A plural of a word kept as it is ("LLMs") is the word.
-    return re.search(rf"(?<![\w@]){re.escape(term.strip())}(?:e?s)?(?![\w])", source_text) is not None
+    return re.search(rf"(?<![\w@]){re.escape(term)}(?:e?s)?(?![\w])", source_text) is not None
 
 
 def find_term_violations(

@@ -91,6 +91,12 @@ class LiteralTermTests(unittest.TestCase):
         )
         self.assertEqual(self.violated("Two LLMs disagree.", "两个大模型意见不一。"), ["LLM"])
 
+    def test_a_lowercase_word_kept_as_it_is_is_a_name_in_code(self) -> None:
+        terms = [LockedTerm("execute", ("execute",))]
+        check = lambda source, target: [item.source_term for item in find_term_violations([("u", source, target)], terms)]  # noqa: E731
+        self.assertEqual(check("The LLM executes each step.", "大语言模型逐步执行。"), [])
+        self.assertEqual(check("Call `execute` on the tool.", "对工具调用执行。"), ["execute"])
+
     def test_words_still_match_by_their_forms(self) -> None:
         self.assertEqual(self.violated("Agents act on their own.", "代理自主行动。"), ["agent"])
         self.assertEqual(self.violated("Agents act on their own.", "智能体自主行动。"), [])
