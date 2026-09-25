@@ -645,6 +645,17 @@ class PilotRepairService:
         for finding in blocking:
             by_check[str(finding["check_id"])].append(finding)
         approval_ids: list[str] = []
+        # A question whose problem a later repair solved is no longer asked.
+        for stale in self.session.scalars(
+            select(Approval).where(
+                Approval.document_id == ctx.document_id, Approval.kind == QUESTION_KIND, Approval.status == ApprovalStatus.PENDING
+            )
+        ).all():
+            if (stale.payload_json or {}).get("check_id") not in by_check:
+                stale.status = ApprovalStatus.EXPIRED
+                stale.decided_by = "agent.pilot_repair"
+                stale.decided_at = _utcnow()
+                stale.decision_note = "a later repair solved it"
         export_root = self._evidence_root(ctx)
         for check_id, findings in by_check.items():
             title, question = escalation_question(check_id, findings)

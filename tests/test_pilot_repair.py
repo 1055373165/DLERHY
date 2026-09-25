@@ -336,6 +336,17 @@ class BoundsAndEscalationTests(PilotRepairBenchCase):
         payload, _final = self.repair()
         with self.bench.session_factory() as session:
             self.assertEqual(len(session.scalars(select(Approval).where(Approval.kind == "pilot_question")).all()), 1)
+        # Once the problem is gone, the question is withdrawn.
+        with self.bench.session_factory() as session:
+            for text in ("The first technique reads", "The second technique masks"):
+                (sentence,) = sentence_ids(session, self.bench.document_id, text)
+                edit_translation(session, sentence, lambda current: current.replace("¡", "一"))
+            session.commit()
+        payload, _final = self.repair()
+        self.assertEqual(payload["questions"], [])
+        with self.bench.session_factory() as session:
+            (question,) = session.scalars(select(Approval).where(Approval.kind == "pilot_question")).all()
+            self.assertEqual(question.status, ApprovalStatus.EXPIRED)
 
     def test_the_budget_stops_the_loop(self) -> None:
         self.worker.cost_per_call = 0.01
