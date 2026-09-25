@@ -1069,7 +1069,7 @@ def merge_render_text_fragments(previous_text: str, current_text: str) -> str:
     if re.match(r"[A-Za-z0-9]", prev_char) and re.match(r"[A-Za-z0-9]", curr_char):
         return f"{previous_clean} {current_clean}"
     # "over time." + "how the loop ..." is two words, not "time.how" (Chinese joins as it is).
-    if needs_ascii_sentence_gap(previous_clean, current_clean):
+    if needs_ascii_sentence_gap(previous_clean, current_clean) or _latin_cjk_seam(previous_clean, current_clean):
         return f"{previous_clean} {current_clean}"
     return previous_clean + current_clean
 

@@ -60,6 +60,7 @@ class RunInHeadingMergeTests(unittest.TestCase):
         self.assertEqual(merge_render_text_fragments("over time.", "how it works"), "over time. how it works")
         self.assertEqual(merge_render_text_fragments("pre-", "trained"), "pre-trained")
         self.assertEqual(merge_render_text_fragments("随着时间展开。", "循环如何运作"), "随着时间展开。循环如何运作")
+        self.assertEqual(merge_render_text_fragments("本书的选择：OpenAI API", "在本书中"), "本书的选择：OpenAI API 在本书中")
 
 
 if __name__ == "__main__":
