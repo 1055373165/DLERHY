@@ -12,6 +12,7 @@ survive into TERM_CONFLICT issues; the translation service reports them as
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
@@ -39,6 +40,29 @@ class TermViolation:
     accepted_renderings: tuple[str, ...]
     source_occurrences: int
     target_text: str
+
+
+_CODE_CHARS = re.compile(r"[@_()./:<>\[\]]")
+
+
+def _needs_literal_source(term: LockedTerm) -> bool:
+    """Terms the source must spell exactly for the lock to apply.
+
+    The matcher folds case, punctuation and plurals, which is right for words ("large language
+    model"). An identifier locked as-is ("@tool", "step()", "final_result") would otherwise claim
+    every "tool" and "step", and a word kept in English with its capitals ("Event", "Action",
+    "ARES") every "event", "action" and "are".
+    """
+    source = term.source_term.strip()
+    if _CODE_CHARS.search(source):
+        return True
+    kept_as_is = any(rendering.strip() == source for rendering in term.renderings)
+    return kept_as_is and any(char.isupper() for char in source)
+
+
+def _literal_in(term: str, source_text: str) -> bool:
+    # A plural of a word kept as it is ("LLMs") is the word.
+    return re.search(rf"(?<![\w@]){re.escape(term.strip())}(?:e?s)?(?![\w])", source_text) is not None
 
 
 def find_term_violations(
@@ -74,6 +98,8 @@ def find_term_violations(
         for position, term in usable:
             key = source_term_key(term.source_term)
             if key not in counts:
+                continue
+            if _needs_literal_source(term) and not _literal_in(term.source_term, source_text or ""):
                 continue
             renderings = tuple(r for r in term.renderings if r and r.strip())
             if target_has_rendering(target_text or "", renderings):
