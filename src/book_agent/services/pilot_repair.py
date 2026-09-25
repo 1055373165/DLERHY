@@ -379,6 +379,7 @@ class PilotRepairService:
         self.session.commit()
         self._begin_write()
         before = QaSnapshot.from_layers(layers)
+        misaligned_before = alignment_anomalies(self.session, ctx.chapter_ids)
         chapter_ids_before = list(ctx.chapter_ids)
         spent_before = ctx.budget.spent_usd
         result: ToolResult | None = None
@@ -393,6 +394,12 @@ class PilotRepairService:
             after = QaSnapshot.from_layers(new_layers)
             verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings})
             outcome = _AttemptOutcome("kept" if verdict.keep else "reverted", None if verdict.keep else verdict.reason, new_layers, verdict.resolved_keys)
+            # A repair must not leave translations the export cannot align (ALIGNMENT_FAILURE).
+            misaligned_after = alignment_anomalies(self.session, ctx.chapter_ids)
+            if verdict.keep and misaligned_after > misaligned_before:
+                outcome = _AttemptOutcome(
+                    "reverted", f"worse:alignment ({misaligned_before} -> {misaligned_after} misaligned targets)", new_layers
+                )
         except NotApplicable as exc:
             outcome = _AttemptOutcome("skipped", f"not_applicable: {exc}"[:500])
         except BudgetExhausted as exc:
@@ -834,6 +841,24 @@ class PilotRepairService:
                 for state in classes.values()
             ],
         }
+
+
+def alignment_anomalies(session: Session, chapter_ids: Sequence[str]) -> int:
+    """Alignment breakage the export's check would flag in these chapters (export/alignment.py):
+    translation segments no sentence renders, and sentences whose only translations are inactive.
+
+    Sentences with no translation at all are left out: that is the QA's untranslated check, and
+    retranslating them is what a repair does.
+    """
+    from book_agent.export.alignment import build_export_misalignment_evidence
+    from book_agent.infra.repositories.export import ExportRepository
+
+    repository = ExportRepository(session)
+    total = 0
+    for chapter_id in chapter_ids:
+        evidence = build_export_misalignment_evidence(repository.load_chapter_bundle(chapter_id))
+        total += len(evidence.sentence_ids_with_only_inactive_targets) + len(evidence.orphan_target_segment_ids)
+    return total
 
 
 def spacing_convention(session: Session, chapter_ids: Sequence[str]) -> str | None:
