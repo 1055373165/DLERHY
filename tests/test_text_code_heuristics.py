@@ -89,6 +89,17 @@ class ExportSingleLineCodeishTest(unittest.TestCase):
         for line in ("if x > 3:", "for item in items:", "from pathlib import Path", "print(result)"):
             with self.subTest(line=line):
                 self.assertTrue(looks_like_single_line_codeish_text(line))
+        for line in ("def solve_problem(problem: dict) -> str:", 'response = completion(model="gpt-5-mini", messages=messages)'):
+            with self.subTest(line=line):
+                self.assertTrue(looks_like_single_line_codeish_text(line))
+
+    def test_a_sentence_with_a_parenthesis_and_a_colon_is_prose(self) -> None:
+        # The Agent book: this paragraph was set as a code block in the reading copy (L4 prose_in_code).
+        line = (
+            "Context engineering can be broadly categorized into five strategies (table 1.1), each of which is "
+            "covered in detail in various chapters of this book:"
+        )
+        self.assertFalse(looks_like_single_line_codeish_text(line))
 
 
 if __name__ == "__main__":
