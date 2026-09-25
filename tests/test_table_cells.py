@@ -61,5 +61,42 @@ class CellRenderingTests(unittest.TestCase):
         self.assertEqual(render_table_markdown_metadata_aware({"table_markdown": markdown}, ""), markdown)
 
 
+class SharedGridTranslationTests(unittest.TestCase):
+    """The model answered several cells with one segment: the whole translated grid (the Agent book's tables)."""
+
+    def test_a_shared_translated_grid_is_split_back_cell_by_cell(self) -> None:
+        from book_agent.domain.structure.table_cells import split_shared_cell_translations
+
+        source = "| Model | Accuracy | Judged solvable |\n| GPT-5 mini | 4/20 (20%) | 8/20 (40%) |"
+        whole = "| 模型 | 准确率 | 判定为可解 |\n| GPT-5 mini | 4/20 (20%) | 8/20 (40%) |"
+        cells = {cell: whole for cell in ("Model", "Accuracy", "Judged solvable")}
+        split = split_shared_cell_translations(table_grid(source), cells)
+        self.assertEqual(split, {"Model": "模型", "Accuracy": "准确率", "Judged solvable": "判定为可解"})
+        html = render_structured_table_html(source, cell_translations=split)
+        self.assertIn(">模型</th>", html)
+        self.assertNotIn("| 模型", html)
+
+    def test_a_grid_of_another_shape_is_left_alone(self) -> None:
+        from book_agent.domain.structure.table_cells import split_shared_cell_translations
+
+        source = "| A | B |\n| alpha | beta |"
+        cells = {"alpha": "| 甲 | 乙 | 丙 |", "beta": "| 甲 | 乙 | 丙 |"}
+        self.assertEqual(split_shared_cell_translations(table_grid(source), cells), cells)
+        self.assertEqual(split_shared_cell_translations(table_grid(source), {"alpha": "阿尔法"}), {"alpha": "阿尔法"})
+
+    def test_long_cells_in_a_pipe_grid_are_still_a_table_not_prose(self) -> None:
+        from book_agent.export.render_repair import is_translatable_prose_artifact_block
+
+        text = (
+            "| Strategy | Description | Related chapters |\n"
+            "| Generate Retrieve Write | Constructing context with LLM-generated outputs Bringing information from "
+            "external sources into context Saving from context to external storage | Chapter 7 (planning and reflection) "
+            "Chapter 3 (tools), Chapter 5 (knowledge base), Chapter 6 (memory) |"
+        )
+        metadata = {"pdf_block_role": "table_like"}
+        block = SimpleNamespace(block_type=BlockType.TABLE, source_text=text, source_span_json=metadata)
+        self.assertFalse(is_translatable_prose_artifact_block(block, metadata, block_type=BlockType.TABLE, source_text=text))
+
+
 if __name__ == "__main__":
     unittest.main()

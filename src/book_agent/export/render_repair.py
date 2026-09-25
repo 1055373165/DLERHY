@@ -15,6 +15,7 @@ from book_agent.domain.enums import (
     SentenceStatus,
 )
 from book_agent.domain.structure.geometry import horizontal_overlap_ratio
+from book_agent.domain.structure.table_cells import table_grid
 from book_agent.export import code_text
 from book_agent.export.common import (
     _APPENDIX_TITLE_PATTERN,
@@ -1622,6 +1623,9 @@ def is_translatable_prose_artifact_block(
     if effective_block_type == BlockType.CODE:
         return False
     effective_source_text = source_text if source_text is not None else block.source_text
+    if effective_block_type == BlockType.TABLE and table_grid(effective_source_text, source_metadata):
+        # Rows of "|"-delimited cells are a table, however long its cells read: it renders as a grid.
+        return False
     if code_text.looks_like_mixed_code_prose_artifact_text(effective_source_text):
         return False
     if not code_text.looks_like_prose_artifact_text(
