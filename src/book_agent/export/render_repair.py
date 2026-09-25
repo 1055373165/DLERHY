@@ -1068,6 +1068,9 @@ def merge_render_text_fragments(previous_text: str, current_text: str) -> str:
     curr_char = current_clean[0]
     if re.match(r"[A-Za-z0-9]", prev_char) and re.match(r"[A-Za-z0-9]", curr_char):
         return f"{previous_clean} {current_clean}"
+    # "over time." + "how the loop ..." is two words, not "time.how" (Chinese joins as it is).
+    if needs_ascii_sentence_gap(previous_clean, current_clean):
+        return f"{previous_clean} {current_clean}"
     return previous_clean + current_clean
 
 
@@ -1260,6 +1263,11 @@ def merge_code_blocks_across_inline_artifact(
     return replace(merged, source_metadata=merged_metadata)
 
 
+_SENTENCE_END = (".", "!", "?", ".”", "?”", "!”")
+# A period that ends an abbreviation does not end the sentence.
+_ABBREVIATION_ENDINGS = ("e.g.", "i.e.", "etc.", "vs.", "cf.", "al.", "Fig.", "fig.", "No.")
+
+
 def should_merge_adjacent_book_paragraph_fragments(
     previous: MergedRenderBlock,
     current: MergedRenderBlock,
@@ -1292,7 +1300,10 @@ def should_merge_adjacent_book_paragraph_fragments(
     previous_flags = set(str(flag) for flag in list(previous.source_metadata.get("recovery_flags") or []))
     current_flags = set(str(flag) for flag in list(current.source_metadata.get("recovery_flags") or []))
     if current_text[:1].islower():
-        return True
+        # After a finished sentence a lowercase start is a run-in heading ("how the agent loop
+        # works The loop is ..."), not the rest of a sentence broken by the page.
+        previous_text = _normalize_render_text(previous.source_text)
+        return not (previous_text.endswith(_SENTENCE_END) and not previous_text.endswith(_ABBREVIATION_ENDINGS))
     if "export_book_heading_demoted" in previous_flags or "export_book_heading_demoted" in current_flags:
         return not previous.source_text.rstrip().endswith(_TERMINAL_PUNCTUATION)
     return False
