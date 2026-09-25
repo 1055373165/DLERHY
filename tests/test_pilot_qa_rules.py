@@ -532,6 +532,13 @@ class KnownIssueTests(unittest.TestCase):
         found = self.assertFound(build([*clean_blocks(), block]), "L1.heading_merged_into_text", MAJOR, target_id="b-ri")
         self.assertEqual(found["evidence"]["headings"], ["how the agent loop works"])
 
+    def test_code_parsed_as_a_table_is_flagged_unless_the_reading_copy_sets_it_as_code(self) -> None:
+        code = "| from litellm import completion |\n| response = completion( |\n| model=\"gpt-5-mini\", |"
+        as_table = rendered("b-tc", C2, "table", code, "", mode="translated_wrapper_with_preserved_artifact", kind="table", page=36)
+        self.assertFound(build([*clean_blocks(), as_table]), "L3.table_is_code", MAJOR, target_id="b-tc")
+        as_code = rendered("b-tc", C2, "table", code, "", mode="source_artifact_full_width", kind="code", page=36)
+        self.assertNotIn("L3.table_is_code", [finding["check_id"] for finding in findings(build([*clean_blocks(), as_code]))])
+
     def test_a_running_header_kept_as_a_footnote(self) -> None:
         header = rendered("b-rh", C2, "footnote", "11\nThe loop", "11 循环", page=33)
         self.assertFound(build([*clean_blocks(), header]), "L1.running_header_as_text", MAJOR, target_id="b-rh")

@@ -960,7 +960,9 @@ def check_tables(inputs: PilotQaInputs) -> list[CheckRun]:
         if _is_table(block):
             label = _snippet(block.caption_text or block.target_text or "这个表格", 40)
             if looks_like_code(block.source_text):
-                is_code.findings.append(_block_finding("L3.table_is_code", block, f"{label}其实是一段代码"))
+                # The reading copy already sets it as code: the reader sees code, not a broken table.
+                if block.artifact_kind != "code":
+                    is_code.findings.append(_block_finding("L3.table_is_code", block, f"{label}其实是一段代码"))
                 continue
             rows = _table_rows(block.html)
             if not rows:
