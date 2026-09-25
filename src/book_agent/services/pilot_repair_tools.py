@@ -329,7 +329,7 @@ class PilotRepairToolbox:
         editor = SegmentEditService(self.session)
 
         def transform(text: str, _ids: list[str]) -> str:
-            fixed = fixes.fix_halfwidth_punctuation(fixes.fix_odd_whitespace(text))
+            fixed = fixes.fix_halfwidth_punctuation(fixes.fix_odd_whitespace(fixes.strip_markdown_emphasis(text)))
             return fixes.fix_cjk_latin_spacing(fixed, convention) if convention in {"spaced", "unspaced"} else fixed
 
         for packet_id in packet_ids:

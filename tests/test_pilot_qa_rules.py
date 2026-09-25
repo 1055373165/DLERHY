@@ -532,6 +532,12 @@ class KnownIssueTests(unittest.TestCase):
         found = self.assertFound(build([*clean_blocks(), block]), "L1.heading_merged_into_text", MAJOR, target_id="b-ri")
         self.assertEqual(found["evidence"]["headings"], ["how the agent loop works"])
 
+    def test_markdown_bold_left_in_the_translation_is_a_leak(self) -> None:
+        # The Agent book: the model set run-in headings in markdown bold; the reader saw "**核心要点**".
+        bold = rendered("b-md", C2, "heading", "Key takeaways", "**核心要点**", page=40)
+        found = self.assertFound(build([*clean_blocks(), bold]), "L7.leaked_marker", BLOCKING, target_id="b-md")
+        self.assertEqual(found["evidence"]["marker"], "**")
+
     def test_code_parsed_as_a_table_is_flagged_unless_the_reading_copy_sets_it_as_code(self) -> None:
         code = "| from litellm import completion |\n| response = completion( |\n| model=\"gpt-5-mini\", |"
         as_table = rendered("b-tc", C2, "table", code, "", mode="translated_wrapper_with_preserved_artifact", kind="table", page=36)

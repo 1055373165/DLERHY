@@ -1529,6 +1529,7 @@ LEAKED_MARKERS: tuple[str, ...] = (
     "</translation>",
 )
 _LEAK_PREFIX_RE = re.compile(r"^\s*(?:译文|翻译|中文翻译|Translation)\s*[:：]")
+_MARKDOWN_EMPHASIS_RE = re.compile(r"\*\*(?=\S).+?(?<=\S)\*\*", re.DOTALL)
 _GLYPH_RE = re.compile("[\u00a1\ufffd\ue000-\uf8ff]")
 _SPACING_RE = re.compile(rf"(?:(?<=[{_CJK}])( ?)(?=[A-Za-z0-9])|(?<=[A-Za-z0-9])( ?)(?=[{_CJK}]))")
 _HALFWIDTH_RE = re.compile(rf"[{_CJK}][,;!?]|[,;!?](?=[{_CJK}])|[{_CJK}]:(?=\s?[{_CJK}])|[{_CJK}]\((?=[^)]*[{_CJK}])")
@@ -1553,6 +1554,9 @@ def check_purity(inputs: PilotQaInputs) -> list[CheckRun]:
         marker = next((marker for marker in LEAKED_MARKERS if marker in reader or marker in target), None)
         if marker is None and _LEAK_PREFIX_RE.match(target):
             marker = _LEAK_PREFIX_RE.match(target).group(0).strip()
+        # Markdown the model wrapped around a heading or phrase: the reader sees the asterisks.
+        if marker is None and not _is_code(block) and _MARKDOWN_EMPHASIS_RE.search(_without_code_and_urls(target)) and "**" not in (block.source_text or ""):
+            marker = "**"
         if marker is not None:
             leaked.findings.append(
                 _block_finding("L7.leaked_marker", block, f"译文里出现了程序提示「{marker}」，读者只应看到原文的译文", marker=marker)

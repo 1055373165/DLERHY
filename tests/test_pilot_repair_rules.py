@@ -176,6 +176,11 @@ class TextFixTests(unittest.TestCase):
         self.assertEqual(fixes.replace_rendering("大型语言模型和大语言模型", "大型语言模型", "大语言模型"), "大语言模型和大语言模型")
         self.assertEqual(fixes.replace_rendering("嵌入向量和嵌入", "嵌入", "嵌入向量"), "嵌入向量和嵌入向量")
 
+    def test_markdown_bold_around_a_heading_is_taken_out(self) -> None:
+        self.assertEqual(fixes.strip_markdown_emphasis("**核心要点**"), "核心要点")
+        self.assertEqual(fixes.strip_markdown_emphasis("见 `a**b**c`，**重点**"), "见 `a**b**c`，重点")
+        self.assertEqual(fixes.strip_leaked_markers("**明确知识边界**"), "明确知识边界")
+
     def test_whitespace_after_chinese_punctuation(self) -> None:
         self.assertEqual(fixes.fix_odd_whitespace("第一句。 第二句  还有　"), "第一句。第二句 还有")
 

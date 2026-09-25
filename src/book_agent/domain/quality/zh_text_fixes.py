@@ -66,8 +66,8 @@ def fix_halfwidth_punctuation(text: str) -> str:
 
 
 def strip_leaked_markers(text: str) -> str:
-    """The translation without program notes ("图片锚点保留", "ZH::", a "译文：" prefix)."""
-    fixed = _LEAK_PREFIX_RE.sub("", text)
+    """The translation without program notes ("图片锚点保留", "ZH::", a "译文：" prefix) or markdown ("**")."""
+    fixed = strip_markdown_emphasis(_LEAK_PREFIX_RE.sub("", text))
     for marker in LEAKED_MARKERS:
         fixed = fixed.replace(marker, "")
     if fixed == text:
@@ -90,6 +90,17 @@ def unify_label(text: str, numbers: Sequence[str], wanted: str, others: Sequence
             pattern = rf"{lookbehind}{re.escape(other)}(\s*){re.escape(number)}(?![\d.])"
             fixed = re.sub(pattern, lambda match: f"{wanted}{match.group(1)}{number}", fixed)
     return fixed
+
+
+# Markdown emphasis the model wraps around a heading or a phrase ("**核心要点**"): shown as asterisks.
+MARKDOWN_EMPHASIS_RE = re.compile(r"\*\*(?=\S)(.+?)(?<=\S)\*\*", re.DOTALL)
+
+
+def strip_markdown_emphasis(text: str) -> str:
+    """"**核心要点**" -> "核心要点" (outside inline code)."""
+    if "**" not in (text or ""):
+        return text
+    return _outside_protected(text, lambda part: MARKDOWN_EMPHASIS_RE.sub(r"\1", part))
 
 
 def replace_rendering(text: str, minority: str, majority: str) -> str:
