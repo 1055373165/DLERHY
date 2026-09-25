@@ -141,7 +141,8 @@ class RepairContext:
     # figure_problems(page, bbox, furniture) for a PDF, else None.
     figure_problems: Callable[[int, Sequence[float], list[Sequence[float]]], list[Any]] | None = None
     judge: StructureJudge | None = None
-    # Spent inside the current attempt (read by the loop from the events it wrote).
+    # The book's CJK–Latin spacing ("spaced" | "unspaced" | None): retranslations are written that way.
+    spacing_convention: str | None = None
     _workflow: Any = None
 
     @property
@@ -313,7 +314,29 @@ class PilotRepairToolbox:
             )
             done.append(packet_id)
         self.session.flush()
+        self._normalize(done)
         return done
+
+    def _normalize(self, packet_ids: Sequence[str]) -> None:
+        """A fresh translation written the book's way: its CJK–Latin spacing, full-width punctuation.
+
+        The same deterministic fixes the L7 checks call for; without them a retranslation that fixes
+        its problem would be rolled back for spacing the rest of the book does not have.
+        """
+        convention = self.ctx.spacing_convention
+        if not packet_ids:
+            return
+        editor = SegmentEditService(self.session)
+
+        def transform(text: str, _ids: list[str]) -> str:
+            fixed = fixes.fix_halfwidth_punctuation(fixes.fix_odd_whitespace(text))
+            return fixes.fix_cjk_latin_spacing(fixed, convention) if convention in {"spaced", "unspaced"} else fixed
+
+        for packet_id in packet_ids:
+            try:
+                editor.rewrite_packet(packet_id, transform, reason="按全书习惯规范空格和标点", actor_id=ACTOR_ID, run_id=self.ctx.run_id)
+            except Exception:  # a guard refused the correction: the translation stays as the model wrote it
+                logger.debug("normalizing packet %s refused", packet_id, exc_info=True)
 
     def _retranslate_fork(self, outcome: Any, hints: Sequence[str]) -> list[str]:
         fork = getattr(outcome, "fork", None)
@@ -736,53 +759,82 @@ class PilotRepairToolbox:
         )
 
     def _structure_edit__split_run_in_heading(self, item: WorkItem) -> ToolResult:
+        """Run-in subheadings out of their paragraph, each its own heading block.
+
+        The parser keeps a run-in heading as a line of the paragraph ("... over time.\\nhow the agent
+        loop works\\nThe loop is necessary ..."): a short line that starts in lowercase, after a line
+        that ends a sentence (or at the block's start), before a line that starts a sentence. Every
+        such line of the block is split out. A text without line breaks falls back to the glue the
+        check saw ("...considering.cost optimization When ...").
+        """
         finding = item.findings[0]
         block = self._finding_block(finding)
-        text = block.source_text or ""
-        heading_start = body_start = None
-        for match in pilot_qa._GLUED_HEADING_RE.finditer(text):
-            if match.group(3) in pilot_qa._NOT_GLUED:
-                continue
-            start = match.start(3)
-            tail = text[start:]
-            words = list(re.finditer(r"\S+", tail))
-            for index, word in enumerate(words[:9]):
-                if index > 0 and word.group(0)[:1].isupper():
-                    heading_start, body_start = start, start + word.start()
-                    break
-            if heading_start is not None:
-                break
-        if heading_start is None or body_start is None:
-            raise NotApplicable("cannot tell where the run-in heading ends")
-        heading = text[heading_start:body_start].strip()
-        first = self.structure.split_block(
-            self.ctx.document_id, block.id, text[heading_start : heading_start + 80], actor_id=ACTOR_ID, reason=f"拆出小标题「{heading}」"
-        )
-        heading_block = self.session.get(Block, first.block_ids[-1])
-        second = self.structure.split_block(
-            self.ctx.document_id,
-            heading_block.id,
-            (heading_block.source_text or "")[len(heading) :].strip()[:80],
-            actor_id=ACTOR_ID,
-            reason=f"小标题「{heading}」后面的正文",
-        )
         levels = [
             int((b.source_span_json or {}).get("heading_level") or 0)
             for b in self._chapter_blocks(block.chapter_id)
             if b.block_type == BlockType.HEADING and (b.source_span_json or {}).get("heading_level")
         ]
-        level = max(levels) if levels else 3
-        relabel = self.structure.relabel_block(
-            self.ctx.document_id, heading_block.id, BlockType.HEADING.value, heading_level=max(2, level), actor_id=ACTOR_ID, reason="行内小标题"
-        )
+        level = max(2, max(levels) if levels else 3)
+        outcomes: list[Any] = []
+        headings: list[str] = []
+        heading_ids: list[str] = []
+        current: Block | None = block
+        if _run_in_heading_line(block.source_text or "") is None and _glued_heading(block.source_text or "") is None:
+            # The reading copy joined this paragraph with the next one, which opens with the heading.
+            _previous, following = self._neighbours(block)
+            opening = _run_in_heading_line(following.source_text or "") if following is not None else None
+            if following is not None and following.block_type in {BlockType.PARAGRAPH, BlockType.LIST_ITEM} and opening and opening[0] == 0:
+                current = following
+        while current is not None:
+            text = current.source_text or ""
+            spot = _run_in_heading_line(text) or _glued_heading(text)
+            if spot is None:
+                break
+            start, end = spot
+            heading = text[start:end].strip()
+            body = text[end:].strip()
+            if start > 0:
+                # Split the heading (and what follows) off the text before it.
+                split = self.structure.split_block(
+                    self.ctx.document_id, current.id, _marker(text, start), actor_id=ACTOR_ID, reason=f"拆出小标题「{heading}」"
+                )
+                outcomes.append(split)
+                heading_block = self.session.get(Block, split.block_ids[-1])
+            else:
+                heading_block = current
+            rest: Block | None = None
+            if body:
+                heading_text = heading_block.source_text or ""
+                body_at = heading_text.find(body[:40])
+                if body_at <= 0:
+                    raise NotApplicable("cannot find where the text after the heading starts")
+                split = self.structure.split_block(
+                    self.ctx.document_id, heading_block.id, _marker(heading_text, body_at), actor_id=ACTOR_ID, reason=f"小标题「{heading}」后面的正文"
+                )
+                outcomes.append(split)
+                rest = self.session.get(Block, split.block_ids[-1])
+            outcomes.append(
+                self.structure.relabel_block(
+                    self.ctx.document_id, heading_block.id, BlockType.HEADING.value, heading_level=level, actor_id=ACTOR_ID, reason="行内小标题"
+                )
+            )
+            headings.append(heading)
+            heading_ids.append(heading_block.id)
+            current = rest
+            if len(headings) >= 8:
+                break
+        if not headings:
+            raise NotApplicable("cannot tell where the run-in heading ends")
         packets: list[str] = []
-        for outcome in (first, second, relabel):
-            fork = outcome.fork
-            packets.extend(getattr(fork, "retranslate_packet_ids", []) or [])
-        done = self.retranslate(list(dict.fromkeys(packets)), [f"「{heading}」是小标题，单独成行，不要和正文连在一起。"])
+        block_ids: list[str] = [block.id]
+        for outcome in outcomes:
+            packets.extend(getattr(outcome.fork, "retranslate_packet_ids", []) or [])
+            block_ids.extend(outcome.block_ids)
+        hint = "、".join(f"「{heading}」" for heading in headings)
+        done = self.retranslate(list(dict.fromkeys(packets)), [f"{hint}是小标题，单独成行，不要和正文连在一起。"])
         return ToolResult(
-            params={"block_id": block.id, "heading": heading, "heading_block_id": heading_block.id, "heading_level": max(2, level)},
-            block_ids=list(dict.fromkeys([*first.block_ids, *second.block_ids])),
+            params={"block_id": block.id, "heading": headings[0], "headings": headings, "heading_block_ids": heading_ids, "heading_level": level},
+            block_ids=list(dict.fromkeys(block_ids)),
             packet_ids=done,
         )
 
@@ -1175,6 +1227,36 @@ class PilotRepairToolbox:
         targets = active_target_texts(self.session, sentence_ids)
         text = " ".join(targets.get(sentence_id, "") for sentence_id in sentence_ids).strip()
         return text or None
+
+
+_RUN_IN_MAX_WORDS = pilot_qa.RUN_IN_MAX_WORDS
+
+
+def _run_in_heading_line(text: str) -> tuple[int, int] | None:
+    """(start, end) of the first run-in heading line of a block's text, or None."""
+    spans = pilot_qa.run_in_heading_spans(text)
+    return spans[0] if spans else None
+
+
+def _glued_heading(text: str) -> tuple[int, int] | None:
+    """A heading glued to the sentence before it ("...considering.cost optimization When ...")."""
+    for match in pilot_qa._GLUED_HEADING_RE.finditer(text):
+        if match.group(3) in pilot_qa._NOT_GLUED:
+            continue
+        start = match.start(3)
+        for index, word in enumerate(list(re.finditer(r"\S+", text[start:]))[: _RUN_IN_MAX_WORDS - 1]):
+            if index > 0 and word.group(0)[:1].isupper():
+                return start, start + word.start()
+    return None
+
+
+def _marker(text: str, at: int) -> str:
+    """The shortest text from ``at`` that occurs once in ``text`` (a split's second-part marker)."""
+    for length in (24, 40, 80, 160, len(text)):
+        marker = text[at : at + length]
+        if len(marker.strip()) >= 3 and text.count(marker) == 1:
+            return marker
+    return text[at:]
 
 
 # Clear of the check's touch gap (2pt): an edge this close to a line counts as cutting it.

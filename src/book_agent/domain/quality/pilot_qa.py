@@ -192,6 +192,8 @@ class QaBlock:
     caption_text: str | None = None
     # Blocks the export folds into this artifact's caption.
     context_texts: tuple[str, ...] = ()
+    # The parsed block's own text with its line breaks (the render joins lines): run-in headings show there.
+    parsed_text: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -746,6 +748,42 @@ def check_exported_chapters(inputs: PilotQaInputs) -> list[CheckRun]:
     return [missing, titles]
 
 
+# A run-in heading is short and never ends like a sentence or a clause.
+RUN_IN_MAX_WORDS = 10
+_RUN_IN_BEFORE = (".", "?", "!", ":", "\u201d", '"', "\u2019")
+
+
+def run_in_heading_spans(text: str) -> list[tuple[int, int]]:
+    """(start, end) of each run-in heading line kept inside a parsed paragraph.
+
+    Manning-style books set a subheading in bold at the start of its paragraph; the parser keeps it
+    as the paragraph's line ("... over time.\nhow the agent loop works\nThe loop is necessary ...").
+    Such a line starts in lowercase, is short, does not end like a sentence, comes after a line
+    that does (or starts the block) and before a line that starts a sentence.
+    """
+    lines = (text or "").split("\n")
+    spans: list[tuple[int, int]] = []
+    offset = 0
+    for index, line in enumerate(lines):
+        start = offset + (len(line) - len(line.lstrip()))
+        offset += len(line) + 1
+        stripped = line.strip()
+        if not stripped or not stripped[0].islower() or index + 1 >= len(lines):
+            continue
+        if len(stripped.split()) > RUN_IN_MAX_WORDS or stripped.endswith((".", ",", ";")):
+            continue
+        if index > 0 and not lines[index - 1].rstrip().endswith(_RUN_IN_BEFORE):
+            continue
+        if not lines[index + 1].strip()[:1].isupper():
+            continue
+        spans.append((start, start + len(stripped)))
+    return spans
+
+
+def run_in_heading_lines(text: str) -> list[str]:
+    return [text[start:end] for start, end in run_in_heading_spans(text)]
+
+
 def check_headings_and_headers(inputs: PilotQaInputs) -> list[CheckRun]:
     prose_headings = CheckRun("L1.heading_is_prose")
     headers = CheckRun("L1.running_header_as_text")
@@ -772,13 +810,16 @@ def check_headings_and_headers(inputs: PilotQaInputs) -> list[CheckRun]:
                 # An identifier the translation keeps as it is ("asyncio.gather") is code, not a glued heading.
                 if match.group(3) not in _NOT_GLUED and match.group(1) not in {"etc"} and match.group(0) not in block.target_text
             ]
-            if hits:
+            lines = run_in_heading_lines(block.parsed_text)
+            if hits or lines:
+                shown = hits[:3] or [f"「{line}」" for line in lines[:3]]
                 glued.findings.append(
                     _block_finding(
                         "L1.heading_merged_into_text",
                         block,
-                        f"小标题和正文粘在了一起（{'、'.join(hits[:3])}），译文里小标题成了正文的一部分",
+                        f"小标题和正文粘在了一起（{'、'.join(shown)}），译文里小标题成了正文的一部分",
                         hits=hits[:5],
+                        headings=lines[:5],
                     )
                 )
         match = _LEADING_NUMBER_RE.match(block.source_text.strip())

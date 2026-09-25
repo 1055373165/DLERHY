@@ -377,6 +377,7 @@ def load_pilot_inputs(
                     packet_id=packet_id,
                     caption_text=str(caption_text) if caption_text else None,
                     context_texts=tuple(str(block_texts.get(str(context_id)) or "") for context_id in context_ids),
+                    parsed_text=str(block_texts.get(block.block_id) or ""),
                 )
             )
 

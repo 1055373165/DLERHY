@@ -394,6 +394,23 @@ class RunInHeadingAndHeaderTests(PilotRepairBenchCase):
             heading = session.scalars(select(Block).where(Block.source_text == "masking tokens")).one()
             self.assertEqual(heading.block_type.value, "heading")
 
+    def test_run_in_heading_lines_the_parser_kept_in_the_paragraph_are_split_out(self) -> None:
+        """The Agent book's form: the heading is a line of the paragraph, the reading copy glues it on."""
+        self.translate()
+        self._replace_text(
+            "The first technique reads",
+            "The first technique reads the context from left to right.\nmasking tokens\nThe second technique masks a token.\n"
+            "It predicts the token from both sides.\nwhy it helps\nBoth sides give more context.",
+        )
+        payload, final = self.repair()
+
+        kept = self.attempts(payload, "kept")
+        self.assertEqual((kept[0]["path"], kept[0]["params"]["headings"]), ("split_run_in_heading", ["masking tokens", "why it helps"]))
+        self.assertEqual(_findings(final, "L1.heading_merged_into_text"), [])
+        with self.bench.session_factory() as session:
+            for heading in ("masking tokens", "why it helps"):
+                self.assertEqual(session.scalars(select(Block).where(Block.source_text == heading)).one().block_type.value, "heading")
+
     def test_a_running_header_kept_as_text_is_hidden(self) -> None:
         self.translate()
         self._replace_text(

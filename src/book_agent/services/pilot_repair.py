@@ -215,6 +215,7 @@ class PilotRepairService:
             budget=budget,
             judge=self.judge,
         )
+        ctx.spacing_convention = spacing_convention(self.session, ctx.chapter_ids)
         pages = self._open_pdf(document_id)
         if pages is not None:
             ctx.figure_problems = pages.figure_problems
@@ -804,6 +805,31 @@ class PilotRepairService:
                 for state in classes.values()
             ],
         }
+
+
+def spacing_convention(session: Session, chapter_ids: Sequence[str]) -> str | None:
+    """The pilot's own CJK–Latin spacing, by majority: "spaced", "unspaced", or None without any."""
+    from book_agent.domain.models import Sentence
+    from book_agent.domain.quality.pilot_qa import _boundaries
+    from book_agent.infra.repositories.review import active_target_texts
+
+    sentence_ids = list(
+        session.scalars(
+            select(Sentence.id).where(
+                Sentence.chapter_id.in_(list(chapter_ids) or ["-"]),
+                Sentence.translatable.is_(True),
+                Sentence.retired_by_revision_id.is_(None),
+            )
+        ).all()
+    )
+    spaced = unspaced = 0
+    for text in active_target_texts(session, sentence_ids).values():
+        with_space, without = _boundaries(text or "")
+        spaced += with_space
+        unspaced += without
+    if not spaced and not unspaced:
+        return None
+    return "spaced" if spaced >= unspaced else "unspaced"
 
 
 # --- reading ------------------------------------------------------------------------------------------
