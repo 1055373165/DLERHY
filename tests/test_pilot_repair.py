@@ -368,6 +368,16 @@ class BoundsAndEscalationTests(PilotRepairBenchCase):
         self.assertAlmostEqual(payload["cost_usd"], 0.01, places=4)
 
 
+    def test_a_pilot_that_reused_translations_budgets_from_the_estimate(self) -> None:
+        from unittest.mock import patch
+
+        self.translate()
+        with patch.object(PilotRepairService, "_estimated_pilot_cost", return_value=0.05):
+            payload, _final = self.repair()
+        # The bench's calls cost nothing; the estimate for these chapters sets the budget (×2).
+        self.assertAlmostEqual(payload["budget_usd"], 0.1, places=6)
+
+
 class RunInHeadingAndHeaderTests(PilotRepairBenchCase):
     """The Agent book's run-in subheadings and the RAG book's running headers."""
 

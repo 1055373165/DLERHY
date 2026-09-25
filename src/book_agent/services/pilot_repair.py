@@ -43,7 +43,7 @@ from sqlalchemy.orm import Session
 
 from book_agent.domain.enums import ApprovalStatus, ExportType, SourceType
 from book_agent.domain.event_kinds import LLM_CALL_COMPLETED, LLM_CALL_FAILED
-from book_agent.domain.models import Block, Document, Event
+from book_agent.domain.models import Block, Chapter, Document, Event
 from book_agent.domain.models.agent import Approval
 from book_agent.domain.models.ops import DocumentRun
 from book_agent.domain.models.review import PilotDefectTicket, PilotQualityReport, PilotRepair, PilotRepairAttempt
@@ -324,6 +324,9 @@ class PilotRepairService:
                 )
                 or 0.0
             )
+        # A pilot that reused translations made earlier cost next to nothing; the budget follows what
+        # translating these chapters costs (§7.4: twice the pilot's estimated cost), whichever is more.
+        pilot_cost = max(pilot_cost, self._estimated_pilot_cost(packets, chapter_ids))
         budget_usd = self.budget_override
         if budget_usd is None and pilot_cost > 0:
             budget_usd = round(self.budget_multiplier * pilot_cost, 6)
@@ -333,6 +336,21 @@ class PilotRepairService:
             max_packets=max(1, int(self.budget_multiplier * max(packets, 1))),
             cost_per_packet_usd=per_packet,
         )
+
+    def _estimated_pilot_cost(self, packets: int, chapter_ids: Sequence[str]) -> float:
+        """The book's estimate scaled to the pilot chapters' share of its packets; 0 when unpriced."""
+        from book_agent.core.config import get_settings
+        from book_agent.services.cost_estimate import estimate_document_cost
+
+        if not packets or not chapter_ids:
+            return 0.0
+        document_id = self.session.scalar(select(Chapter.document_id).where(Chapter.id == chapter_ids[0]))
+        if document_id is None:
+            return 0.0
+        estimate = estimate_document_cost(self.session, str(document_id), get_settings())
+        if not estimate.cost_usd or not estimate.packet_count:
+            return 0.0
+        return estimate.cost_usd * min(1.0, packets / estimate.packet_count)
 
     # --- one attempt -------------------------------------------------------------------------------
 
