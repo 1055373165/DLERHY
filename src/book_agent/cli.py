@@ -123,6 +123,12 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--suite", action="append", default=[], help="terminology, review, structure or export; repeatable")
     evaluate.add_argument("--output", default=None, help="Report directory (default evals/reports/<timestamp>)")
 
+    heal = subparsers.add_parser(
+        "heal-alignment",
+        help="Supersede stale translation attempts behind export ALIGNMENT_FAILURE issues and re-check them",
+    )
+    heal.add_argument("--document-id", required=True)
+
     action = subparsers.add_parser("execute-action", help="Execute a planned issue action")
     action.add_argument("--action-id", required=True)
     action.add_argument("--run-followup", action="store_true")
@@ -216,6 +222,12 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.command == "bootstrap":
             _dump(asdict(service.bootstrap_document(args.source_path)))
+            return 0
+        if args.command == "heal-alignment":
+            from book_agent.services.pilot_repair import heal_alignment
+
+            _dump(heal_alignment(session, service, args.document_id))
+            session.commit()
             return 0
         if args.command == "summary":
             _dump(asdict(service.get_document_summary(args.document_id)))

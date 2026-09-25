@@ -1058,3 +1058,84 @@ def question_payload(approval: Approval) -> dict[str, Any]:
 
 def document_is_pdf(document: Document | None) -> bool:
     return document is not None and document.source_type in {SourceType.PDF_TEXT, SourceType.PDF_MIXED, SourceType.PDF_SCAN}
+
+
+def heal_alignment(session: Session, workflow: Any, document_id: str) -> dict[str, Any]:
+    """Heal translations left misaligned (ALIGNMENT_FAILURE, export_time_misalignment) and re-check.
+
+    For each packet an open export ALIGNMENT_FAILURE names: when its latest successful attempt
+    translates every current sentence of the packet, the other attempts' active segments are
+    superseded (what the repair and the fork now do as they go). Then each chapter's export gate
+    runs again, which resolves the issues it no longer finds. A packet whose latest attempt does
+    not cover it is left alone and reported: it needs a retranslation.
+    """
+    from book_agent.domain.enums import IssueStatus, PacketSentenceRole, RootCauseLayer, RunStatus, TargetSegmentStatus
+    from book_agent.domain.models import Sentence
+    from book_agent.domain.models.review import ReviewIssue
+    from book_agent.domain.models.translation import AlignmentEdge, PacketSentenceMap, TargetSegment, TranslationRun
+    from book_agent.infra.repositories.translation import TranslationRepository
+
+    issues = session.scalars(
+        select(ReviewIssue).where(
+            ReviewIssue.document_id == document_id,
+            ReviewIssue.issue_type == "ALIGNMENT_FAILURE",
+            ReviewIssue.root_cause_layer == RootCauseLayer.EXPORT,
+            ReviewIssue.status.in_((IssueStatus.OPEN, IssueStatus.TRIAGED)),
+        )
+    ).all()
+    healed: list[dict[str, Any]] = []
+    skipped: list[str] = []
+    chapters: set[str] = set()
+    for issue in issues:
+        if not issue.packet_id:
+            continue
+        chapters.add(str(issue.chapter_id))
+        latest = session.scalars(
+            select(TranslationRun)
+            .where(TranslationRun.packet_id == issue.packet_id, TranslationRun.status == RunStatus.SUCCEEDED)
+            .order_by(TranslationRun.attempt.desc())
+            .limit(1)
+        ).first()
+        current = set(
+            session.scalars(
+                select(Sentence.id)
+                .join(PacketSentenceMap, PacketSentenceMap.sentence_id == Sentence.id)
+                .where(
+                    PacketSentenceMap.packet_id == issue.packet_id,
+                    PacketSentenceMap.role == PacketSentenceRole.CURRENT,
+                    Sentence.translatable.is_(True),
+                    Sentence.retired_by_revision_id.is_(None),
+                )
+            ).all()
+        )
+        covered = (
+            set(
+                session.scalars(
+                    select(AlignmentEdge.sentence_id)
+                    .join(TargetSegment, TargetSegment.id == AlignmentEdge.target_segment_id)
+                    .where(TargetSegment.translation_run_id == latest.id, TargetSegment.final_status != TargetSegmentStatus.SUPERSEDED)
+                ).all()
+            )
+            if latest is not None
+            else set()
+        )
+        if latest is None or not current <= covered:
+            skipped.append(str(issue.packet_id))
+            continue
+        superseded = TranslationRepository(session).supersede_other_attempts(str(issue.packet_id), latest.id)
+        healed.append({"packet_id": str(issue.packet_id), "kept_attempt": latest.attempt, "superseded_segments": superseded})
+    session.flush()
+    for chapter_id in sorted(chapters):
+        workflow._revalidate_export_gate(chapter_id)
+    session.flush()
+    still_open = [
+        str(issue.id)
+        for issue in session.scalars(
+            select(ReviewIssue).where(
+                ReviewIssue.document_id == document_id,
+                ReviewIssue.issue_type == "ALIGNMENT_FAILURE",
+                ReviewIssue.status.in_((IssueStatus.OPEN, IssueStatus.TRIAGED)),
+            )
+        ).all()
+    ]
+    return {"healed": healed, "needs_retranslation": skipped, "open_alignment_issues": still_open}

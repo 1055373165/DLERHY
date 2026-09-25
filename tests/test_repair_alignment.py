@@ -83,6 +83,40 @@ class RepairAlignmentTests(unittest.TestCase):
 
 
 
+class HealTests(RepairAlignmentTests):
+    def test_rows_left_by_the_old_code_are_healed_and_the_issue_resolved(self) -> None:
+        from unittest.mock import patch
+
+        from book_agent.domain.models.review import ReviewIssue
+        from book_agent.infra.repositories.translation import TranslationRepository
+        from book_agent.services.pilot_repair import heal_alignment
+
+        # The code before the fix: nothing superseded but the attempt carried from.
+        with patch.object(TranslationRepository, "supersede_other_attempts", lambda self, packet_id, keep_run_id: 0):
+            self._rewrite("Alpha reads the context. Beta predicts a token. Gamma repeats it.")
+            self._rewrite("Alpha reads the context. Beta masks a token instead. Gamma repeats it.")
+            self._rewrite("Alpha now reads both sides. Beta masks a token instead. Gamma repeats it.")
+        self.assertTrue(self._evidence().orphan_target_segment_ids)
+        with self.bench.session_factory() as session:
+            from book_agent.domain.enums import ChapterStatus
+            from book_agent.domain.models import Chapter
+
+            workflow = self.bench.workflow(session)
+            chapter = session.get(Chapter, session.get(Block, self.block_id).chapter_id)
+            chapter.status = ChapterStatus.QA_CHECKED  # reviewed, as a pilot's chapters are at export
+            workflow._revalidate_export_gate(chapter.id)
+            session.commit()
+            issues = session.scalars(select(ReviewIssue).where(ReviewIssue.issue_type == "ALIGNMENT_FAILURE")).all()
+            self.assertTrue(issues)
+            self.assertEqual({issue.status.value for issue in issues}, {"open"})
+
+            result = heal_alignment(session, workflow, self.bench.document_id)
+            session.commit()
+        self.assertTrue(result["healed"])
+        self.assertEqual(result["open_alignment_issues"], [])
+        self.assertFalse(self._evidence().has_anomalies)
+
+
 class RepairVerificationTests(unittest.TestCase):
     def test_an_attempt_that_leaves_an_orphan_segment_is_reverted(self) -> None:
         from unittest.mock import patch
