@@ -66,7 +66,7 @@ class PilotPlanTests(unittest.TestCase):
         self.assertEqual((plan.chapter_ids, plan.packet_ids), (frozenset({"c1", "c2"}), frozenset({"p1", "p2", "p3"})))
         # The full pipeline: terminology (whole book), translate, model review, review, exports, then the layered QA.
         self.assertEqual(
-            plan.stages, ("terminology", "translate", "model_review", "review", "bilingual_html", "merged_html", "pilot_qa")
+            plan.stages, ("terminology", "translate", "model_review", "review", "bilingual_html", "merged_html", "pilot_qa", "pilot_repair")
         )
 
     def test_a_whole_book_plan_is_unscoped_and_can_skip_what_a_pilot_reviewed(self) -> None:

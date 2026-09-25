@@ -57,6 +57,7 @@ from book_agent.orchestrator.run_plan import (
     AGENT_STAGES,
     EXECUTABLE_RUN_TYPES,
     PILOT_QA_STAGE,
+    PILOT_REPAIR_STAGE,
     RunPlan,
     plan_for_run,
     translate_packet_scope,
@@ -520,6 +521,8 @@ class DocumentRunExecutor:
                 ):
                     continue
                 if plan.includes(PILOT_QA_STAGE) and self._process_pilot_qa_stage(run_id, plan):
+                    continue
+                if plan.includes(PILOT_REPAIR_STAGE) and self._process_pilot_repair_stage(run_id, plan):
                     continue
                 with session_scope(self.session_factory) as session:
                     execution = self._run_execution_service(session)
@@ -1218,6 +1221,103 @@ class DocumentRunExecutor:
                 session=session,
             )
         return True
+
+    def _pilot_repair_thread_key(self, run_id: str) -> str:
+        return f"pilot-repair:{run_id}"
+
+    def _process_pilot_repair_stage(self, run_id: str, plan: RunPlan) -> bool:
+        """A pilot's repair loop (services/pilot_repair.py), on its own thread: it retranslates packets.
+
+        The repair row is written here, running, before the thread starts, so the stage is RUNNING
+        from the first tick; the loop ticks on (keeping the run's ownership) until the row finishes.
+        A run resumed after a restart finds a running row without a thread: it records that one as
+        interrupted and starts again from the current QA.
+        """
+        from book_agent.services.pilot_repair import PilotRepairService, repair_for_run
+
+        key = self._pilot_repair_thread_key(run_id)
+        with self._lock:
+            thread = self._active_work_threads.get(run_id, {}).get(key)
+        if thread is not None and thread.is_alive():
+            return True
+        with session_scope(self.session_factory) as session:
+            run = RunControlRepository(session).get_run(run_id)
+            existing = repair_for_run(session, run_id)
+            if existing is not None and existing.status in {"finished", "error"}:
+                return False
+            if existing is not None and existing.status == "running":
+                existing.status = "error"
+                existing.outcome = "error"
+                existing.error_text = "interrupted: the repair thread stopped (restart); started again"
+                existing.finished_at = datetime.now(timezone.utc)
+                session.flush()
+            if not StageGateKeeper(session).can_start(
+                run_id, run.document_id, PILOT_REPAIR_STAGE, plan_stages=plan.stages, packet_ids=plan.packet_ids
+            ):
+                return False
+            repair = PilotRepairService(session, workflow_factory=self._workflow_service).start(run.document_id, run=run)
+            repair_id = repair.id
+            self._update_pipeline_stage(
+                run_id, PILOT_REPAIR_STAGE, status="running", current_stage=PILOT_REPAIR_STAGE, session=session
+            )
+        self._ensure_work_thread(
+            run_id=run_id,
+            work_item_id=key,
+            thread_name=f"book-agent-pilot-repair-{run_id}",
+            target=lambda: self._execute_pilot_repair(run_id, repair_id, plan),
+        )
+        return True
+
+    def _execute_pilot_repair(self, run_id: str, repair_id: str, plan: RunPlan) -> None:
+        from book_agent.harness.agents.pilot_repair import AgentStructureJudge
+        from book_agent.services.pilot_repair import PilotRepairService
+
+        with bind_run_context(run_id), tracing.span("pilot_repair", **{"book_agent.run_id": run_id}):
+            session = self.session_factory()
+            try:
+                run = RunControlRepository(session).get_run(run_id)
+                worker = self._current_translation_worker(run_id)
+                judge = AgentStructureJudge(
+                    session_factory=self.session_factory,
+                    model=self.agent_model_resolver(worker),
+                    model_name=worker.metadata().model_name if worker is not None else "echo-worker",
+                    run_id=run_id,
+                )
+                repair = PilotRepairService(session, workflow_factory=self._workflow_service, judge=judge).run_for_pilot(
+                    run, repair_id=repair_id
+                )
+                extra = {
+                    "repair_id": repair.id,
+                    "repair_status": repair.status,
+                    "repair_outcome": repair.outcome,
+                    "repaired_count": repair.repaired_count,
+                    "remaining_blocking": repair.remaining_blocking,
+                    "remaining_major": repair.remaining_major,
+                    "cost_usd": float(repair.cost_usd or 0),
+                }
+            except Exception as exc:  # the service records its own errors; this is the last guard
+                logger.exception("pilot repair thread for %s failed", run_id)
+                session.rollback()
+                from book_agent.domain.models.review import PilotRepair
+
+                repair = session.get(PilotRepair, repair_id)
+                if repair is not None and repair.status == "running":
+                    repair.status = "error"
+                    repair.outcome = "error"
+                    repair.error_text = f"{type(exc).__name__}: {exc}"[:2000]
+                    repair.finished_at = datetime.now(timezone.utc)
+                    session.commit()
+                extra = {"repair_id": repair_id, "repair_status": "error"}
+            finally:
+                session.close()
+        self._update_pipeline_stage(
+            run_id,
+            PILOT_REPAIR_STAGE,
+            status="succeeded",
+            extra=extra,
+            current_stage=self._next_stage_label(plan, PILOT_REPAIR_STAGE),
+        )
+        self.wake(run_id)
 
     def _execute_translate_work_item(self, run_id: str, claimed: ClaimedRunWorkItem) -> None:
         self._execute_claimed_work_item(

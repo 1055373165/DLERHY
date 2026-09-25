@@ -40,13 +40,17 @@ from tests.test_pilot_run import BOOK
 class PilotQaPlanTests(unittest.TestCase):
     def test_only_pilot_runs_plan_the_qa_stage_and_it_comes_last(self) -> None:
         pilot = plan_for_run(DocumentRunType.TRANSLATE_FULL, {"run_request": {"scope": "pilot", "chapter_ids": ["c1"]}})
-        self.assertEqual(pilot.stages[-1], PILOT_QA_STAGE)
+        self.assertEqual(pilot.stages[-2:], (PILOT_QA_STAGE, "pilot_repair"))
         book = plan_for_run(DocumentRunType.TRANSLATE_FULL, {"run_request": {}})
         self.assertNotIn(PILOT_QA_STAGE, book.stages)
         reviewed = plan_for_run(
             DocumentRunType.TRANSLATE_FULL, {"run_request": {"scope": "pilot", "export_review": "sampled"}}
         )
-        self.assertEqual(reviewed.stages[-2:], ("export_review", PILOT_QA_STAGE))
+        self.assertEqual(reviewed.stages[-3:], ("export_review", PILOT_QA_STAGE, "pilot_repair"))
+        without_repair = plan_for_run(
+            DocumentRunType.TRANSLATE_FULL, {"run_request": {"scope": "pilot", "pilot_repair": "off"}}
+        )
+        self.assertEqual(without_repair.stages[-1], PILOT_QA_STAGE)
 
     def test_exported_chapters_are_read_from_the_merged_html(self) -> None:
         html = (
@@ -116,10 +120,12 @@ class PilotQualityRunTests(unittest.TestCase):
         self.assertEqual(self._wait(pilot_id)["status"], "succeeded")
 
         with self.session_factory() as session:
-            reports = session.scalars(select(PilotQualityReport).where(PilotQualityReport.run_id == pilot_id)).all()
-            self.assertEqual(len(reports), 1)
-            report = reports[0]
-            self.assertEqual(report.trigger, "pilot_run")
+            reports = session.scalars(
+                select(PilotQualityReport).where(PilotQualityReport.run_id == pilot_id).order_by(PilotQualityReport.created_at)
+            ).all()
+            # The QA stage's report, then the repair loop's report on the re-exported pilot.
+            self.assertEqual([item.trigger for item in reports], ["pilot_run", "pilot_repair"])
+            report, repaired = reports
             run = session.get(DocumentRun, pilot_id)
             self.assertEqual(
                 StageStatusCalculator(session).stage_status(pilot_id, run.document_id, PILOT_QA_STAGE), StageStatus.SUCCEEDED
@@ -129,33 +135,39 @@ class PilotQualityRunTests(unittest.TestCase):
                 for chapter in session.scalars(select(Chapter).where(Chapter.document_id == document_id)).all()
             }
             cached = ((run.status_detail_json or {}).get("pipeline") or {}).get("_cached_pipeline_stages") or {}
+            first_layers = list(report.layers_json)
         self.assertEqual([chapter_titles[chapter_id] for chapter_id in report.chapter_ids_json], ["1 Why agents", "2 The loop"])
         self.assertEqual(cached[PILOT_QA_STAGE]["status"], "succeeded")
         self.assertEqual(cached[PILOT_QA_STAGE]["report_id"], report.id)
-
-        payload = self.client.get(f"/v1/documents/{document_id}/pilot-quality").json()
-        self.assertEqual(payload["report_id"], report.id)
-        self.assertEqual(payload["run_id"], pilot_id)
-        self.assertEqual([layer["layer"] for layer in payload["layers"]], ["L1", "L2", "L3", "L4", "L5", "L6", "L7"])
-        self.assertEqual([chapter["title"] for chapter in payload["chapters"]], ["1 Why agents", "2 The loop"])
-        self.assertEqual(payload["export_source"], "file")
+        self.assertEqual(report.export_source, "file")
         # The echo model writes "ZH::" before every translation: a leaked program marker, blocking.
-        l7 = payload["layers"][6]
+        l7 = first_layers[6]
         self.assertEqual(l7["status"], "blocking")
         leaked = [finding for finding in l7["findings"] if finding["check_id"] == "L7.leaked_marker"]
         self.assertTrue(leaked)
         self.assertEqual(leaked[0]["evidence"]["marker"], "ZH::")
         self.assertEqual(set(leaked[0]["location"]) >= {"chapter_id", "block_id", "packet_id"}, True)
-        self.assertEqual(payload["status"], "blocking")
-        self.assertGreater(payload["counts"]["blocking"], 0)
+        self.assertEqual(report.status, "blocking")
+        self.assertGreater(report.blocking_count, 0)
+
+        # The reader is shown the latest report: after the repair loop took the marker out.
+        payload = self.client.get(f"/v1/documents/{document_id}/pilot-quality").json()
+        self.assertEqual(payload["report_id"], repaired.id)
+        self.assertEqual(payload["run_id"], pilot_id)
+        self.assertEqual([layer["layer"] for layer in payload["layers"]], ["L1", "L2", "L3", "L4", "L5", "L6", "L7"])
+        self.assertEqual([chapter["title"] for chapter in payload["chapters"]], ["1 Why agents", "2 The loop"])
+        self.assertEqual(payload["export_source"], "file")
+        self.assertFalse([f for f in payload["layers"][6]["findings"] if f["check_id"] == "L7.leaked_marker"])
 
         overview = self.client.get(f"/v1/documents/{document_id}/overview").json()
         self.assertEqual(overview["pilot"]["state"], "ready")
         quality = overview["pilot"]["quality"]
-        self.assertEqual((quality["report_id"], quality["status"]), (report.id, "blocking"))
+        self.assertEqual((quality["report_id"], quality["status"]), (repaired.id, payload["status"]))
         self.assertEqual([layer["layer"] for layer in quality["layers"]], ["L1", "L2", "L3", "L4", "L5", "L6", "L7"])
-        self.assertEqual(quality["layers"][6]["counts"]["blocking"], l7["counts"]["blocking"])
         self.assertIn(("pilot_qa", "试译质检"), [(step["key"], step["label"]) for step in overview["translation"]["steps"]])
+        self.assertIn(("pilot_repair", "自动修复试译"), [(step["key"], step["label"]) for step in overview["translation"]["steps"]])
+        self.assertEqual(overview["pilot"]["repair"]["status"], "finished")
+        self.assertGreaterEqual(overview["pilot"]["repair"]["repaired"], 1)
 
         # Run again by hand: a new report for the same pilot; the latest is the one shown.
         again = self.client.post(f"/v1/documents/{document_id}/pilot-quality")
@@ -164,7 +176,7 @@ class PilotQualityRunTests(unittest.TestCase):
         self.assertEqual(again.json()["trigger"], "manual")
         self.assertEqual(self.client.get(f"/v1/documents/{document_id}/pilot-quality").json()["report_id"], again.json()["report_id"])
 
-        # The whole-book run after it has no QA stage and writes no report.
+        # The whole-book run after it has no QA or repair stage and writes no report.
         book = self.client.post(
             "/v1/runs",
             json={"document_id": document_id, "run_type": "translate_full", "requested_by": "t", "status_detail_json": {}},
@@ -172,7 +184,9 @@ class PilotQualityRunTests(unittest.TestCase):
         self.assertIn(book.status_code, {200, 201, 202}, book.text)
         with self.session_factory() as session:
             book_run = session.get(DocumentRun, book.json()["run_id"])
-            self.assertNotIn(PILOT_QA_STAGE, plan_for_run(book_run.run_type, book_run.status_detail_json).stages)
+            book_stages = plan_for_run(book_run.run_type, book_run.status_detail_json).stages
+            self.assertNotIn(PILOT_QA_STAGE, book_stages)
+            self.assertNotIn("pilot_repair", book_stages)
 
     def test_a_qa_error_is_kept_and_does_not_fail_the_pilot(self) -> None:
         document_id = self._import()

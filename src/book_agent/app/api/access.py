@@ -36,7 +36,8 @@ from book_agent.domain.models.review import Export, IssueAction, ReviewIssue
 from book_agent.services.api_keys import ApiKeyService
 
 _ROLE_RANK = {"viewer": 0, "editor": 1, "admin": 2}
-_ADMIN_PATH_PREFIXES = ("/providers", "/api-keys")
+# Defect tickets are the dev side's work list, not a reader's.
+_ADMIN_PATH_PREFIXES = ("/providers", "/api-keys", "/pilot-defects")
 _READ_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
