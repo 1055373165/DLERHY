@@ -488,18 +488,25 @@ class PilotRepairToolbox:
             None,
         )
 
-    def _settle_term(self, source_term: str, rendering: str) -> dict[str, Any]:
-        """The book's rendering of the term in the glossary: kept at its lock level (PREFERRED if new), other forms dropped."""
+    def _settle_term(self, source_term: str, rendering: str, *, drop: Sequence[str] = ()) -> dict[str, Any]:
+        """The book's rendering of the term in the glossary, kept at its lock level (PREFERRED if new).
+
+        The renderings the book rejects (``drop``: the minority of the pilot) leave the entry; every
+        other accepted form stays (an acronym kept in English, "LLM", is still accepted).
+        """
         entry = self._term_entry(source_term)
         level = entry.lock_level if entry is not None and entry.lock_level in (LockLevel.LOCKED, LockLevel.PREFERRED) else LockLevel.PREFERRED
         term_type = entry.term_type if entry is not None else None
         kwargs = {"term_type": term_type} if term_type is not None else {}
+        previous = [entry.target_term, *(entry.target_variants_json or [])] if entry is not None else []
+        variants = [form for form in dict.fromkeys(str(value) for value in previous if value) if form != rendering and form not in set(drop)]
         written = GlossaryService(self.session).lock_term(
-            self.ctx.document_id, entry.source_term if entry is not None else source_term, rendering, target_variants=(), lock_level=level, **kwargs
+            self.ctx.document_id, entry.source_term if entry is not None else source_term, rendering, target_variants=variants, lock_level=level, **kwargs
         )
         return {
             "source_term": written.source_term,
             "target_term": written.target_term,
+            "target_variants": list(written.target_variants_json or []),
             "lock_level": written.lock_level.value,
             "previous_target": entry.target_term if entry is not None else None,
             "previous_variants": list(entry.target_variants_json or []) if entry is not None else [],
@@ -543,7 +550,7 @@ class PilotRepairToolbox:
     def _glossary__lock_majority_and_retranslate(self, item: WorkItem) -> ToolResult:
         (finding,) = item.findings[:1]
         source_term, majority, minority = self._term_variant_plan(finding)
-        settled = self._settle_term(source_term, majority)
+        settled = self._settle_term(source_term, majority, drop=minority)
         by_rendering = self._sentences_with_rendering(source_term, [majority, *minority])
         packets = list(dict.fromkeys(packet for rendering in minority for packet in by_rendering.get(rendering, [])))
         if not packets:
@@ -555,7 +562,7 @@ class PilotRepairToolbox:
     def _glossary__lock_majority_and_unify(self, item: WorkItem) -> ToolResult:
         (finding,) = item.findings[:1]
         source_term, majority, minority = self._term_variant_plan(finding)
-        settled = self._settle_term(source_term, majority)
+        settled = self._settle_term(source_term, majority, drop=minority)
         by_rendering = self._sentences_with_rendering(source_term, [majority, *minority])
         packets = list(dict.fromkeys(packet for rendering in minority for packet in by_rendering.get(rendering, [])))
         if not packets:

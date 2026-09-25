@@ -301,7 +301,10 @@ class SegmentEditService:
             if covered:
                 sentence = self.session.get(Sentence, covered[0])
                 if sentence is not None:
-                    self._check_locked_terms(sentence, self._covered_sources(sentence, covered), new_text)
+                    # A mechanical correction must not break a locked term; one the text already broke stays its own problem.
+                    self._check_locked_terms(
+                        sentence, self._covered_sources(sentence, covered), new_text, previous_text=segment.text_zh or ""
+                    )
             changes[segment.id] = new_text
         if not changes:
             return None
@@ -454,9 +457,13 @@ class SegmentEditService:
             for item in self.session.scalars(select(Sentence).where(Sentence.id.in_(covered or [sentence.id]))).all()
         ]
 
-    def _check_locked_terms(self, sentence: Sentence, sources: list[str], new_text: str) -> None:
+    def _check_locked_terms(self, sentence: Sentence, sources: list[str], new_text: str, *, previous_text: str | None = None) -> None:
         locked = GlossaryService(self.session).locked_terms_for_chapter(sentence.document_id, sentence.chapter_id)
         violations = find_term_violations([(sentence.id, " ".join(sources), new_text)], locked)
+        if previous_text is not None and violations:
+            # Only what the edit breaks: a term the previous text did not keep either is not this edit's doing.
+            before = {item.source_term for item in find_term_violations([(sentence.id, " ".join(sources), previous_text)], locked)}
+            violations = [item for item in violations if item.source_term not in before]
         if violations:
             detail = "; ".join(
                 f'"{item.source_term}" must be rendered as {" / ".join(item.accepted_renderings)}' for item in violations
