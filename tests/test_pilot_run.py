@@ -363,7 +363,8 @@ class PilotRunTests(unittest.TestCase):
         self.assertEqual(overview["pilot"]["state"], "ready")
         self.assertGreaterEqual(overview["pilot"]["problems"]["blocking"], 1)
         self.assertIn("OMISSION", [entry["type"] for entry in overview["pilot"]["problems"]["by_type"]])
-        self.assertIn("个问题没有解决", overview["headline"])
+        # After the repair loop the headline says what is still blocking; the card lists it.
+        self.assertRegex(overview["headline"], "个严重问题需要你看|个问题没有解决")
         stages = terminal["status_detail_json"]["pipeline"]
         review = (stages.get("_cached_pipeline_stages") or stages.get("stages") or {}).get("review") or {}
         self.assertGreaterEqual(int(review.get("blockers_left_for_reader") or 0), 1)

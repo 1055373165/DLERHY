@@ -858,20 +858,37 @@ def open_questions(session: Session, document_id: str) -> list[Approval]:
 
 
 def overview_summary(session: Session, repair: PilotRepair | None) -> dict[str, Any] | None:
-    """What the pilot card says of the repair: what was repaired, what is left, what waits on the reader."""
+    """What the pilot card says of the repair: what was repaired, what is left, what waits on the reader.
+
+    ``repair`` is the latest; what was repaired adds up every repair of the book (a repair run again
+    by hand after a fix builds on the first), what is left is the latest's.
+    """
     if repair is None:
         return None
     summary = repair.summary_json or {}
+    finished = list(
+        session.scalars(
+            select(PilotRepair)
+            .where(PilotRepair.document_id == repair.document_id, PilotRepair.status == "finished")
+            .order_by(PilotRepair.created_at)
+        ).all()
+    )
+    repaired = sum(int(item.repaired_count or 0) for item in finished)
+    kept: Counter[str] = Counter()
+    for item in finished:
+        for entry in (item.summary_json or {}).get("classes") or []:
+            if int(entry.get("kept") or 0) > 0:
+                kept[str(entry.get("title") or entry.get("check_id"))] += int(entry.get("kept") or 0)
     questions = open_questions(session, repair.document_id)
     left = int(repair.remaining_blocking or 0) + int(repair.remaining_major or 0)
     if repair.status == "running":
         text = "正在自动修复试译里的问题…"
     elif repair.status == "error":
         text = "自动修复没能完成，试译照常给你看，问题都列在下面。"
-    elif repair.outcome == "nothing_to_do":
+    elif repair.outcome == "nothing_to_do" and not repaired:
         text = "质检没有发现需要修复的严重或一般问题。"
     else:
-        parts = [f"自动修复了 {repair.repaired_count} 个问题" if repair.repaired_count else "自动修复没能解决这些问题"]
+        parts = [f"自动修复了 {repaired} 个问题" if repaired else "自动修复没能解决这些问题"]
         if repair.remaining_blocking:
             parts.append(
                 f"还有 {repair.remaining_blocking} 个严重问题需要你看" + (f"（{len(questions)} 个问题等你回答）" if questions else "")
@@ -881,26 +898,21 @@ def overview_summary(session: Session, repair: PilotRepair | None) -> dict[str, 
         else:
             parts.append("没有留下严重或一般问题")
         text = "，".join(parts) + "。"
-    # What kinds of problem were repaired, most first ("术语不统一", "中英文空格").
-    repaired_kinds = [
-        str(entry.get("title") or entry.get("check_id"))
-        for entry in sorted(summary.get("classes") or [], key=lambda entry: -int(entry.get("kept") or 0))
-        if int(entry.get("kept") or 0) > 0
-    ]
     return {
         "repair_id": repair.id,
         "status": repair.status,
         "outcome": repair.outcome,
-        "repaired_kinds": list(dict.fromkeys(repaired_kinds))[:5],
+        # What kinds of problem were repaired, most first ("同一术语用了几种译法", ...).
+        "repaired_kinds": [kind for kind, _count in kept.most_common(5)],
         "stop_reason": repair.stop_reason,
         "rounds": repair.rounds,
-        "repaired": int(repair.repaired_count or 0),
+        "repaired": repaired,
         "remaining": {"blocking": int(repair.remaining_blocking or 0), "major": int(repair.remaining_major or 0)},
         "questions": len(questions),
         "attempts": int(summary.get("attempts") or 0),
         "before": summary.get("before"),
         "after": summary.get("after"),
-        "cost_usd": round(float(repair.cost_usd or 0), 4),
+        "cost_usd": round(sum(float(item.cost_usd or 0) for item in finished) or float(repair.cost_usd or 0), 4),
         "text": text,
         "finished_at": repair.finished_at.isoformat() if repair.finished_at else None,
     }

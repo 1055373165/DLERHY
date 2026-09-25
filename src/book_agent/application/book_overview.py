@@ -485,8 +485,10 @@ def _headline(
         return translation.get("stop_reason_text") or ("翻译失败了。" if state == "failed" else "翻译已取消。")
     if pilot["state"] == "ready":
         repair = pilot.get("repair") or {}
-        if repair.get("status") == "finished" and repair.get("outcome") != "nothing_to_do":
-            return "试译完成：前两章可以阅读了。" + str(repair.get("text") or "")
+        if repair.get("status") == "finished":
+            # The card below says what was repaired and what is left; the headline says only what needs the reader.
+            blocking = int((repair.get("remaining") or {}).get("blocking") or 0)
+            return "试译完成：前两章可以阅读了。" + (f"还有 {blocking} 个严重问题需要你看。" if blocking else "")
         problems = pilot.get("problems") or {}
         left = int(problems.get("open") or 0)
         return "试译完成：前两章可以阅读了。" + (f"还有 {left} 个问题没有解决，列在下面。" if left else "")
