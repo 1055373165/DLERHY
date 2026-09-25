@@ -75,6 +75,72 @@ _LOCKED_TERM_PREFIX_STOPWORDS = {
 }
 _REFERENCE_LIKE_CHAPTER_TITLES = {"reference", "references", "glossary", "bibliography", "index"}
 _LOCKED_TERM_LEADING_MODIFIERS = {"大", "小", "超", "微", "强", "弱", "多", "单"}
+# PDF roles a reader follows as running text (reading order matters between them).
+_PDF_PROSE_ROLES = {"body", "heading", "list_item", "footnote", "quote"}
+_PDF_FIGURE_ROLES = {"figure", "image"}
+
+_Rect = tuple[float, float, float, float]
+
+
+def _pdf_page_regions(blocks: list[Any], pages: set[int]) -> tuple[dict[int, list[_Rect]], dict[int, list[_Rect]]]:
+    """(prose rects, figure rects) per page, from the blocks' source regions."""
+    prose: dict[int, list[_Rect]] = {}
+    figures: dict[int, list[_Rect]] = {}
+    for block in blocks:
+        metadata = block.source_span_json or {}
+        if metadata.get("repair_hidden_from_export"):
+            continue
+        role = str(metadata.get("pdf_block_role") or "")
+        block_type = getattr(block.block_type, "value", block.block_type)
+        if role in _PDF_FIGURE_ROLES or block_type in {"figure", "image"}:
+            target = figures
+        elif role in _PDF_PROSE_ROLES:
+            target = prose
+        else:
+            continue
+        regions = (metadata.get("source_bbox_json") or {}).get("regions") or []
+        for region in regions:
+            if not isinstance(region, dict) or region.get("page_number") not in pages:
+                continue
+            bbox = region.get("bbox")
+            if not isinstance(bbox, list) or len(bbox) != 4:
+                continue
+            try:
+                x0, y0, x1, y1 = (float(value) for value in bbox)
+            except (TypeError, ValueError):
+                continue
+            if x1 > x0 and y1 > y0:
+                target.setdefault(int(region["page_number"]), []).append((x0, y0, x1, y1))
+    return prose, figures
+
+
+def _inside(rect: _Rect, container: _Rect, tolerance: float = 2.0) -> bool:
+    center_x, center_y = (rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2
+    return (
+        container[0] - tolerance <= center_x <= container[2] + tolerance
+        and container[1] - tolerance <= center_y <= container[3] + tolerance
+    )
+
+
+def _has_side_by_side(rects: list[_Rect]) -> bool:
+    """Two prose regions in different columns at the same height of the page.
+
+    Different columns: no shared width, or left edges set apart by more than 30% of the prose's
+    width (a line running past its column still starts in it). Same height: overlapping, or
+    closer vertically than the taller one's height (staggered column lines).
+    """
+    if not rects:
+        return False
+    span = max(rect[2] for rect in rects) - min(rect[0] for rect in rects)
+    for index, left in enumerate(rects):
+        for right in rects[index + 1 :]:
+            shared_width = left[2] > right[0] and right[2] > left[0]
+            if shared_width and abs(left[0] - right[0]) <= 0.3 * span:
+                continue
+            gap = max(left[1], right[1]) - min(left[3], right[3])
+            if gap < max(left[3] - left[1], right[3] - right[1]):
+                return True
+    return False
 
 
 @dataclass(slots=True)
@@ -1221,6 +1287,33 @@ class ReviewService:
                 "reason": "pdf_scan_single_page_locally_anchored_advisory",
             }
 
+        # A book-wide "high" risk is inherited by every chapter: without page-level evidence in
+        # this chapter there is nothing to say its reading order is wrong.
+        if layout_risk == "high" and chapter_page_evidence and not local_suspicious_pages and not local_layout_risk_pages:
+            return {
+                "severity": Severity.LOW,
+                "blocking": False,
+                "emit_issue": False,
+                "recovery_lane": recovery_lane,
+                "reason": "no_local_layout_signals",
+            }
+
+        # "multi_column" pages whose prose still runs in one column: the columns are a diagram's
+        # boxes, not text. Advisory; side-by-side prose on any flagged page stays blocking.
+        if recovery_lane != "academic_paper" and self._multi_column_pages_have_one_prose_column(
+            bundle,
+            local_suspicious_pages=local_suspicious_pages,
+            local_layout_risk_pages=local_layout_risk_pages,
+            chapter_page_evidence=chapter_page_evidence,
+        ):
+            return {
+                "severity": Severity.LOW,
+                "blocking": False,
+                "emit_issue": True,
+                "recovery_lane": recovery_lane,
+                "reason": "multi_column_pages_single_prose_column",
+            }
+
         if layout_risk != "medium":
             return default
 
@@ -1417,6 +1510,41 @@ class ReviewService:
                 anchored_page_count += 1
 
         return anchored_page_count >= 3
+
+    def _multi_column_pages_have_one_prose_column(
+        self,
+        bundle: ChapterReviewBundle,
+        *,
+        local_suspicious_pages: list[int],
+        local_layout_risk_pages: list[int],
+        chapter_page_evidence: list[dict[str, Any]],
+    ) -> bool:
+        """Every flagged page is flagged for "multi_column" only, and on each its prose blocks
+        (outside figures, not hidden by a repair) never sit side by side."""
+        flagged = sorted({int(page) for page in [*local_suspicious_pages, *local_layout_risk_pages] if isinstance(page, int)})
+        if not flagged:
+            return False
+        evidence_by_page = {
+            int(page["page_number"]): page
+            for page in chapter_page_evidence
+            if isinstance(page, dict) and isinstance(page.get("page_number"), int)
+        }
+        for page_number in flagged:
+            reasons = {
+                str(reason)
+                for reason in list((evidence_by_page.get(page_number) or {}).get("page_layout_reasons") or [])
+                if isinstance(reason, str)
+            }
+            if not reasons or not reasons.issubset({"multi_column"}):
+                return False
+        prose_by_page, figures_by_page = _pdf_page_regions(bundle.blocks, set(flagged))
+        for page_number in flagged:
+            figures = figures_by_page.get(page_number, [])
+            prose = [rect for rect in prose_by_page.get(page_number, []) if not any(_inside(rect, figure) for figure in figures)]
+            # Nothing to judge the page by: no evidence that it reads in one column.
+            if not prose or _has_side_by_side(prose):
+                return False
+        return True
 
     def _pdf_image_caption_review_policy(
         self,
