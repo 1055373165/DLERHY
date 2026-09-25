@@ -846,15 +846,26 @@ def overview_summary(session: Session, repair: PilotRepair | None) -> dict[str, 
         text = "质检没有发现需要修复的严重或一般问题。"
     else:
         parts = [f"自动修复了 {repair.repaired_count} 个问题" if repair.repaired_count else "自动修复没能解决这些问题"]
-        if left:
-            parts.append(f"还有 {left} 个需要你看" + (f"（{len(questions)} 个问题等你回答）" if questions else ""))
+        if repair.remaining_blocking:
+            parts.append(
+                f"还有 {repair.remaining_blocking} 个严重问题需要你看" + (f"（{len(questions)} 个问题等你回答）" if questions else "")
+            )
+        elif left:
+            parts.append(f"还有 {left} 个一般问题，不影响阅读")
         else:
             parts.append("没有留下严重或一般问题")
         text = "，".join(parts) + "。"
+    # What kinds of problem were repaired, most first ("术语不统一", "中英文空格").
+    repaired_kinds = [
+        str(entry.get("title") or entry.get("check_id"))
+        for entry in sorted(summary.get("classes") or [], key=lambda entry: -int(entry.get("kept") or 0))
+        if int(entry.get("kept") or 0) > 0
+    ]
     return {
         "repair_id": repair.id,
         "status": repair.status,
         "outcome": repair.outcome,
+        "repaired_kinds": list(dict.fromkeys(repaired_kinds))[:5],
         "stop_reason": repair.stop_reason,
         "rounds": repair.rounds,
         "repaired": int(repair.repaired_count or 0),
