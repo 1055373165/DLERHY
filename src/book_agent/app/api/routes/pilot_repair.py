@@ -46,6 +46,32 @@ def get_pilot_repair(document_id: str, session: Session = Depends(get_db_session
     return repair_payload(session, repair)
 
 
+class RepairRequest(BaseModel):
+    # The most the repair may spend; default twice what the pilot cost.
+    budget_usd: float | None = None
+
+
+@documents_router.post("/{document_id}/pilot-repair", status_code=status.HTTP_202_ACCEPTED)
+def start_pilot_repair(
+    document_id: str, request: Request, body: RepairRequest | None = None, session: Session = Depends(get_db_session)
+) -> dict[str, Any]:
+    """Run the repair loop again now, in the background (after a code fix, or for a pilot translated
+    another way); GET the same path to follow it."""
+    from book_agent.app.runtime.document_run_executor import ensure_document_run_executor
+    from book_agent.services.pilot_repair import latest_repair
+
+    _document_or_404(session, document_id)
+    running = latest_repair(session, document_id)
+    if running is not None and running.status == "running":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="这本书的试译正在自动修复，等它完成后再试。")
+    executor = ensure_document_run_executor(request.app)
+    start = getattr(executor, "start_pilot_repair", None)
+    if start is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="the run executor is not running")
+    repair_id = start(document_id, budget_usd=body.budget_usd if body else None)
+    return {"repair_id": repair_id, "status": "running"}
+
+
 @documents_router.get("/{document_id}/pilot-repair/evidence/{name}")
 def get_pilot_repair_evidence(document_id: str, name: str, request: Request, session: Session = Depends(get_db_session)) -> FileResponse:
     """A page image attached to a question (the problem outlined on the original page)."""

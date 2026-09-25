@@ -115,6 +115,25 @@ class PilotRepairApiTests(unittest.TestCase):
         overview = self.client.get(f"/v1/documents/{self.bench.document_id}/overview").json()
         self.assertEqual(len([item for item in overview["needs_you"] if item["kind"] == "question"]), 1)
 
+    def test_the_repair_can_be_run_again_by_hand_but_not_twice_at_once(self) -> None:
+        started: list[tuple[str, float | None]] = []
+
+        class _Executor:
+            def start_pilot_repair(self, document_id: str, *, budget_usd: float | None = None) -> str:
+                started.append((document_id, budget_usd))
+                return "r-new"
+
+        with patch("book_agent.app.runtime.document_run_executor.ensure_document_run_executor", return_value=_Executor()):
+            response = self.client.post(f"/v1/documents/{self.bench.document_id}/pilot-repair", json={"budget_usd": 0.1})
+            self.assertEqual((response.status_code, response.json()["repair_id"]), (202, "r-new"))
+            self.assertEqual(started, [(self.bench.document_id, 0.1)])
+            from book_agent.domain.models.review import PilotRepair
+
+            with self.bench.session_factory() as session:
+                session.get(PilotRepair, self.repair_id).status = "running"
+                session.commit()
+            self.assertEqual(self.client.post(f"/v1/documents/{self.bench.document_id}/pilot-repair").status_code, 409)
+
     def test_the_dev_side_lists_and_closes_the_defect_tickets(self) -> None:
         tickets = self.client.get("/v1/pilot-defects").json()["tickets"]
         (glyph,) = [ticket for ticket in tickets if ticket["check_id"] == "L7.stray_glyph"]

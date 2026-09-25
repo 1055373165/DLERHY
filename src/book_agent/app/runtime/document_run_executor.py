@@ -6,7 +6,7 @@ import socket
 import threading
 import time
 import traceback
-from contextlib import ExitStack
+from contextlib import ExitStack, nullcontext
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1267,6 +1267,56 @@ class DocumentRunExecutor:
             target=lambda: self._execute_pilot_repair(run_id, repair_id, plan),
         )
         return True
+
+    def start_pilot_repair(self, document_id: str, *, budget_usd: float | None = None) -> str:
+        """Run the pilot repair again by hand (POST /documents/{id}/pilot-repair), on its own thread.
+
+        For the book's latest pilot run when it has one, else for the chapters a pilot would take
+        (a book translated some other way). Returns the new repair's id; it runs in the background.
+        """
+        from book_agent.harness.agents.pilot_repair import AgentStructureJudge
+        from book_agent.services.pilot import latest_pilot_run
+        from book_agent.services.pilot_repair import PilotRepairService
+
+        with session_scope(self.session_factory) as session:
+            run = latest_pilot_run(session, document_id)
+            repair = PilotRepairService(session, workflow_factory=self._workflow_service).start(document_id, run=run)
+            repair_id, run_id = repair.id, run.id if run is not None else None
+
+        def _run() -> None:
+            with bind_run_context(run_id) if run_id else nullcontext():
+                session = self.session_factory()
+                try:
+                    run = session.get(DocumentRun, run_id) if run_id else None
+                    worker = self._current_translation_worker(run_id)
+                    judge = AgentStructureJudge(
+                        session_factory=self.session_factory,
+                        model=self.agent_model_resolver(worker),
+                        model_name=worker.metadata().model_name if worker is not None else "echo-worker",
+                        run_id=run_id,
+                    )
+                    service = PilotRepairService(session, workflow_factory=self._workflow_service, judge=judge, budget_usd=budget_usd)
+                    if run is not None:
+                        service.run_for_pilot(run, repair_id=repair_id)
+                    else:
+                        try:
+                            service.run(document_id, repair_id=repair_id)
+                        except Exception as exc:
+                            logger.exception("pilot repair of %s failed", document_id)
+                            session.rollback()
+                            from book_agent.domain.models.review import PilotRepair
+
+                            row = session.get(PilotRepair, repair_id)
+                            if row is not None:
+                                row.status, row.outcome = "error", "error"
+                                row.error_text = f"{type(exc).__name__}: {exc}"[:2000]
+                                row.finished_at = datetime.now(timezone.utc)
+                                session.commit()
+                finally:
+                    session.close()
+
+        threading.Thread(target=_run, name=f"book-agent-pilot-repair-{document_id}", daemon=True).start()
+        return repair_id
 
     def _execute_pilot_repair(self, run_id: str, repair_id: str, plan: RunPlan) -> None:
         from book_agent.harness.agents.pilot_repair import AgentStructureJudge
