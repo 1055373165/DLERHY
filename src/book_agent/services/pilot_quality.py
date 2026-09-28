@@ -11,6 +11,7 @@ its exports; ``POST /v1/documents/{id}/pilot-quality`` runs it again by hand. Th
 * the pilot chapters' sentences with their current translation and packet;
 * the glossary (locked and preferred terms) and the Reviewer Agent's open findings (the pilot's
   model review; no new model call is made here);
+* every open blocking review issue of the pilot chapters (review pass, export gate, a person);
 * parse health's inputs for the pilot chapters' blocks, with the PDF pages for figure crops.
 
 A QA run never fails the pilot: an error is kept as a report with status "error" and the pilot
@@ -54,6 +55,7 @@ from book_agent.domain.quality.pilot_qa import (
     QaBlock,
     QaChapter,
     QaSentence,
+    ReviewBlocker,
     ReviewFinding,
 )
 from book_agent.export import markup, pdf_crop
@@ -247,9 +249,43 @@ def _model_issues(session: Session, document_id: str, chapter_ids: Sequence[str]
                 target_text=str(targets.get(str(row.sentence_id)) or evidence.get("target_text") or ""),
                 explanation=str(evidence.get("explanation") or evidence.get("reason") or ""),
                 suggested_target_text=str(evidence.get("suggested_target_text") or ""),
+                blocking=bool(row.blocking),
             )
         )
     return findings
+
+
+def _value(value: Any) -> str:
+    return str(value.value if hasattr(value, "value") else value)
+
+
+def _review_blockers(session: Session, document_id: str, chapter_ids: Sequence[str]) -> list[ReviewBlocker]:
+    """The open blocking review issues of these chapters, whoever opened them (review pass, export gate, a person)."""
+    rows = session.scalars(
+        select(ReviewIssue)
+        .where(
+            ReviewIssue.document_id == document_id,
+            ReviewIssue.chapter_id.in_(list(chapter_ids)),
+            ReviewIssue.blocking.is_(True),
+            ReviewIssue.status.in_((IssueStatus.OPEN, IssueStatus.TRIAGED)),
+        )
+        .order_by(ReviewIssue.created_at, ReviewIssue.id)
+    ).all()
+    return [
+        ReviewBlocker(
+            issue_id=str(row.id),
+            issue_type=str(row.issue_type),
+            severity=_value(row.severity),
+            chapter_id=row.chapter_id,
+            root_cause_layer=_value(row.root_cause_layer),
+            detector=_value(row.detector),
+            block_id=row.block_id,
+            sentence_id=row.sentence_id,
+            packet_id=row.packet_id,
+            evidence=dict(row.evidence_json or {}),
+        )
+        for row in rows
+    ]
 
 
 class _Loaded:
@@ -428,6 +464,7 @@ def load_pilot_inputs(
         sentences=sentences,
         glossary=_glossary(session, document_id),
         model_issues=_model_issues(session, document_id, chapter_ids),
+        review_blockers=_review_blockers(session, document_id, chapter_ids),
         exported=exported,
         health=health,
     )

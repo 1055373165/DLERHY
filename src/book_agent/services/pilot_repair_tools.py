@@ -20,6 +20,8 @@ glossary                   the book's rendering of a term settled in the glossar
 book_instructions          a BOOK.md decision (the book's convention) for the whole-book run
 retranslate_packets        the affected packets only, with the problems as hints
 segment_edit               a deterministic correction of the translation text, as a new attempt
+review_recheck             the rule review pass or the export gate run again on a chapter whose
+                           blocking review issue is a finding: what they no longer find resolves
 =========================  ====================================================================
 
 Nothing here changes code, and nothing commits: the loop runs each repair in a savepoint and keeps
@@ -724,6 +726,69 @@ class PilotRepairToolbox:
                 merged_with = second.id if first.id == block.id else first.id
                 break
         return ToolResult(params={"block_id": block.id, "merged_with": merged_with}, block_ids=list(dict.fromkeys(block_ids)))
+
+    def _structure_edit__relabel_table_as_code(self, item: WorkItem) -> ToolResult:
+        """A listing typed as a table becomes code; the export gate then checks the chapter again,
+        so the table it could not draw is no longer an open issue."""
+        block = self._finding_block(item.findings[0])
+        if block.block_type != BlockType.TABLE:
+            raise NotApplicable(f"a {block.block_type.value} block is not a table")
+        outcome = self.structure.relabel_block(
+            self.ctx.document_id, block.id, BlockType.CODE.value, actor_id=ACTOR_ID, reason="代码被识别成了表格，改为代码块"
+        )
+        self.session.flush()
+        self._recheck_export_gate([block.chapter_id])
+        return ToolResult(params={"block_id": block.id, "from": BlockType.TABLE.value}, block_ids=list(outcome.block_ids))
+
+    def _recheck_export_gate(self, chapter_ids: Sequence[str]) -> None:
+        workflow = self.ctx.workflow()
+        for chapter_id in dict.fromkeys(chapter_ids):
+            workflow._revalidate_export_gate(chapter_id)
+        self.session.flush()
+
+    # --- review_recheck ------------------------------------------------------------------------
+
+    def _review_recheck__rerun_detectors(self, item: WorkItem) -> ToolResult:
+        """Run the detector that opened each finding's review issue again: the export gate for its
+        issues, the rule review pass for its own. What they no longer find is resolved; an issue
+        they still find stays (and the finding with it). Model and human issues are not theirs."""
+        from book_agent.domain.enums import Detector, IssueStatus
+        from book_agent.infra.repositories.review import ReviewRepository, is_export_gate_issue
+        from book_agent.services.review import ReviewService
+
+        issue_ids = [str((finding.get("evidence") or {}).get("issue_id") or "") for finding in item.findings]
+        issues = [self.session.get(ReviewIssue, issue_id) for issue_id in dict.fromkeys(issue_ids) if issue_id]
+        issues = [
+            issue
+            for issue in issues
+            if issue is not None
+            and issue.document_id == self.ctx.document_id
+            and issue.status in (IssueStatus.OPEN, IssueStatus.TRIAGED)
+        ]
+        if not issues:
+            raise NotApplicable("no open review issue behind these findings")
+        gate_chapters = [str(issue.chapter_id) for issue in issues if issue.chapter_id and is_export_gate_issue(issue)]
+        review_chapters = [
+            str(issue.chapter_id)
+            for issue in issues
+            if issue.chapter_id and not is_export_gate_issue(issue) and issue.detector == Detector.RULE
+        ]
+        if not gate_chapters and not review_chapters:
+            raise NotApplicable("the issues were opened by a person or the Reviewer Agent: no detector to rerun")
+        if review_chapters:
+            review = ReviewService(ReviewRepository(self.session))
+            for chapter_id in dict.fromkeys(review_chapters):
+                review.review_chapter(chapter_id)
+            self.session.flush()
+        if gate_chapters:
+            self._recheck_export_gate(gate_chapters)
+        return ToolResult(
+            params={
+                "issue_ids": [issue.id for issue in issues],
+                "review_chapter_ids": list(dict.fromkeys(review_chapters)),
+                "gate_chapter_ids": list(dict.fromkeys(gate_chapters)),
+            }
+        )
 
     def _hide(self, block: Block, reason: str) -> None:
         self.structure.override_metadata(

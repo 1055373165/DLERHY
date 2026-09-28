@@ -68,6 +68,7 @@ from book_agent.ingestion.pdf.models import (
     PdfOutlineEntry,
     PdfPage,
     PdfTextBlock,
+    _PageRecoveryContext,
     _RecoveredBlock,
 )
 from book_agent.ingestion.text import (
@@ -1614,6 +1615,50 @@ class PdfBootstrapPipelineTests(unittest.TestCase):
 
         self.assertFalse(_looks_like_code(text, len(lines)))
         self.assertFalse(_looks_like_table(len(lines), lines))
+
+    def test_monospace_code_listing_with_model_names_is_code_not_table(self) -> None:
+        # Build an AI Agent, listing 2.4: "model=" is a table header cue and "gpt-5-mini" a number,
+        # so the numeric-table heuristic took the listing for a table.
+        lines = [
+            "from litellm import completion",
+            "response = completion(",
+            'model="gpt-5-mini",',
+            'messages=[{"role": "user", "content": "Hello!"}]',
+            ")",
+            "response = completion(",
+            'model="claude-sonnet-4-5",',
+            'messages=[{"role": "user", "content": "Hello!"}]',
+            ")",
+        ]
+        self.assertTrue(_looks_like_numeric_table_fragment(lines))
+
+        def classify(font_names: frozenset[str]) -> str:
+            block = PdfTextBlock(
+                page_number=1,
+                block_number=1,
+                text="\n".join(lines),
+                bbox=(102.0, 300.0, 352.0, 412.0),
+                line_texts=lines,
+                span_count=len(lines),
+                line_count=len(lines),
+                font_size_min=8.5,
+                font_size_max=8.5,
+                font_size_avg=8.5,
+                font_names=font_names,
+            )
+            page = PdfPage(page_number=1, width=540.0, height=666.0, blocks=[block])
+            return PdfStructureRecoveryService()._classify_role(
+                page=page,
+                raw_block=block,
+                page_font_median=10.0,
+                repeated_edge_text=set(),
+                outline_titles=[],
+                page_context=_PageRecoveryContext(is_toc_page=False),
+            )
+
+        self.assertEqual(classify(frozenset({"JetBrainsMonoNL-Regular"})), "code_like")
+        # The same lines in a body font stay with the table heuristic (no font evidence of code).
+        self.assertEqual(classify(frozenset({"NewBaskervilleStd-Roman"})), "table_like")
 
     def test_wrapped_numeric_academic_table_heuristics_detect_compressed_multiline_tables(self) -> None:
         lines = [

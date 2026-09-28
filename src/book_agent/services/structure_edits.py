@@ -165,7 +165,10 @@ class StructureEditService:
             new_type = BlockType(block_type)
         except ValueError as exc:
             raise StructureEditRejected(f"unknown block type {block_type!r}") from exc
-        if block.block_type not in RELABEL_TYPES or new_type not in RELABEL_TYPES:
+        # A table that is really code (a listing the parser read as a table) becomes code: its cells
+        # are dropped, nothing has to be created.
+        table_to_code = block.block_type == BlockType.TABLE and new_type == BlockType.CODE
+        if not table_to_code and (block.block_type not in RELABEL_TYPES or new_type not in RELABEL_TYPES):
             raise StructureEditRejected(
                 f"cannot relabel {block.block_type.value} as {new_type.value}; allowed types: "
                 + ", ".join(sorted(t.value for t in RELABEL_TYPES))
@@ -670,6 +673,8 @@ class StructureEditService:
         now = _utcnow()
         span = dict(block.source_span_json or {})
         span["structure_edit_previous_type"] = block.block_type.value
+        if new_type == BlockType.CODE and span.get("pdf_block_role") == "table_like":
+            span["pdf_block_role"] = "code_like"
         if new_type == BlockType.HEADING:
             span["heading_level"] = heading_level or span.get("heading_level") or 2
         block.block_type = new_type
