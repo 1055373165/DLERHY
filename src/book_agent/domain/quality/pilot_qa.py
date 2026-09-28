@@ -679,6 +679,7 @@ _SECTION_NUMBER_RE = re.compile(r"^\s*\d+(?:\.\d+)*\s+")
 _GLUED_HEADING_RE = re.compile(r"(?<![\w.@/])([a-z]{3,})([.?!])([a-z]{2,})(?=\s)")
 _NOT_GLUED = frozenset({"com", "org", "net", "io", "ai", "py", "js", "md", "txt", "json", "html", "csv", "pdf", "env", "yaml", "yml", "toml", "sh", "exe", "zip"})
 _LEADING_NUMBER_RE = re.compile(r"^\s*(\d{1,4})\s+(.+)$", re.DOTALL)
+_ARTIFACT_TITLE_RE = re.compile(r"^\s*(?:Listing|Table|Figure|Example)\s+[A-Z]?\d+(?:\.\d+)*\b")
 
 
 def _norm(text: str | None) -> str:
@@ -850,6 +851,11 @@ def check_headings_and_headers(inputs: PilotQaInputs) -> list[CheckRun]:
             if _is_sentence(text):
                 prose_headings.findings.append(
                     _block_finding("L1.heading_is_prose", block, f"这句正文被排成了标题：「{_snippet(text, 80)}」")
+                )
+            elif _ARTIFACT_TITLE_RE.match(text):
+                # "Listing 2.4 Unified API calls with LiteLLM" titles its listing, not a section.
+                prose_headings.findings.append(
+                    _block_finding("L1.heading_is_prose", block, f"代码清单或图表的标题被排成了章节标题：「{_snippet(text, 60)}」")
                 )
             continue
         if block.block_type not in {"paragraph", "footnote", "list_item"}:

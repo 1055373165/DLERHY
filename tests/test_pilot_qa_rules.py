@@ -849,6 +849,11 @@ class HeadingIsProseTests(unittest.TestCase):
     def test_a_sentence_set_as_a_heading_is_found(self) -> None:
         self.assertTrue(self.found("Chapter 7 explores the various layers of infrastructure that support RAG systems."))
 
+    def test_a_listing_title_set_as_a_heading_is_found(self) -> None:
+        # Build an AI Agent: "Listing 2.4 Unified API calls with LiteLLM" was promoted to a section heading.
+        hits = self.found("Listing 2.4 Unified API calls with LiteLLM")
+        self.assertEqual([(hit["target"]["id"], hit["repair"]) for hit in hits], [("b-hq", "structure_edit")])
+
     def test_a_numbered_section_title_that_asks_a_question_is_a_title(self) -> None:
         # The RAG book's "2.1": relabelling it as a paragraph would lose the section.
         self.assertEqual(self.found("2.1 What does a RAG system look like?"), [])
