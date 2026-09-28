@@ -125,6 +125,8 @@ def render_callout_html(
 
 # After the end of a Chinese sentence (closing quotes stay with it).
 _ZH_SENTENCE_END = re.compile(r"(?<=[。！？!?])(?![”’」』）)])")
+# Before a labelled line ("行动：…" "响应：…"): prompt lines often start with a short label.
+_ZH_LABEL_START = re.compile(r"\s+(?=[一-鿿]{1,6}\s?\d*\s?[：:])")
 
 
 def callout_target_text(
@@ -151,7 +153,12 @@ def callout_target_text(
         text = str(getattr(target_map[target_id], "text_zh", "") or "").strip()
         if not text:
             continue
-        pieces = [piece.strip() for piece in _ZH_SENTENCE_END.split(text) if piece.strip()] if len(sentence_ids) > 1 else [text]
+        pieces = [text]
+        if len(sentence_ids) > 1:
+            for boundary in (_ZH_SENTENCE_END, _ZH_LABEL_START):
+                pieces = [piece.strip() for piece in boundary.split(text) if piece.strip()]
+                if len(pieces) == len(sentence_ids):
+                    break
         if len(pieces) != len(sentence_ids):
             pieces = [text] + [""] * (len(sentence_ids) - 1)
         for sentence_id, piece in zip(sentence_ids, pieces):

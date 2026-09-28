@@ -18,8 +18,10 @@ import fitz
 from book_agent.domain.enums import BlockType, SentenceStatus
 from book_agent.domain.structure.callouts import (
     CALLOUT_ICON_KEY,
+    LooseBlock,
     callout_line_is_code,
     looks_like_code_callout,
+    pdf_callout_lines,
 )
 from book_agent.domain.structure.pdf import PDFParser
 from book_agent.export import markup
@@ -127,6 +129,21 @@ class IconCalloutParseTests(unittest.TestCase):
         blocks = _page_blocks(_parse(["Agents should act before asking questions."], callout_font="tiro"), 2)
         self.assertFalse([block for block in blocks if block.metadata.get("pdf_block_role") == "callout"])
         self.assertTrue([block for block in blocks if block.block_type == "image"])
+
+
+class PdfCalloutLinesTests(unittest.TestCase):
+    """An old parse joined two callout lines into one block; the repair reads them apart from the page."""
+
+    def test_lines_come_back_from_the_page(self) -> None:
+        first, second = "Action: search the web for the price", "Response: The price is 42 won."
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "book.pdf"
+            _build(path, [first, second])
+            joined = LooseBlock("b1", "paragraph", f"{first} {second}", ("Helvetica",), ((2, (110.0, 220.0, 470.0, 250.0)),))
+            with fitz.open(path) as pdf:
+                self.assertEqual(pdf_callout_lines(pdf, [joined]), [first, second])
+                edited = LooseBlock("b1", "paragraph", "Something else entirely", ("Helvetica",), joined.regions)
+                self.assertIsNone(pdf_callout_lines(pdf, [edited]))
 
 
 class CalloutClassificationTests(unittest.TestCase):
@@ -256,6 +273,11 @@ class CalloutRenderTests(unittest.TestCase):
         # One translation per line inside the joined segment: the lines come back.
         split = {"t1": SimpleNamespace(text_zh="意图明确时，直接执行。只有不明确时，才提问。")}
         self.assertEqual(markup.callout_target_text(sentences, joined, split), "意图明确时，直接执行。\n只有不明确时，才提问。")
+        # Labelled prompt lines ("Action: ..." / "Response: ...") come back at their labels.
+        labelled = {"t1": SimpleNamespace(text_zh="行动：[web_search: price] 响应：当前股价为 XX 韩元。")}
+        self.assertEqual(
+            markup.callout_target_text(sentences, joined, labelled), "行动：[web_search: price]\n响应：当前股价为 XX 韩元。"
+        )
         # Otherwise the joined translation stays on the first line; no English line is shown.
         whole = {"t1": SimpleNamespace(text_zh="意图明确时直接执行，不明确时才提问。")}
         self.assertEqual(markup.callout_target_text(sentences, joined, whole), "意图明确时直接执行，不明确时才提问。")

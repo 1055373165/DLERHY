@@ -478,6 +478,80 @@ def body_font_of(blocks: Iterable[LooseBlock]) -> str | None:
     return chars.most_common(1)[0][0] if chars else None
 
 
+_PICTOGRAPH_FONT = re.compile(r"wingding|dingbat|webding", re.IGNORECASE)
+_LETTERS = re.compile(r"[\W_]+")
+
+
+def _pdf_block_line(block: dict[str, Any]) -> str:
+    """A PDF text block of ``page.get_text("dict")`` as one callout line (a pictograph bullet as "• ")."""
+    parts: list[str] = []
+    for line in block.get("lines") or []:
+        spans = [span for span in line.get("spans") or [] if str(span.get("text") or "")]
+        visible = [span for span in spans if str(span.get("text") or "").strip()]
+        texts = [str(span.get("text") or "") for span in spans]
+        if len(visible) >= 2 and len(str(visible[0]["text"]).strip()) == 1 and _PICTOGRAPH_FONT.search(str(visible[0].get("font") or "")):
+            texts[spans.index(visible[0])] = "• "
+        parts.append(_normalize_text("".join(texts)))
+    joined = ""
+    for part in parts:
+        if not part:
+            continue
+        if joined.endswith("-") and joined[-2:-1].isalpha() and part[:1].isalnum():
+            joined += part
+        else:
+            joined = f"{joined} {part}" if joined else part
+    return joined.strip()
+
+
+def pdf_callout_lines(pdf_document: Any, lines: Sequence[LooseBlock]) -> list[str] | None:
+    """The callout's lines as the page sets them: one per PDF text block inside the lines' regions.
+
+    An old parse may have joined two lines into one block ("Action: ... Response: ..."); the page
+    still has them apart. None when the page text does not match the blocks' text letter for letter
+    (the regions are off, or the text was edited): the blocks are then the lines.
+    """
+    found: list[str] = []
+    seen: set[tuple[int, tuple[float, ...]]] = set()
+    page_dicts: dict[int, dict[str, Any]] = {}
+    for line in lines:
+        for page_number, (x0, y0, x1, y1) in line.regions:
+            if page_number < 1 or page_number > pdf_document.page_count:
+                return None
+            if page_number not in page_dicts:
+                page_dicts[page_number] = pdf_document.load_page(page_number - 1).get_text("dict")
+            blocks = [
+                block
+                for block in page_dicts[page_number].get("blocks") or []
+                if block.get("type") == 0
+                and x0 - 1 <= (block["bbox"][0] + block["bbox"][2]) / 2 <= x1 + 1
+                and y0 - 1 <= (block["bbox"][1] + block["bbox"][3]) / 2 <= y1 + 1
+            ]
+            for block in sorted(blocks, key=lambda item: (round(item["bbox"][1], 1), item["bbox"][0])):
+                key = (page_number, tuple(round(value, 1) for value in block["bbox"]))
+                if key in seen:
+                    continue
+                seen.add(key)
+                text = _pdf_block_line(block)
+                if text:
+                    found.append(text)
+    wanted = _LETTERS.sub("", "".join(line.text for line in lines)).replace("•", "")
+    got = _LETTERS.sub("", "".join(found)).replace("•", "")
+    if not found or wanted.casefold() != got.casefold():
+        return None
+    # A word the page hyphenated at a line end and the parse already joined keeps the parse's form.
+    block_text = " ".join(line.text for line in lines)
+
+    def rejoin(match: re.Match[str]) -> str:
+        token = match.group(0)
+        joined = token.replace("-", "")
+        return joined if token not in block_text and joined in block_text else token
+
+    return [_HYPHENATED.sub(rejoin, text) for text in found]
+
+
+_HYPHENATED = re.compile(r"[A-Za-z]+-[A-Za-z]+")
+
+
 def split_callouts(blocks: Sequence[LooseBlock]) -> list[SplitCallout]:
     """Icon-sized image blocks followed by the lines set beside them in a non-body face, in order."""
     body_font = body_font_of(blocks)

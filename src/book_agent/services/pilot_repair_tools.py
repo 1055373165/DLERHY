@@ -37,6 +37,7 @@ import uuid
 from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
@@ -56,7 +57,7 @@ from book_agent.domain.enums import (
     SnapshotType,
 )
 from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
-from book_agent.domain.models import Block, Chapter, Event, MemorySnapshot, Sentence
+from book_agent.domain.models import Block, Chapter, Document, Event, MemorySnapshot, Sentence
 from book_agent.domain.models.document import DocumentImage
 from book_agent.domain.models.ops import DocumentRun
 from book_agent.domain.models.review import ReviewIssue
@@ -70,7 +71,14 @@ from book_agent.domain.quality import pilot_qa
 from book_agent.domain.quality import zh_text_fixes as fixes
 from book_agent.domain.quality.pilot_repair import WorkItem
 from book_agent.domain.structure import parse_health
-from book_agent.domain.structure.callouts import CALLOUT_KIND_CODE, LooseBlock, split_callouts
+from book_agent.domain.structure.callouts import (
+    CALLOUT_KIND_CODE,
+    CALLOUT_KIND_PROSE,
+    LooseBlock,
+    looks_like_code_callout,
+    pdf_callout_lines,
+    split_callouts,
+)
 from book_agent.domain.structure.figure_clustering import FIGURE_REGION_CONTENT_EXTENT
 from book_agent.domain.structure.parse_health import HealthBlock
 from book_agent.domain.terminology.matching import SourceTermIndex, source_term_key
@@ -748,6 +756,24 @@ class PilotRepairToolbox:
                 break
         return ToolResult(params={"block_id": block.id, "merged_with": merged_with}, block_ids=list(dict.fromkeys(block_ids)))
 
+    def _pdf_callout_lines(self, lines: Sequence[LooseBlock]) -> list[str] | None:
+        """The callout's lines read again from the PDF page (None without the PDF or on a mismatch)."""
+        document = self.session.get(Document, self.ctx.document_id)
+        source = getattr(document, "source_path", None)
+        if not source or not Path(source).is_file() or not str(source).lower().endswith(".pdf"):
+            return None
+        try:
+            import fitz
+
+            pdf = fitz.open(source)
+        except Exception:  # pragma: no cover - an unreadable file only loses the page's line breaks
+            logger.warning("pilot repair: cannot open %s", source, exc_info=True)
+            return None
+        try:
+            return pdf_callout_lines(pdf, lines)
+        finally:
+            pdf.close()
+
     def _structure_edit__merge_icon_callout(self, item: WorkItem) -> ToolResult:
         """An icon block and the loose lines beside it become one callout block.
 
@@ -779,15 +805,19 @@ class PilotRepairToolbox:
         if callout is None:
             raise NotApplicable("no lines set beside this icon: it does not lead a callout")
         line_ids = [line.block_id for line in callout.lines]
+        line_texts = self._pdf_callout_lines(callout.lines)
+        # The page's lines decide code or prose (an old parse's joined blocks can read either way).
+        kind = (CALLOUT_KIND_CODE if looks_like_code_callout(line_texts) else CALLOUT_KIND_PROSE) if line_texts else callout.kind
         outcome = self.structure.merge_callout(
             self.ctx.document_id,
             icon.id,
             line_ids,
+            line_texts=line_texts,
             actor_id=ACTOR_ID,
-            reason=f"图标和它后面的 {len(line_ids)} 行是一个{'代码' if callout.kind == CALLOUT_KIND_CODE else '提示'}框",
+            reason=f"图标和它后面的 {len(line_ids)} 行是一个{'代码' if kind == CALLOUT_KIND_CODE else '提示'}框",
         )
         packets: list[str] = []
-        if callout.kind != CALLOUT_KIND_CODE:
+        if kind != CALLOUT_KIND_CODE:
             fork_packets = list(getattr(outcome.fork, "retranslate_packet_ids", []) or []) if outcome.fork else []
             packets = list(dict.fromkeys([*fork_packets, *self._packets_of_blocks([line_ids[0]])]))
         done = self.retranslate(
@@ -798,7 +828,12 @@ class PilotRepairToolbox:
             ],
         )
         return ToolResult(
-            params={"icon_block_id": icon.id, "line_block_ids": line_ids, "callout_kind": callout.kind},
+            params={
+                "icon_block_id": icon.id,
+                "line_block_ids": line_ids,
+                "callout_kind": kind,
+                "lines_from_page": line_texts is not None,
+            },
             block_ids=outcome.block_ids,
             packet_ids=done,
         )

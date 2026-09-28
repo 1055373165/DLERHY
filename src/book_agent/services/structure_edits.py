@@ -282,25 +282,29 @@ class StructureEditService:
         *,
         actor_id: str,
         reason: str,
+        line_texts: list[str] | None = None,
         turn_id: str | None = None,
     ) -> EditOutcome:
         """An icon block and the loose lines after it become one callout block (the parser's view today).
 
         The first line's block takes the callout: its lines joined by newlines, a quote (or code when
         the lines are code), the icon's page and bbox under ``callout_icon``. The icon block and the
-        other lines are invalidated, merged into it.
+        other lines are invalidated, merged into it. ``line_texts`` are the callout's lines as the page
+        sets them (read again from the PDF: an old parse may have joined two lines into one block);
+        without them each block is one line.
         """
         icon = self._active_block(document_id, icon_block_id)
         lines = [self._active_block(document_id, block_id) for block_id in dict.fromkeys(line_block_ids)]
         self._check_callout(icon, lines)
+        texts = [" ".join(text.split()) for text in line_texts or [] if text and text.strip()] or None
         snapshot = [_snapshot(icon), *(_snapshot(line) for line in lines)]
-        self._apply_callout(icon, lines)
+        self._apply_callout(icon, lines, texts)
         block_ids = [line.id for line in lines] + [icon.id]
         fork = self._fork(document_id, block_ids, reason=f"structure edit: callout {lines[0].id}", actor_id=actor_id)
         edit = self._log(
             document_id,
             MERGE_CALLOUT,
-            {"icon_block_id": icon.id, "line_block_ids": [line.id for line in lines]},
+            {"icon_block_id": icon.id, "line_block_ids": [line.id for line in lines], **({"line_texts": texts} if texts else {})},
             snapshot,
             fork=fork,
             actor_id=actor_id,
@@ -515,7 +519,7 @@ class StructureEditService:
                 self._check_callout(icon, lines)
             except StructureEditRejected:
                 return "stale", []
-            self._apply_callout(icon, lines)
+            self._apply_callout(icon, lines, args.get("line_texts"))
             return "reapplied", [line.id for line in lines] + [icon.id]
         if edit.kind == LINK_CAPTION:
             caption, artifact = blocks[args["caption_block_id"]], blocks[args["artifact_block_id"]]
@@ -846,10 +850,10 @@ class StructureEditService:
         if [block.id for block in following] != [line.id for line in lines]:
             raise StructureEditRejected("the lines must directly follow the icon, in order")
 
-    def _apply_callout(self, icon: Block, lines: list[Block]) -> None:
+    def _apply_callout(self, icon: Block, lines: list[Block], line_texts: list[str] | None = None) -> None:
         now = _utcnow()
         first = lines[0]
-        texts = [" ".join((line.source_text or "").split()) for line in lines]
+        texts = list(line_texts or [" ".join((line.source_text or "").split()) for line in lines])
         texts = [text for text in texts if text]
         kind = CALLOUT_KIND_CODE if looks_like_code_callout(texts) else CALLOUT_KIND_PROSE
         new_type = BlockType.CODE if kind == CALLOUT_KIND_CODE else BlockType.QUOTE
