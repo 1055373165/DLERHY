@@ -20,6 +20,7 @@ from book_agent.domain.structure.callouts import (
     CALLOUT_KIND_PROSE,
     callout_lines,
     is_callout_metadata,
+    is_tiny_image,
 )
 # Table parsing lives in the domain now; the names stay importable from here for existing callers.
 from book_agent.domain.structure.table_cells import (  # noqa: F401
@@ -52,6 +53,16 @@ _LEADING_BULLET_GLYPH = re.compile(r"^(\s*(?:[A-Z]{2}::)?)\s*[\u2022\u25cf\u25e6
 
 def is_callout_block(block: MergedRenderBlock) -> bool:
     return is_callout_metadata(block.source_metadata)
+
+
+def is_tiny_image_block(block: MergedRenderBlock) -> bool:
+    """An uncaptioned image no bigger than a line of text (every region at most 24pt a side)."""
+    if block.artifact_kind not in {"image", "figure"}:
+        return False
+    source_bbox = (block.source_metadata or {}).get("source_bbox_json")
+    regions = source_bbox.get("regions") if isinstance(source_bbox, dict) else None
+    boxes = [region.get("bbox") for region in regions or [] if isinstance(region, dict)]
+    return bool(boxes) and all(isinstance(box, list) and len(box) == 4 and is_tiny_image(box) for box in boxes)
 
 
 def callout_kind(block: MergedRenderBlock) -> str:
@@ -541,6 +552,12 @@ def render_block_html(
         asset_src = ""
         if asset_path_by_block_id is not None:
             asset_src = str(asset_path_by_block_id.get(block.block_id) or "")
+        if asset_src and is_tiny_image_block(block):
+            # A line-high pictogram (an emoji, a margin icon) is not a figure: drawn at its size, no card.
+            return (
+                f"<section class='block inline-icon-block'>"
+                f"<img class='inline-icon' src='{html.escape(url_encode_asset_path(asset_src))}' alt=''/></section>"
+            )
         if asset_src and block.artifact_kind in {"image", "figure"}:
             note = f"<div class='artifact-note'>{html.escape(notice_text)}</div>" if notice_text else ""
             image_alt_text = str(block.source_metadata.get("image_alt") or "PDF image")
@@ -971,6 +988,8 @@ def render_block_rebuilt_epub_xhtml(
 
     if block.render_mode == "source_artifact_full_width":
         note_html = f"<div class='artifact-note'>{notice}</div>" if notice else ""
+        if asset_src and is_tiny_image_block(block):
+            return f"<p class='inline-icon-block'><img class='inline-icon' src='{html.escape(asset_src)}' alt='' /></p>"
         if asset_src and block.artifact_kind in {"image", "figure"}:
             caption_html = ""
             if block.source_text and block.source_text not in ARTIFACT_PLACEHOLDER_TEXTS:

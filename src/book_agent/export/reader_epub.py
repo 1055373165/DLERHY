@@ -64,6 +64,7 @@ figure{margin:1em 0;text-align:center}
 .callout-body{flex:1}
 .callout-line{margin:0 0 .25em;text-indent:0}
 .callout-list{margin:.1em 0 .4em;padding-left:1.3em}
+.inline-icon{width:1.2em;height:1.2em;vertical-align:middle}
 img{max-width:100%;height:auto}
 pre,code{font-family:monospace;font-size:.85em}
 pre{white-space:pre-wrap;word-break:break-all;background:#f4f4f4;padding:.6em}

@@ -60,3 +60,4 @@ a{color:var(--accent);text-decoration:none;}a:hover{text-decoration:underline;}
 .callout-body{flex:1;min-width:0;}.callout .zh{font-family:var(--font-ui);font-size:16px;line-height:1.7;max-width:none;}.callout .source{white-space:normal;}
 .callout-line{margin:0 0 4px;}.callout-line:last-child{margin-bottom:0;}.callout-list{margin:2px 0 6px;padding-left:1.3em;}.callout-list li{margin:2px 0;}
 .callout pre{margin:0;white-space:pre-wrap;font-size:14px;line-height:1.6;background:transparent;}
+.inline-icon-block{margin:8px 0;}.inline-icon{width:18px;height:18px;object-fit:contain;vertical-align:middle;}
