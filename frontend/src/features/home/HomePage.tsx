@@ -122,7 +122,7 @@ export function HomePage() {
       <section className={s.recent}>
         <div className={s.recentHead}>
           <h2 className={s.recentTitle}>最近的书</h2>
-          <Link to="/library">全部书 →</Link>
+          <Link to="/library">书库 →</Link>
         </div>
         {recent.isError ? (
           <div className={s.error}>书单没能加载：{(recent.error as Error).message}</div>

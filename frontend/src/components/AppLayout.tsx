@@ -60,13 +60,14 @@ const Icons = {
 
 const NAV_ITEMS = [
   { to: "/", label: "首页", icon: Icons.work },
+  { to: "/library", label: "书库", icon: Icons.lib },
   { to: "/inbox", label: "需要你处理", icon: Icons.approve },
   { to: "/settings", label: "设置", icon: Icons.settings },
 ] as const;
 
 function pageName(pathname: string): string {
   if (pathname.startsWith("/books/")) return "这本书";
-  if (pathname.startsWith("/library")) return "全部书";
+  if (pathname.startsWith("/library")) return "书库";
   if (pathname.startsWith("/inbox")) return "需要你处理";
   if (pathname.startsWith("/settings")) return "设置";
   return "首页";
@@ -74,7 +75,7 @@ function pageName(pathname: string): string {
 
 /* Where 「返回」 goes from here. A book belongs to the shelf; everything else to the home page. */
 function backLink(pathname: string): { to: string; label: string } | null {
-  if (pathname.startsWith("/books/")) return { to: "/library", label: "返回书架" };
+  if (pathname.startsWith("/books/")) return { to: "/library", label: "返回书库" };
   if (pathname === "/" ) return null;
   return { to: "/", label: "返回首页" };
 }
