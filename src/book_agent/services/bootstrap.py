@@ -14,6 +14,7 @@ from book_agent.core.ids import stable_id
 from book_agent.domain.document_titles import resolve_document_titles
 from book_agent.domain.block_rules import protected_policy_for_block, translatability_for_block
 from book_agent.domain.models.auth import DEFAULT_ORG_ID
+from book_agent.domain.structure.callouts import callout_line_is_code, callout_lines, is_callout_metadata
 from book_agent.domain.structure.recovery_skills import METADATA_KEY as RECOVERY_SKILLS_KEY
 from book_agent.domain.structure.table_cells import translatable_cells
 from book_agent.domain.context.builders import (
@@ -749,6 +750,10 @@ class SegmentationService:
             BlockType.FIGURE, BlockType.EQUATION, BlockType.IMAGE,
         }:
             segmented = [block.normalized_text or block.source_text]
+        # A callout is translated line by line, so its translation keeps the lines; data lines stay as they are.
+        prose_callout = is_callout_metadata(block.source_span_json) and block.block_type != BlockType.CODE
+        if prose_callout:
+            segmented = callout_lines(block.source_text)
 
         translatable, nontranslatable_reason, initial_status = translatability_for_block(
             block.block_type,
@@ -773,6 +778,9 @@ class SegmentationService:
                 block_canonical_node_id or block.id,
                 ordinal,
             )
+            sentence_translatable, sentence_reason, sentence_status = translatable, nontranslatable_reason, initial_status
+            if prose_callout and translatable and callout_line_is_code(text):
+                sentence_translatable, sentence_reason, sentence_status = False, "callout_data_line", SentenceStatus.PROTECTED
             output.append(
                 Sentence(
                     id=stable_id(
@@ -791,8 +799,8 @@ class SegmentationService:
                     source_text=text,
                     normalized_text=_normalize_text(text),
                     source_lang=document.src_lang,
-                    translatable=translatable,
-                    nontranslatable_reason=nontranslatable_reason,
+                    translatable=sentence_translatable,
+                    nontranslatable_reason=sentence_reason,
                     source_anchor=block.source_anchor,
                     source_span_json={
                         "block_id": block.id,
@@ -801,9 +809,10 @@ class SegmentationService:
                         "parse_revision_id": parse_revision_id,
                         "canonical_node_id": sentence_canonical_node_id,
                         **({"table_cell": True} if cells else {}),
+                        **({"callout_line": ordinal} if prose_callout else {}),
                     },
                     upstream_confidence=block.parse_confidence,
-                    sentence_status=initial_status,
+                    sentence_status=sentence_status,
                     active_version=1,
                     created_at=now,
                     updated_at=now,
