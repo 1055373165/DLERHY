@@ -840,5 +840,19 @@ class FigureResidueTests(unittest.TestCase):
         self.assertEqual(self.found(*blocks), [])
 
 
+
+class HeadingIsProseTests(unittest.TestCase):
+    def found(self, text: str) -> list[dict[str, Any]]:
+        heading = rendered("b-hq", C2, "heading", text, "标题", page=33)
+        return [f for f in findings(build([*clean_blocks(), heading])) if f["check_id"] == "L1.heading_is_prose"]
+
+    def test_a_sentence_set_as_a_heading_is_found(self) -> None:
+        self.assertTrue(self.found("Chapter 7 explores the various layers of infrastructure that support RAG systems."))
+
+    def test_a_numbered_section_title_that_asks_a_question_is_a_title(self) -> None:
+        # The RAG book's "2.1": relabelling it as a paragraph would lose the section.
+        self.assertEqual(self.found("2.1 What does a RAG system look like?"), [])
+
+
 if __name__ == "__main__":
     unittest.main()

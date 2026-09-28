@@ -690,7 +690,12 @@ def _chapter_number(title: str | None) -> int | None:
 
 
 def _is_sentence(text: str) -> bool:
-    """A heading that reads as a sentence of body text ("Chapter 7 explores the layers of ...")."""
+    """A heading that reads as a sentence of body text ("Chapter 7 explores the layers of ...").
+
+    A numbered section title is a title even when it asks a question ("2.1 What does a RAG system look like?").
+    """
+    if re.match(r"^\s*\d+(?:\.\d+)+\s", text):
+        return False
     return len(text.split()) >= 8 and text.rstrip().endswith((".", "?", "!"))
 
 
