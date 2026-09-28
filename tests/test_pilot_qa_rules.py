@@ -876,5 +876,31 @@ class ProseParsedAsCodeTests(unittest.TestCase):
         self.assertEqual([f for f in findings(build([*clean_blocks(), split])) if f["check_id"] == "L4.prose_in_code"], [])
 
 
+
+class HiddenPageTopHeadingTests(unittest.TestCase):
+    """RAG chapter 2: "Summary" opens page 49 and was taken for the running head "29 Summary"."""
+
+    def _header(self, fonts: list[str]) -> HealthBlock:
+        return HealthBlock(
+            id="b-hidden",
+            chapter_id=C2,
+            ordinal=90,
+            block_type="paragraph",
+            source_text="Summary",
+            source_span_json={"pdf_block_role": "header", "pdf_font_names": fonts, "source_page_start": 38},
+        )
+
+    def found(self, header: HealthBlock) -> list[dict[str, Any]]:
+        inputs = build(styled_pilot(), health_extra=[header])
+        return [finding for finding in findings(inputs) if finding["check_id"] == "L1.heading_as_text"]
+
+    def test_a_section_label_in_the_heading_face_hidden_as_a_header_is_found(self) -> None:
+        hits = self.found(self._header([DEM]))
+        self.assertEqual([(hit["target"]["id"], hit["evidence"]["heading_level"], hit["evidence"]["detail"]) for hit in hits], [("b-hidden", 2, "hidden_as_header")])
+
+    def test_the_real_running_head_is_left_hidden(self) -> None:
+        self.assertEqual(self.found(self._header(["NewBaskervilleStd-Bold"])), [])
+
+
 if __name__ == "__main__":
     unittest.main()

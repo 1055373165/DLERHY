@@ -921,6 +921,27 @@ def check_headings_as_text(inputs: PilotQaInputs) -> CheckRun:
                 heading_level=level,
             )
         )
+    # A section label opening a page ("Summary") taken for the running head that repeats its word:
+    # the reading copy does not show it at all.
+    for health_block in inputs.health.blocks if inputs.health is not None else ():
+        if health_block.role != "header" or " ".join(health_block.source_text.split()).casefold() not in parse_health.SECTION_LABELS:
+            continue
+        fonts = health_block.source_span_json.get("pdf_font_names") or ()
+        level = parse_health.section_heading_level(
+            health_block.source_text, fonts, number_by_chapter.get(health_block.chapter_id), style
+        )
+        if level is None:
+            continue
+        run.findings.append(
+            Finding(
+                check_id="L1.heading_as_text",
+                severity=CHECKS["L1.heading_as_text"].severity,
+                target={"kind": "block", "id": health_block.id},
+                location=Location(chapter_id=health_block.chapter_id, block_id=health_block.id, page=health_block.page),
+                message=f"小标题「{_snippet(health_block.source_text, 40)}」被当成页眉隐藏了，中文版里没有它",
+                evidence={"source": _snippet(health_block.source_text), "heading_level": level, "detail": "hidden_as_header"},
+            )
+        )
     return run
 
 
