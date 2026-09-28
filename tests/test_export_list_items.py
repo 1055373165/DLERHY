@@ -34,6 +34,12 @@ class BulletedListItemHtmlTest(unittest.TestCase):
         # The source toggle keeps the original text.
         self.assertIn("• Closing price decides RSI level", html)
 
+    def test_an_item_whose_translation_dropped_the_bullet_keeps_its_marker(self) -> None:
+        # Build an AI Agent, "This chapter covers": one of five items came back without its "•".
+        html = render_block_html(_list_item("• Workflows versus agents and when to use each", "工作流与智能体的对比及各自适用场景"))
+        self.assertIn("<section class='block list_item bulleted'>", html)
+        self.assertIn("<div class='zh'>工作流与智能体的对比及各自适用场景</div>", html)
+
     def test_numbered_items_are_left_alone(self) -> None:
         html = render_block_html(_list_item("1. Tops and Bottoms", "1. 顶部与底部"))
         self.assertIn("<section class='block list_item'>", html)

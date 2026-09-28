@@ -550,6 +550,9 @@ def render_block_html(
         if unbulleted != display_text:
             block_class = f"{block_class} bulleted"
             display_html = format_inline_text(unbulleted, code_spans=bool(block.target_text))
+        elif _LEADING_BULLET_GLYPH.sub(r"\1", block.source_text or "", count=1) != (block.source_text or ""):
+            # The translation dropped the source's bullet: the item is still one of its list.
+            block_class = f"{block_class} bulleted"
     return (
         f"<section class='block {html.escape(block_class)}'>"
         f"<div class='zh'>{display_html}</div>"
