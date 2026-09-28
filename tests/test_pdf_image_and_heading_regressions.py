@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -21,7 +22,10 @@ import fitz
 from book_agent.domain.enums import BlockType
 from book_agent.domain.structure.pdf import PDFParser
 from book_agent.export.models import MergedRenderBlock
-from book_agent.export.render_repair import should_demote_book_heading_to_paragraph
+from book_agent.export.render_repair import (
+    should_demote_book_heading_to_paragraph,
+    should_demote_book_heading_with_prose_target,
+)
 from book_agent.services.export import _copy_asset_if_changed
 
 
@@ -100,6 +104,37 @@ class StyledHeadingDemotionTest(unittest.TestCase):
 
     def test_heading_without_font_evidence_keeps_the_prose_shape_rule(self) -> None:
         self.assertTrue(should_demote_book_heading_to_paragraph(self.BUNDLE, 5, _heading(self.TITLE, [])))
+
+
+
+class SectionHeadingTargetTest(unittest.TestCase):
+    """The Manning pilots: every "1.2.1" heading was demoted because its translation "had two sentence stops"."""
+
+    BUNDLE = SimpleNamespace(chapter=SimpleNamespace(title_src="1 LLMs and the need for RAG"))
+
+    def _translated(self, source: str, target: str, **metadata: object) -> MergedRenderBlock:
+        block = _heading(source, [])
+        return replace(block, target_text=target, source_metadata={**block.source_metadata, **metadata})
+
+    def test_the_dots_of_a_section_number_end_no_sentence(self) -> None:
+        for source, target in (
+            ("1.1.1 LLMs are not trained for facts", "1.1.1 LLM 并非为事实而训练"),
+            ("2.1 What does a RAG system look like?", "2.1 RAG 系统长什么样？"),
+            ("2.4.1 Why GAIA: Setting goals for GPT-4.1 agents", "2.4.1 为什么选择 GAIA：为 GPT-4.1 智能体设定目标"),
+        ):
+            with self.subTest(source=source):
+                self.assertFalse(should_demote_book_heading_with_prose_target(self.BUNDLE, self._translated(source, target)))
+
+    def test_a_heading_translated_into_prose_is_still_demoted(self) -> None:
+        block = self._translated("How it works", "它是这样工作的。模型先读上下文。然后调用工具。")
+        self.assertTrue(should_demote_book_heading_with_prose_target(self.BUNDLE, block))
+
+    def test_a_heading_made_by_a_structure_edit_keeps_its_type(self) -> None:
+        # A run-in heading the repair split off reads like a phrase ("how the agent loop works").
+        block = _heading("core definition: autonomous control flow", [])
+        self.assertTrue(should_demote_book_heading_to_paragraph(self.BUNDLE, 5, block))
+        edited = replace(block, source_metadata={**block.source_metadata, "structure_edit_previous_type": "paragraph"})
+        self.assertFalse(should_demote_book_heading_to_paragraph(self.BUNDLE, 5, edited))
 
 
 if __name__ == "__main__":

@@ -763,6 +763,10 @@ def should_demote_book_heading_to_paragraph(
         # The parser saw the line set apart in bold/larger type; the prose-shape rules
         # below would demote titles such as "7. Chart patterns like Triangles, ... etc."
         return False
+    if block.source_metadata.get("structure_edit_previous_type"):
+        # A person or the repair loop made this block a heading on purpose (a run-in heading
+        # set in small caps reads "how the agent loop works"); the shape rules must not undo it.
+        return False
     if _CHAPTER_LOWERCASE_TAIL_PATTERN.match(normalized):
         return True
     if normalized[:1].islower() and token_count >= 4:
@@ -1781,6 +1785,10 @@ def join_sentence_source_texts(sentences: list[object]) -> str:
     return inline_join_target_text(cleaned)
 
 
+_LEADING_SECTION_NUMBER = re.compile(r"^\s*\d+(?:\.\d+)*\.?\s*")
+_SENTENCE_STOP = re.compile(r"(?<!\d)\.(?!\d)|[!?。！？]")
+
+
 def looks_like_prose_title_text(
     title_text: str | None,
     *,
@@ -1790,7 +1798,9 @@ def looks_like_prose_title_text(
     normalized = _normalize_render_text(title_text)
     if not normalized:
         return False
-    sentence_stop_count = sum(normalized.count(marker) for marker in (".", "!", "?", "。", "！", "？"))
+    # The dots of a section number ("1.1.1 LLM 并非为事实而训练") or a version ("GPT-4.1") end no sentence.
+    unnumbered = _LEADING_SECTION_NUMBER.sub("", normalized)
+    sentence_stop_count = len(_SENTENCE_STOP.findall(unnumbered))
     clause_break_count = sum(normalized.count(marker) for marker in (",", "，", ";", "；", ":", "："))
     english_word_count = len(re.findall(r"[A-Za-z][A-Za-z'-]*", normalized))
     cjk_char_count = len(re.findall(r"[\u4e00-\u9fff]", normalized))
