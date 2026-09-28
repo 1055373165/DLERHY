@@ -163,6 +163,23 @@ class StructureEditTests(unittest.TestCase):
             with self.assertRaisesRegex(StructureEditRejected, "cannot relabel"):
                 self._edit(session).relabel_block(self.document_id, block_id, "table", actor_id="t", reason="no")
 
+    def test_a_table_that_is_really_code_can_become_code_and_nothing_else(self) -> None:
+        # Build an AI Agent, listing 2.4: a LiteLLM listing the parser typed as a table.
+        block_id = self.blocks[OTHER]
+        with self.session_factory() as session:
+            block = session.get(Block, block_id)
+            block.block_type = BlockType.TABLE
+            block.source_span_json = {**(block.source_span_json or {}), "pdf_block_role": "table_like"}
+            session.commit()
+            with self.assertRaisesRegex(StructureEditRejected, "cannot relabel"):
+                self._edit(session).relabel_block(self.document_id, block_id, "paragraph", actor_id="t", reason="no")
+            self._edit(session).relabel_block(self.document_id, block_id, "code", actor_id="t", reason="a listing")
+            session.commit()
+            block = session.get(Block, block_id)
+            self.assertEqual(block.block_type, BlockType.CODE)
+            self.assertEqual(block.source_span_json["pdf_block_role"], "code_like")
+            self.assertEqual(block.source_span_json["structure_edit_previous_type"], "table")
+
     def test_relabel_to_heading_keeps_the_sentence_and_its_translation(self) -> None:
         block_id = self.blocks[OTHER]
         with self.session_factory() as session:
