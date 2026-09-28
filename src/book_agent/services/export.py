@@ -38,6 +38,7 @@ from book_agent.domain.enums import (
 from book_agent.domain.models.review import Export, ReviewIssue
 from book_agent.domain.structure import web as web_page
 from book_agent.domain.structure.artifact_grouping import resolve_artifact_group_context_ids
+from book_agent.domain.structure.callouts import CALLOUT_ICON_KEY, is_callout_metadata
 from book_agent.domain.structure.table_cells import split_shared_cell_translations, table_grid
 from book_agent.domain.structure.epub import (
     _parse_xml_document,
@@ -1997,17 +1998,31 @@ class ExportService:
                 render_source_text = str(source_metadata.get("linked_caption_text") or "")
 
             normalized_target_text_override: str | None = None
-            render_source_text, target_ids, normalized_target_text_override = render_repair.normalize_pdf_body_render_texts(
-                document=bundle.document,
-                block_type=effective_block_type,
-                render_mode=render_mode,
-                source_text=render_source_text,
-                block_sentences=block_sentences,
-                sentence_targets=sentence_targets,
-                target_ids=target_ids,
-                target_map=target_map,
-                source_metadata=source_metadata,
-            )
+            callout_block = is_callout_metadata(source_metadata)
+            if callout_block:
+                # A callout keeps its lines: translated line by line, a code callout shown as it is.
+                render_mode = (
+                    "source_artifact_full_width"
+                    if effective_block_type == BlockType.CODE
+                    else "zh_primary_with_optional_source"
+                )
+                normalized_target_text_override = (
+                    None
+                    if effective_block_type == BlockType.CODE
+                    else markup.callout_target_text(block_sentences, sentence_targets, target_map)
+                )
+            else:
+                render_source_text, target_ids, normalized_target_text_override = render_repair.normalize_pdf_body_render_texts(
+                    document=bundle.document,
+                    block_type=effective_block_type,
+                    render_mode=render_mode,
+                    source_text=render_source_text,
+                    block_sentences=block_sentences,
+                    sentence_targets=sentence_targets,
+                    target_ids=target_ids,
+                    target_map=target_map,
+                    source_metadata=source_metadata,
+                )
             target_text = markup.join_block_target_text(
                 [target_map[target_id].text_zh for target_id in target_ids],
                 block_type=target_block_type,
@@ -2144,6 +2159,9 @@ class ExportService:
         index: int,
         block: MergedRenderBlock,
     ) -> list[MergedRenderBlock]:
+        if is_callout_metadata(block.source_metadata):
+            # A callout was read as one unit by the parser; the book-PDF render heuristics do not apply.
+            return [block]
         if block.block_type == BlockType.HEADING.value and render_repair.should_drop_book_heading_label(bundle, index, block):
             return []
         if render_repair.should_clear_suspicious_short_source_target_text(block):
@@ -3060,7 +3078,8 @@ class ExportService:
             if getattr(image, "block_id", None)
         }
         render_blocks_by_id = {block.block_id: block for block in render_blocks}
-        relative_path_by_block_id: dict[str, str] = {}
+        # A callout's small icon is drawn from the page under the callout block's own id.
+        relative_path_by_block_id: dict[str, str] = self._export_callout_icon_assets(pdf_path, render_blocks, output_dir)
 
         # Fast path: use images materialized at parse time via image_path.
         asset_root = output_dir / "assets" / "pdf-images"
@@ -3178,6 +3197,52 @@ class ExportService:
             document.close()
 
         return relative_path_by_block_id
+
+    # Pixels per PDF point for a callout icon: a 16pt icon becomes a 96px image, sharp at any zoom.
+    _CALLOUT_ICON_SCALE = 6.0
+
+    def _export_callout_icon_assets(
+        self,
+        pdf_path: Path,
+        render_blocks: list[MergedRenderBlock],
+        output_dir: Path,
+    ) -> dict[str, str]:
+        """Render each callout's icon from its page to ``assets/pdf-images/<block id>-icon.png``."""
+        icons: dict[str, dict[str, object]] = {}
+        for block in render_blocks:
+            icon = (block.source_metadata or {}).get(CALLOUT_ICON_KEY)
+            if is_callout_metadata(block.source_metadata) and isinstance(icon, dict):
+                icons[block.block_id] = icon
+        if not icons:
+            return {}
+        try:
+            import fitz
+        except ImportError:
+            return {}
+        asset_root = output_dir / "assets" / "pdf-images"
+        exported: dict[str, str] = {}
+        document = fitz.open(str(pdf_path))
+        try:
+            for block_id, icon in icons.items():
+                page_number, bbox = icon.get("page_number"), icon.get("bbox")
+                if not isinstance(page_number, int) or not isinstance(bbox, list) or len(bbox) != 4:
+                    continue
+                if page_number < 1 or page_number > document.page_count:
+                    continue
+                target_path = asset_root / f"{block_id}-icon.png"
+                if not target_path.exists():
+                    rect = fitz.Rect(*[float(value) for value in bbox])
+                    if rect.width <= 1 or rect.height <= 1:
+                        continue
+                    asset_root.mkdir(parents=True, exist_ok=True)
+                    page = document.load_page(page_number - 1)
+                    scale = self._CALLOUT_ICON_SCALE
+                    pixmap = page.get_pixmap(matrix=fitz.Matrix(scale, scale), clip=rect, alpha=False)
+                    pixmap.save(str(target_path))
+                exported[block_id] = PurePosixPath("assets", "pdf-images", target_path.name).as_posix()
+        finally:
+            document.close()
+        return exported
 
     def _pdf_asset_crop_spec(self, block: MergedRenderBlock) -> tuple[str, int, list[float]] | None:
         return pdf_crop.pdf_asset_crop_spec(block)
