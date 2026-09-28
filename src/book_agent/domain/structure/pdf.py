@@ -143,6 +143,14 @@ from book_agent.ingestion.text import (
     _safe_mean,
     _sorted_counter,
 )
+from book_agent.domain.structure.callouts import (
+    CALLOUT_KIND_CODE,
+    CALLOUT_ROLE,
+    IconCallout,
+    block_key,
+    callout_metadata,
+    detect_icon_callouts,
+)
 from book_agent.domain.structure.geometry import bleeds_off_page, horizontal_overlap_ratio, union_bbox
 
 _OUTLINED_BOOK_TOP_LEVEL_SPECIAL_TITLES = _OUTLINED_BOOK_FRONTMATTER_TITLES.union({"glossary"})
@@ -581,12 +589,31 @@ class PdfStructureRecoveryService:
 
         recovered: list[_RecoveredBlock] = []
         reading_order_index = 0
+        # An icon and the lines set beside it are one callout block, placed where the icon is.
+        callouts = detect_icon_callouts(
+            pages,
+            is_page_furniture=lambda page, raw_block: self._is_page_furniture(page, raw_block, repeated_edge_text),
+        )
+        callout_by_icon = {callout.icon_key: callout for callout in callouts}
+        callout_member_keys = {member.key for callout in callouts for member in callout.members}
         for page in pages:
             font_sizes = [block.font_size_avg for block in page.blocks if block.font_size_avg > 0]
             page_font_median = median(font_sizes) if font_sizes else 12.0
             page_context = page_contexts.get(page.page_number, _PageRecoveryContext(is_toc_page=False))
             for entry_kind, raw_entry in self._ordered_page_content_entries(page, profile):
                 reading_order_index += 1
+                if block_key(page.page_number, raw_entry.bbox) in callout_member_keys and entry_kind == "text":
+                    continue
+                if entry_kind == "image" and block_key(page.page_number, raw_entry.bbox) in callout_by_icon:
+                    recovered.append(
+                        self._callout_block(
+                            callout_by_icon[block_key(page.page_number, raw_entry.bbox)],
+                            page_context,
+                            reading_order_index,
+                            profile,
+                        )
+                    )
+                    continue
                 if entry_kind == "text":
                     raw_block = raw_entry
                     role = self._classify_role(
@@ -709,6 +736,63 @@ class PdfStructureRecoveryService:
                 )
 
         return self._merge_footnote_continuations(recovered, pages)
+
+    def _is_page_furniture(
+        self,
+        page: PdfPage,
+        raw_block: PdfTextBlock,
+        repeated_edge_text: set[tuple[str, str]],
+    ) -> bool:
+        """A running head or folio: what a callout running onto the next page reads past."""
+        text = _normalize_text(raw_block.text)
+        if not text:
+            return True
+        zone = self._page_zone(raw_block.bbox, page.height)
+        if zone not in {"top", "bottom"}:
+            return False
+        return (zone, _header_footer_signature(text)) in repeated_edge_text or _is_page_number_text(text)
+
+    def _callout_block(
+        self,
+        callout: IconCallout,
+        page_context: _PageRecoveryContext,
+        reading_order_index: int,
+        profile: PdfFileProfile,
+    ) -> _RecoveredBlock:
+        """One block for an icon-led callout: its lines joined by newlines, the icon kept in its metadata."""
+        code = callout.kind == CALLOUT_KIND_CODE
+        role = "code_like" if code else "body"
+        text = "\n".join(callout.lines)
+        metadata, flags = self._metadata_for_block(role, text, page_context)
+        metadata.update(callout_metadata(callout))
+        metadata["pdf_font_names"] = sorted({name for member in callout.members for name in member.block.font_names})
+        if code:
+            metadata["detected_by"] = "icon_callout"
+        regions: list[dict[str, Any]] = []
+        for page_number in sorted({member.page_number for member in callout.members}):
+            boxes = [list(member.block.bbox) for member in callout.members if member.page_number == page_number]
+            if page_number == callout.icon.page_number:
+                boxes.append(list(callout.icon.bbox))
+            region: list[float] | None = None
+            for box in boxes:
+                region = union_bbox(region, box)
+            regions.append({"page_number": page_number, "bbox": _bbox_to_json(tuple(region or boxes[0]))})
+        first = callout.members[0].block
+        return _RecoveredBlock(
+            role=CALLOUT_ROLE,
+            block_type=BlockType.CODE if code else BlockType.QUOTE,
+            text=text,
+            page_start=callout.page_start,
+            page_end=callout.page_end,
+            bbox_regions=regions,
+            reading_order_index=reading_order_index,
+            parse_confidence=self._parse_confidence_for_role(role, profile.layout_risk),
+            flags=flags,
+            metadata=metadata,
+            font_size_avg=first.font_size_avg,
+            source_path=f"pdf://page/{callout.page_start}",
+            anchor=f"p{callout.page_start}-callout{reading_order_index}",
+        )
 
     def _ordered_page_content_entries(
         self,
