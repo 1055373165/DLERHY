@@ -541,6 +541,11 @@ def render_block_html(
         else ""
     )
     block_class = "quote" if block.block_type == BlockType.QUOTE.value else block.block_type
+    if block.block_type == BlockType.HEADING.value:
+        # x.y sections, x.y.z subsections and run-in headings each get their own size.
+        level = (block.source_metadata or {}).get("heading_level")
+        if isinstance(level, int) and 1 <= level <= 6:
+            block_class = f"{block_class} level-{level}"
     display_html = target_html or source_html
     if block.block_type == BlockType.LIST_ITEM.value:
         # PDF list items carry their bullet glyph in the text; draw it as a
