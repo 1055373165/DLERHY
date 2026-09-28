@@ -207,6 +207,38 @@ class ParseRevisionForkTests(unittest.TestCase):
                 maps = session.scalars(select(PacketSentenceMap.sentence_id).where(PacketSentenceMap.packet_id == packet.id)).all()
                 self.assertNotIn(self.sentence_id, maps)
 
+    def test_code_relabelled_as_prose_between_packets_joins_the_packet_before_it(self) -> None:
+        """Agent book p49: prose parsed as code has no packet; relabelled a paragraph it must be translated."""
+        from book_agent.domain.enums import BlockType, ProtectedPolicy
+        from book_agent.services.structure_edits import StructureEditService
+
+        prose = "The call_llm function wraps the call. The semaphore limits it to ten requests."
+        with self.session_factory() as session:
+            last = session.scalars(select(Block).where(Block.chapter_id == self.chapter_id).order_by(Block.ordinal.desc())).first()
+            code = Block(
+                id=stable_id("block", self.chapter_id, "listing-prose"),
+                chapter_id=self.chapter_id,
+                ordinal=last.ordinal + 1,
+                block_type=BlockType.CODE,
+                source_text=prose,
+                normalized_text=prose,
+                source_span_json={},
+                protected_policy=ProtectedPolicy.PROTECT,
+                status=ArtifactStatus.ACTIVE,
+            )
+            session.add(code)
+            session.flush()
+            outcome = StructureEditService(session).relabel_block(
+                self.document_id, code.id, BlockType.PARAGRAPH.value, actor_id="test", reason="prose parsed as code"
+            )
+            session.commit()
+
+            self.assertTrue(outcome.fork.retranslate_packet_ids)
+            self.assertEqual(outcome.fork.unpacketed_block_ids, [])
+            fresh = session.scalars(select(Sentence.id).where(Sentence.block_id == code.id, Sentence.retired_by_revision_id.is_(None))).all()
+            mapped = session.scalars(select(PacketSentenceMap.packet_id).where(PacketSentenceMap.sentence_id.in_(fresh))).all()
+            self.assertEqual(set(mapped), set(outcome.fork.retranslate_packet_ids))
+
 
 if __name__ == "__main__":
     unittest.main()
