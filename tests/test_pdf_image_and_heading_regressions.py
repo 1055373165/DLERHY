@@ -23,6 +23,7 @@ from book_agent.domain.enums import BlockType
 from book_agent.domain.structure.pdf import PDFParser
 from book_agent.export.models import MergedRenderBlock
 from book_agent.export.render_repair import (
+    should_demote_book_code_block_to_paragraph,
     should_demote_book_heading_to_paragraph,
     should_demote_book_heading_with_prose_target,
 )
@@ -135,6 +136,44 @@ class SectionHeadingTargetTest(unittest.TestCase):
         self.assertTrue(should_demote_book_heading_to_paragraph(self.BUNDLE, 5, block))
         edited = replace(block, source_metadata={**block.source_metadata, "structure_edit_previous_type": "paragraph"})
         self.assertFalse(should_demote_book_heading_to_paragraph(self.BUNDLE, 5, edited))
+
+
+
+class CodeFaceSampleTest(unittest.TestCase):
+    """The Agent book's GAIA sample: a dict of long English strings, printed as code."""
+
+    SAMPLE = (
+        "{\n   'task_id': 'e1fc63a2-da7a-432f-be78-7c4a95598703',\n"
+        "   'Question': 'If Eliud Kipchoge could maintain his record-making marathon \npace '\n"
+        "               'indefinitely, how many thousand hours would it take him to \nrun '\n"
+        "               'the distance between the Earth and the Moon at its closest \napproach? '\n"
+        "               'Please use the minimum perigee value on the Wikipedia page \nfor the Moon '\n"
+        "               'when carrying out your calculation. Round your result to the \nnearest '\n"
+        "               '1000 hours and do not use any comma separators if \nnecessary.',\n"
+        "   'Level': 1,\n   'Final answer': '17',\n}"
+    )
+
+    def _code(self, fonts: list[str]) -> MergedRenderBlock:
+        return MergedRenderBlock(
+            block_id="b1",
+            chapter_id="c1",
+            block_type="code",
+            render_mode="source_artifact_full_width",
+            artifact_kind="code",
+            title=None,
+            source_text=self.SAMPLE,
+            target_text=None,
+            source_metadata={"pdf_font_names": fonts, "pdf_page_family": "body"},
+            source_sentence_ids=[],
+            target_segment_ids=[],
+            is_expected_source_only=True,
+            notice=None,
+        )
+
+    def test_a_block_set_wholly_in_the_code_face_stays_code(self) -> None:
+        # By its words alone it reads as prose; the code face says otherwise.
+        self.assertTrue(should_demote_book_code_block_to_paragraph(self._code([])))
+        self.assertFalse(should_demote_book_code_block_to_paragraph(self._code(["JetBrainsMonoNL-Regular"])))
 
 
 if __name__ == "__main__":

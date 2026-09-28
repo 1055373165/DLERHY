@@ -216,6 +216,8 @@ class QaBlock:
     # PDF evidence: the fonts the block is set in, and where it lies ((page, bbox) per region).
     font_names: tuple[str, ...] = ()
     regions: tuple[tuple[int, tuple[float, float, float, float]], ...] = ()
+    # The parsed blocks the export joined into this one ((id, text)): a code block and the prose after it.
+    merged_blocks: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1152,6 +1154,17 @@ _LIST_MARKER_RE = re.compile(r"^\s*(\(?(?:\d{1,2}|[a-z])[.)])\s+")
 _FOOTNOTE_MARKER_RE = re.compile(r"^\s*(\d{1,3}|[*†‡])\s")
 
 
+def _prose_parsed_as_code(block: QaBlock) -> str | None:
+    """The parsed code block behind English prose the reading copy shows untranslated, or None."""
+    if block.target_text.strip() or not block.merged_blocks:
+        return None
+    text = " ".join((block.source_text or "").split())
+    if len(english_words(text)) < 6 or cjk_count(visible_text(block.html) if block.html else text):
+        return None
+    lead = text[:40]
+    return next((block_id for block_id, parsed in block.merged_blocks if lead and lead in " ".join(parsed.split())), None)
+
+
 def check_code_and_format(inputs: PilotQaInputs) -> list[CheckRun]:
     translated_code = CheckRun("L4.code_translated")
     prose_code = CheckRun("L4.prose_in_code")
@@ -1200,6 +1213,17 @@ def check_code_and_format(inputs: PilotQaInputs) -> list[CheckRun]:
                 continue
             source = block.source_text or ""
             target = block.target_text or ""
+            parsed_as_code = _prose_parsed_as_code(block)
+            if parsed_as_code is not None:
+                # The export split the prose off a code block it had joined with the listing before
+                # it; the prose was never translated. The parsed block is what a fix relabels.
+                finding = _block_finding(
+                    "L4.prose_in_code", block, "这段正文被当成代码解析，没有翻译，读者看到的是英文原文", has_translation=False
+                )
+                finding.target = {"kind": "block", "id": parsed_as_code}
+                finding.location.block_id = parsed_as_code
+                prose_code.findings.append(finding)
+                continue
             neighbours = chapter_blocks[max(0, index - 1) : index + 2]
             if (
                 _COMMENT_RE.match(source)

@@ -417,6 +417,10 @@ def load_pilot_inputs(
                     parsed_text=str(block_texts.get(block.block_id) or ""),
                     font_names=tuple(str(name) for name in block.source_metadata.get("pdf_font_names") or () if name),
                     regions=tuple(parse_health.block_regions(block.source_metadata)),
+                    merged_blocks=tuple(
+                        (str(merged_id), str(block_texts.get(str(merged_id)) or ""))
+                        for merged_id in block.source_metadata.get("export_merged_block_ids") or ()
+                    ),
                 )
             )
 

@@ -854,5 +854,27 @@ class HeadingIsProseTests(unittest.TestCase):
         self.assertEqual(self.found("2.1 What does a RAG system look like?"), [])
 
 
+
+class ProseParsedAsCodeTests(unittest.TestCase):
+    """Agent p49: prose typed as code, joined by the export with the listing before it, then split off untranslated."""
+
+    PROSE = "The call_llm function wraps acompletion with both protections. The semaphore ensures that only ten calls run."
+
+    def test_the_parsed_code_block_behind_untranslated_prose_is_the_target(self) -> None:
+        split = dataclasses.replace(
+            rendered("b-code", C2, "paragraph", self.PROSE, "", page=33),
+            merged_blocks=(("b-listing", "import asyncio\nsemaphore = asyncio.Semaphore(10)"), ("b-prose", self.PROSE)),
+        )
+        hits = [f for f in findings(build([*clean_blocks(), split])) if f["check_id"] == "L4.prose_in_code"]
+        self.assertEqual([(hit["target"]["id"], hit["location"]["block_id"], hit["severity"]) for hit in hits], [("b-prose", "b-prose", MAJOR)])
+
+    def test_translated_prose_after_a_listing_is_fine(self) -> None:
+        split = dataclasses.replace(
+            rendered("b-code", C2, "paragraph", self.PROSE, "call_llm 函数用两种保护包装了 acompletion。", page=33),
+            merged_blocks=(("b-listing", "import asyncio"), ("b-prose", self.PROSE)),
+        )
+        self.assertEqual([f for f in findings(build([*clean_blocks(), split])) if f["check_id"] == "L4.prose_in_code"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

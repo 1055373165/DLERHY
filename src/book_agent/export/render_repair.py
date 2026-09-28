@@ -15,6 +15,7 @@ from book_agent.domain.enums import (
     SentenceStatus,
 )
 from book_agent.domain.structure.geometry import horizontal_overlap_ratio
+from book_agent.domain.structure.parse_health import is_monospace_font
 from book_agent.domain.structure.table_cells import table_grid
 from book_agent.export import code_text
 from book_agent.export.common import (
@@ -713,6 +714,11 @@ def should_demote_book_code_block_to_paragraph(block: MergedRenderBlock) -> bool
         return False
     if code_text.looks_like_code_artifact_text(block.source_text or "", academic_paper=False):
         return False
+    fonts = [str(name) for name in block.source_metadata.get("pdf_font_names") or () if name]
+    if fonts and all(is_monospace_font(name) for name in fonts):
+        # Set wholly in the code face: a data sample ("{'Question': 'If Eliud Kipchoge ...'}") reads
+        # like prose, but the book prints it as code.
+        return False
     if code_text.looks_like_short_book_prose_line(normalized):
         return True
     return code_text.looks_like_prose_artifact_text(normalized, academic_paper=False)
@@ -1089,6 +1095,10 @@ def merge_adjacent_code_render_blocks(
         merged_metadata["source_bbox_json"] = {"regions": [*previous_regions, *current_regions]}
     merged_metadata["source_page_end"] = block_page_end(current)
     merged_metadata["pdf_block_role"] = "code_like"
+    # The parsed blocks joined here, so a check can name the one a fix acts on.
+    merged_metadata["export_merged_block_ids"] = list(
+        dict.fromkeys([*(previous.source_metadata.get("export_merged_block_ids") or [previous.block_id]), current.block_id])
+    )
     merged_source_text, deduped = merge_code_text_fragments(previous.source_text, current.source_text)
     recovery_flags = [
         *list(previous.source_metadata.get("recovery_flags") or []),
