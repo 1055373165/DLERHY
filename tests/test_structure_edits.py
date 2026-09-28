@@ -386,6 +386,22 @@ class StructureEditTests(unittest.TestCase):
             self.assertEqual([edit["kind"] for edit in listed["edits"]], ["merge_blocks"])
             self.assertEqual(listed["edits"][0]["actor_id"], "api:local")
 
+    def test_the_parsers_role_follows_the_new_type(self) -> None:
+        # Build an AI Agent p49: prose the parser typed as code, relabelled a paragraph, must not
+        # read as code to the export (which joined it back into the listing before it).
+        block_id = self.blocks[OTHER]
+        with self.session_factory() as session:
+            block = session.get(Block, block_id)
+            block.block_type = BlockType.CODE
+            block.source_span_json = {**(block.source_span_json or {}), "pdf_block_role": "code_like"}
+            session.commit()
+            self._edit(session).relabel_block(self.document_id, block_id, "paragraph", actor_id="t", reason="prose")
+            session.commit()
+            self.assertEqual(session.get(Block, block_id).source_span_json["pdf_block_role"], "body")
+            self._edit(session).relabel_block(self.document_id, block_id, "heading", heading_level=2, actor_id="t", reason="title")
+            session.commit()
+            self.assertEqual(session.get(Block, block_id).source_span_json["pdf_block_role"], "heading")
+
 
 if __name__ == "__main__":
     unittest.main()
