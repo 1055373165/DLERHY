@@ -591,5 +591,83 @@ class ImageEdgeCaseTest(unittest.TestCase):
         self.assertFalse(_is_background_panel((77, 292, 329, 353), drawn))
 
 
+
+def _write_styled_headings_book(path: Path) -> None:
+    """Manning's heading styles: "1.1" at 12.5pt bold, "1.1.1" at 10.5pt bold, "Summary" set like "1.1",
+    a small bold run-in heading over its paragraph, and listing titles in the heading face."""
+    document = fitz.open()
+    title_page = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    title_page.insert_text((72, 200), "Synthetic Styles Book", fontname="tibo", fontsize=26)
+    _chapter_opener(document, "1", "Alpha basics")
+    for number in range(1, 4):
+        page = document.new_page(width=_PAGE[0], height=_PAGE[1])
+        page.insert_text((72, 30), f"{number + 2}  Alpha basics", fontname="tiro", fontsize=9)
+        page.insert_text((72, 80), f"1.{number} Section {number} title", fontname="hebo", fontsize=12.5)
+        top = _body(page, 92, count=2)
+        page.insert_text((72, top + 14), f"1.{number}.1 Subsection {number} title", fontname="hebo", fontsize=10.5)
+        top = _body(page, top + 22, count=1)
+        # A run-in heading: a short bold line in a smaller size, directly over its paragraph.
+        page.insert_text((72, top + 14), "how the loop works", fontname="hebo", fontsize=8)
+        _body(page, top + 18, count=1)
+    listing = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    listing.insert_text((72, 30), "6  Alpha basics", fontname="tiro", fontsize=9)
+    top = _body(listing, 60, count=1)
+    listing.insert_text((84, top + 14), "Listing 1.1 Loading the settings", fontname="hebo", fontsize=9)
+    listing.insert_text((72, top + 34), "from dotenv import load_dotenv", fontname="cour", fontsize=8)
+    listing.insert_text((72, top + 44), "load_dotenv()", fontname="cour", fontsize=8)
+    summary = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    summary.insert_text((72, 30), "7  Summary", fontname="tiro", fontsize=9)
+    # The section heading opens the page, under the running head that repeats its word.
+    summary.insert_text((72, 60), "Summary", fontname="hebo", fontsize=12.5)
+    summary.insert_text((72, 80), "Data loading", fontname="hebo", fontsize=10.5)
+    _body(summary, 88, count=2)
+    later = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    later.insert_text((72, 30), "8  Summary", fontname="tiro", fontsize=9)
+    _body(later, 60, count=3)
+    document.set_toc([[1, "1 Alpha basics", 2]])
+    document.save(path)
+
+
+class StyledHeadingTest(unittest.TestCase):
+    """Headings found by the book's own heading styles take the level of the numbered headings set that way."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        parsed = _parse(_write_styled_headings_book, "styles.pdf")
+        cls.blocks = [block for chapter in parsed.chapters for block in chapter.blocks]
+
+    def _headings(self) -> dict[str, int | None]:
+        return {
+            " ".join(block.text.split()): block.metadata.get("heading_level")
+            for block in self.blocks
+            if block.block_type == BlockType.HEADING.value
+        }
+
+    def test_summary_and_its_subheading_are_headings_of_their_styles_levels(self) -> None:
+        headings = self._headings()
+        self.assertEqual(headings.get("Summary"), 2)
+        self.assertEqual(headings.get("Data loading"), 3)
+        self.assertEqual(headings.get("1.1 Section 1 title"), 2)
+        self.assertEqual(headings.get("1.1.1 Subsection 1 title"), 3)
+
+    def test_a_run_in_heading_set_smaller_is_a_level_below_the_numbered_ones(self) -> None:
+        self.assertEqual(self._headings().get("how the loop works"), 4)
+
+    def test_a_listing_title_in_the_heading_face_is_not_a_heading(self) -> None:
+        self.assertFalse([text for text in self._headings() if text.startswith("Listing")])
+
+
+
+class DemiboldFaceTest(unittest.TestCase):
+    def test_the_short_name_of_a_demibold_cut_is_bold(self) -> None:
+        from book_agent.ingestion.pdf.extract import _span_is_bold
+
+        # Manning sets its headings in ITC Franklin Gothic's demibold cut, named "-Dem".
+        self.assertTrue(_span_is_bold({"font": "ITCFranklinGothicStd-Dem", "flags": 0}))
+        self.assertTrue(_span_is_bold({"font": "FranklinGothic-DemiBold", "flags": 0}))
+        self.assertFalse(_span_is_bold({"font": "ITCFranklinGothicStd-Book", "flags": 0}))
+        self.assertFalse(_span_is_bold({"font": "Democratica-Regular", "flags": 0}))
+
+
 if __name__ == "__main__":
     unittest.main()

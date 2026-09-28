@@ -2268,6 +2268,9 @@ def _assess_page_layout(
 
 _EMPHASIS_SIZE_DELTA = 1.0
 _STYLED_HEADING_MAX_WORDS = 16
+# A listing's or table's title line ("Listing 2.4 Unified API calls with LiteLLM") is set in the
+# heading face but labels its artifact; it is not a section of the book.
+ARTIFACT_TITLE_PATTERN = re.compile(r"^(?:listing|table|figure|exhibit|example)\s+[A-Z]?\d+(?:[.\-]\d+)*\b", re.IGNORECASE)
 
 
 def leading_emphasis_line_count(line_styles: tuple[tuple[float, bool], ...]) -> int:
@@ -2308,6 +2311,6 @@ def styled_heading_and_remainder(text: str, emphasis_text: str) -> tuple[str, st
         return None
     if len(heading.split()) > _STYLED_HEADING_MAX_WORDS or heading.endswith((",", ";")):
         return None
-    if _looks_like_caption_text(heading) or _looks_like_code(heading, 1):
+    if _looks_like_caption_text(heading) or ARTIFACT_TITLE_PATTERN.match(heading) or _looks_like_code(heading, 1):
         return None
     return heading, remainder
