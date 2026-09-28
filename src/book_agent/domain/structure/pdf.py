@@ -1264,7 +1264,7 @@ class PdfStructureRecoveryService:
             return "list_item"
         if _looks_like_list_item(text, raw_block.line_count):
             return "list_item"
-        if _looks_like_code(text, raw_block.line_count):
+        if _looks_like_code(text, raw_block.line_count) and not _is_prose_with_code_identifiers(raw_block.font_names, text):
             return "code_like"
         # Font-based code detection: a block that uses ONLY monospace
         # font(s) is almost certainly real code. But many book pages
@@ -2527,6 +2527,8 @@ class PdfStructureRecoveryService:
         if not normalized_lines:
             return False
         if _looks_like_table(len(normalized_lines), normalized_lines) or _looks_like_numeric_table_fragment(normalized_lines):
+            return False
+        if _is_prose_with_code_identifiers(frozenset(block.metadata.get("pdf_font_names") or ()), block.text):
             return False
         if _looks_like_code("\n".join(normalized_lines), max(2, len(normalized_lines))):
             return True
@@ -4553,6 +4555,12 @@ def _is_figure_label_block(block: _RecoveredBlock) -> bool:
     return bool(regions) and all(isinstance(region, dict) and region.get(FIGURE_LABEL_REGION_KEY) for region in regions)
 
 
+def _is_prose_with_code_identifiers(font_names: frozenset[str], text: str) -> bool:
+    """Sentences set in the body face with a few identifiers in the code face ("The call_llm function
+    wraps acompletion ... The semaphore ensures ...") are the prose that explains a listing, not code."""
+    return _has_prose_body_font(font_names) and len(_PROSE_SENTENCE_END_PATTERN.findall(text)) >= 2
+
+
 def _is_heading_at_page_top(raw_block: PdfTextBlock, text: str, page_font_median: float) -> bool:
     """A section heading that opens a page ("Summary") repeats the running head's words, not its type.
 
@@ -4687,6 +4695,8 @@ def _in_place(method_name: str, *context_args: str, **context_kwargs: str) -> Bl
 
 # "1.2 Title" / "1.2.3 Title": a section number with at least one dot, then the title.
 _NUMBERED_SECTION_HEADING_PATTERN = re.compile(r"^(\d{1,2}(?:\.\d{1,2}){1,3})\.?\s+\S")
+# A word, then the end of a sentence and the start of the next ("... protections. The semaphore").
+_PROSE_SENTENCE_END_PATTERN = re.compile(r"[a-z]{2,}[.!?]\s+[A-Z]")
 # How far (pt) a heading's size may be from a level's size and still be set in that level's style.
 _HEADING_STYLE_SIZE_TOLERANCE = 0.6
 

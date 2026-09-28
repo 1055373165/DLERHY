@@ -380,7 +380,7 @@ def _has_monospace_font(font_names: frozenset[str]) -> bool:
 # one of these fonts is present alongside a monospace font, the block
 # is body prose with inline-code highlights, not a code listing.
 _PROSE_BODY_FONT_PATTERNS = re.compile(
-    r"Baskerville|Garamond|Georgia|TimesNewRoman|Times-?New-?Roman"
+    r"Baskerville|Garamond|Georgia|TimesNewRoman|Times-?New-?Roman|Times-(?:Roman|Italic|Bold)"
     r"|FranklinGothic|Helvetica|Caslon|Sabon|Palatino|Minion|Bembo"
     r"|Lato|Roboto|SourceSans|SourceSerif|Charter|Cambria|PT-?Serif",
     re.IGNORECASE,

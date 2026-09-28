@@ -669,5 +669,45 @@ class DemiboldFaceTest(unittest.TestCase):
         self.assertFalse(_span_is_bold({"font": "Democratica-Regular", "flags": 0}))
 
 
+
+def _write_listing_then_prose_page(path: Path) -> None:
+    """A listing, then the prose explaining it with identifiers set in the code face (Agent book p49)."""
+    document = fitz.open()
+    page = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    top = _body(page, 60, count=1)
+    for index, line in enumerate(
+        [
+            "import asyncio",
+            "semaphore = asyncio.Semaphore(10)",
+            "async def call_llm(prompt: str) -> str:",
+            "    async with semaphore:",
+            "        return await acompletion(model=MODEL, messages=prompt)",
+        ]
+    ):
+        page.insert_text((72, top + 12 + 10 * index), line, fontname="cour", fontsize=8)
+    y = top + 80
+    for parts in (
+        [("tiro", "The "), ("cour", "call_llm"), ("tiro", " function wraps the call with both protections. The semaphore")],
+        [("tiro", "ensures that only ten calls run at the same time. When one task completes, the next")],
+        [("tiro", "waiting task proceeds. The "), ("cour", "num_retries"), ("tiro", " parameter retries failed requests.")],
+    ):
+        x = 72.0
+        for font, text in parts:
+            size = 8 if font == "cour" else 10
+            page.insert_text((x, y), text, fontname=font, fontsize=size)
+            x += fitz.get_text_length(text, fontname=font, fontsize=size)
+        y += 13
+    document.save(path)
+
+
+class ListingProseTest(unittest.TestCase):
+    def test_prose_after_a_listing_with_code_identifiers_stays_prose(self) -> None:
+        parsed = _parse(_write_listing_then_prose_page, "listing-prose.pdf")
+        blocks = [block for chapter in parsed.chapters for block in chapter.blocks]
+        prose = [block for block in blocks if "function wraps the call" in block.text]
+        self.assertEqual([block.block_type for block in prose], [BlockType.PARAGRAPH.value])
+        self.assertTrue(any("semaphore = asyncio.Semaphore(10)" in block.text for block in blocks if block.block_type == BlockType.CODE.value))
+
+
 if __name__ == "__main__":
     unittest.main()
