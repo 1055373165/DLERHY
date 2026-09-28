@@ -714,5 +714,131 @@ class ReportShapeTests(unittest.TestCase):
         self.assertEqual(MINOR, "minor")
 
 
+DEM = "ITCFranklinGothicStd-Dem"
+BODY = "NewBaskervilleStd-Roman"
+BODY_TEXT = (
+    "An agent decides which tool to call next, reads what the tool returns and decides again, until the "
+    "task is done or it gives up and says why."
+)
+
+
+def styled(block: QaBlock, *fonts: str, regions: tuple = ()) -> QaBlock:
+    return dataclasses.replace(block, font_names=tuple(fonts), regions=regions)
+
+
+def styled_pilot(*extra: QaBlock) -> list[QaBlock]:
+    """A pilot whose headings are set in the heading face and its prose in the body face (Manning)."""
+    return [
+        styled(rendered("b-h11", C1, "heading", "1.1 The age of agents", "1.1 智能体时代", page=21), DEM),
+        styled(rendered("b-body1", C1, "paragraph", BODY_TEXT, "智能体决定下一步调用哪个工具，读取工具的返回结果后再次决定，直到任务完成。", page=21), BODY),
+        styled(rendered("b-h12", C1, "heading", "1.2 Understanding agents", "1.2 理解智能体", page=22), DEM),
+        styled(rendered("b-body2", C1, "paragraph", BODY_TEXT, "智能体决定下一步调用哪个工具，读取工具的返回结果后再次决定，直到任务完成。", page=22), BODY),
+        *extra,
+    ]
+
+
+class HeadingAsTextTests(unittest.TestCase):
+    """Section headings the reading copy sets as body paragraphs (both Manning books' pilots)."""
+
+    def found(self, blocks: list[QaBlock]) -> list[dict[str, Any]]:
+        return [finding for finding in findings(build(blocks)) if finding["check_id"] == "L1.heading_as_text"]
+
+    def test_a_numbered_subsection_set_in_the_heading_face(self) -> None:
+        heading = styled(rendered("b-121", C1, "paragraph", "1.2.1 What is an LLM?", "1.2.1 什么是 LLM？", page=22), DEM)
+        hits = self.found(styled_pilot(heading))
+        self.assertEqual([(hit["target"]["id"], hit["severity"], hit["repair"]) for hit in hits], [("b-121", MAJOR, "structure_edit")])
+        self.assertEqual(hits[0]["evidence"]["heading_level"], 3)
+
+    def test_section_labels_in_the_heading_face(self) -> None:
+        summary = styled(rendered("b-sum", C1, "paragraph", "Summary", "小结", page=29), DEM)
+        covers = styled(rendered("b-cov", C1, "paragraph", "This chapter covers", "本章涵盖", page=20), DEM)
+        hits = self.found(styled_pilot(summary, covers))
+        self.assertEqual(sorted((hit["target"]["id"], hit["evidence"]["heading_level"]) for hit in hits), [("b-cov", 2), ("b-sum", 2)])
+
+    def test_numbers_and_labels_in_body_type_are_not_headings(self) -> None:
+        blocks = styled_pilot(
+            # A sentence starting with a number, a numbered list item, another chapter's number, body type.
+            styled(rendered("b-n1", C1, "paragraph", "1.5 million users signed up", "150 万用户注册", page=23), BODY),
+            styled(rendered("b-n2", C1, "list_item", "1. Install the package", "1. 安装软件包", page=23), DEM),
+            styled(rendered("b-n3", C1, "paragraph", "2.1 Choosing a model", "2.1 选择模型", page=23), DEM),
+            styled(rendered("b-n4", C1, "paragraph", "Summary", "小结", page=23), BODY),
+            styled(rendered("b-n5", C1, "paragraph", "1.2.2 What is an agent? It is a loop.", "1.2.2 什么是智能体？", page=23), DEM, BODY),
+        )
+        self.assertEqual(self.found(blocks), [])
+
+    def test_without_font_evidence_nothing_is_found(self) -> None:
+        # An EPUB pilot has no fonts: a pattern alone is not evidence.
+        heading = rendered("b-121", C1, "paragraph", "1.2.1 What is an LLM?", "1.2.1 什么是 LLM？", page=22)
+        self.assertEqual(self.found([*clean_blocks(), heading]), [])
+
+
+FIGURE_BOX = (99.0, 51.0, 465.0, 305.0)
+
+
+def figure_block(block_id: str = "b-f27", page: int = 27) -> QaBlock:
+    return styled(
+        rendered(
+            block_id,
+            C1,
+            "figure",
+            "Figure 1.3 The teacher teaches the student.",
+            "图 1.3 老师教学生。",
+            mode="image_anchor_with_translated_caption",
+            kind="figure",
+            page=page,
+            has_image=True,
+        ),
+        regions=((page, FIGURE_BOX),),
+    )
+
+
+def artifact(block_id: str, block_type: str, text: str, target: str, bbox, *fonts: str, caption: str | None = None, page: int = 27) -> QaBlock:
+    mode = "source_artifact_full_width" if block_type == "code" else "translated_wrapper_with_preserved_artifact"
+    return styled(
+        rendered(block_id, C1, block_type, text, target, mode=mode, kind=block_type, page=page, caption=caption),
+        *fonts,
+        regions=((page, bbox),),
+    )
+
+
+class FigureResidueTests(unittest.TestCase):
+    """A figure's own text kept as a table or code block next to it (RAG figure 1.3, Agent figure 1.6)."""
+
+    def found(self, *extra: QaBlock) -> list[dict[str, Any]]:
+        blocks = [*clean_blocks(), figure_block(), *extra]
+        return [finding for finding in findings(build(blocks)) if finding["check_id"] == "L2.figure_residue"]
+
+    def test_repeated_labels_parsed_as_a_table_are_blocking(self) -> None:
+        table = artifact("b-t", "table", "| The | teacher |\n| The | teacher |", "老师老师老师老师", (102.0, 132.0, 165.0, 158.0), "Arial-BoldMT")
+        hits = self.found(table)
+        self.assertEqual([(hit["target"]["id"], hit["severity"], hit["repair"]) for hit in hits], [("b-t", BLOCKING, "structure_edit")])
+
+    def test_a_legend_with_split_words_is_blocking(self) -> None:
+        legend = artifact("b-l", "table", "| | | C | | laude Sonnet 4 |\n| G Q G | PT-4.1 |", "", (121.0, 150.0, 443.0, 290.0), "ArialMT")
+        self.assertEqual([hit["severity"] for hit in self.found(legend)], [BLOCKING])
+
+    def test_diagram_labels_parsed_as_code_are_major(self) -> None:
+        code = artifact("b-c", "code", "{Query + Information} Retrieve", "", (234.0, 208.0, 301.0, 217.0), "ArialMT")
+        self.assertEqual([(hit["target"]["id"], hit["severity"]) for hit in self.found(code)], [("b-c", MAJOR)])
+
+    def test_real_tables_and_listings_are_left_alone(self) -> None:
+        blocks = [
+            # A listing in the book's code font inside the figure's box, a captioned table inside it, a data
+            # grid inside it, and label-like text outside every figure.
+            artifact("b-k1", "code", "from openai import OpenAI\nclient = OpenAI()", "", (110.0, 60.0, 300.0, 90.0), "JetBrainsMonoNL-Regular"),
+            artifact("b-k2", "table", "| Model | Accuracy |\n| GPT-5 | 0.8 |", "", (110.0, 100.0, 300.0, 140.0), "ArialMT", caption="Table 1.1 Accuracy"),
+            artifact(
+                "b-k3",
+                "table",
+                "| Use case | Needs data? | RAG? |\n| Chat bot | Yes: product data | Yes |\n| Translation | No: all in the prompt | No |",
+                "",
+                (110.0, 150.0, 400.0, 290.0),
+                "ArialMT",
+            ),
+            artifact("b-k4", "table", "| The | teacher |\n| The | teacher |", "", (102.0, 400.0, 165.0, 430.0), "ArialMT"),
+        ]
+        self.assertEqual(self.found(*blocks), [])
+
+
 if __name__ == "__main__":
     unittest.main()

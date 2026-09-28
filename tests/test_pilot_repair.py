@@ -591,5 +591,86 @@ class AttemptRecordTests(PilotRepairBenchCase):
             self.assertEqual(row.token_in, 1000)
 
 
+
+class ReaderVisibleStructureTests(PilotRepairBenchCase):
+    """Section headings set as paragraphs and a figure's text kept as a table (both Manning pilots)."""
+
+    def _style(self, contains: str, *, text: str | None = None, fonts: list[str], block_type: str | None = None, level: int | None = None) -> str:
+        """Give a block the fonts it is set in (and new text, or a heading type), as the parse would have."""
+        from book_agent.domain.enums import BlockType
+        from book_agent.services.parse_revision_fork import ParseRevisionForkService
+
+        with self.bench.session_factory() as session:
+            block = block_with_text(session, self.bench.document_id, contains)
+            if text is not None:
+                block.source_text = text
+                block.normalized_text = text
+            span = dict(block.source_span_json or {})
+            span["pdf_font_names"] = fonts
+            if level is not None:
+                span["heading_level"] = level
+            block.source_span_json = span
+            if block_type is not None:
+                block.block_type = BlockType(block_type)
+            session.flush()
+            if text is not None:
+                fork = ParseRevisionForkService(session).resegment_blocks(self.bench.document_id, block_ids=[block.id], reason="inject")
+                workflow = self.bench.workflow(session)
+                for packet_id in fork.retranslate_packet_ids:
+                    workflow.translation_service.execute_packet(packet_id)
+            session.commit()
+            block_id = block.id
+        self.worker.translated_once.clear()
+        return block_id
+
+    def test_a_section_heading_kept_as_a_paragraph_becomes_a_heading(self) -> None:
+        self.translate()
+        # Chapter 1 as Manning sets it: numbered headings in the heading face, body text in the body face.
+        self._style("An LLM answers from", text="1.1 Why facts go stale", fonts=["Heading-Dem"], block_type="heading", level=2)
+        self._style("Retrieval gives the LLM facts", text="1.2 How retrieval helps", fonts=["Heading-Dem"], block_type="heading", level=2)
+        self._style("This chapter explains why", fonts=["Body-Roman"])
+        subsection = self._style("The first technique reads", text="1.2.1 What a retriever returns", fonts=["Heading-Dem"])
+        found = _findings(self.qa(), "L1.heading_as_text")
+        self.assertEqual([(f["target"]["id"], f["evidence"]["heading_level"]) for f in found], [(subsection, 3)])
+
+        payload, final = self.repair()
+
+        kept = [attempt for attempt in self.attempts(payload, "kept") if attempt["check_id"] == "L1.heading_as_text"]
+        self.assertEqual((kept[0]["tool"], kept[0]["path"]), ("structure_edit", "relabel_as_heading"))
+        self.assertEqual(_findings(final, "L1.heading_as_text"), [])
+        with self.bench.session_factory() as session:
+            block = session.get(Block, subsection)
+            self.assertEqual((block.block_type.value, block.source_span_json.get("heading_level")), ("heading", 3))
+
+    def test_figure_text_kept_as_a_table_is_hidden(self) -> None:
+        self.translate()
+        with self.bench.session_factory() as session:
+            figure = next(
+                block
+                for block in session.scalars(select(Block).where(Block.source_text.in_(["[Figure]", "[Image]"]))).all()
+                if (block.source_span_json or {}).get("source_page_start") == 2
+            )
+            (left, top, right, bottom) = figure.source_span_json["source_bbox_json"]["regions"][0]["bbox"]
+        inside = [left + 4.0, top + 4.0, left + 60.0, top + 24.0]
+        table = self._style("The second technique masks", text="| The | teacher |\n| The | teacher |", fonts=["ArialMT"], block_type="table")
+        with self.bench.session_factory() as session:
+            block = session.get(Block, table)
+            block.source_span_json = {
+                **block.source_span_json,
+                "source_bbox_json": {"regions": [{"page_number": 2, "bbox": inside}]},
+            }
+            session.commit()
+        found = _findings(self.qa(), "L2.figure_residue")
+        self.assertEqual([(f["target"]["id"], f["severity"]) for f in found], [(table, "blocking")])
+
+        payload, final = self.repair()
+
+        kept = [attempt for attempt in self.attempts(payload, "kept") if attempt["check_id"] == "L2.figure_residue"]
+        self.assertEqual((kept[0]["tool"], kept[0]["path"]), ("structure_edit", "hide_figure_residue"))
+        self.assertEqual(_findings(final, "L2.figure_residue"), [])
+        with self.bench.session_factory() as session:
+            self.assertTrue(session.get(Block, table).source_span_json.get("repair_hidden_from_export"))
+
+
 if __name__ == "__main__":
     unittest.main()

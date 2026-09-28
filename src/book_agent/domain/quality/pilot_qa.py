@@ -8,10 +8,12 @@ layer  name        what the rules look at
 =====  ==========  ==================================================================================
 L1     结构        parse health's chapter checks on the pilot chapters; a pilot chapter that is front
                    matter, a contents page or holds another chapter; the exported reading copy's
-                   chapters and their titles; sentences set as headings; running headers kept as text
+                   chapters and their titles; sentences set as headings; running headers kept as text;
+                   section headings set as body paragraphs
 L2     图表        figure crops (``figure_region_problems`` through parse health), image fragments,
                    figure labels kept as text, body text folded into or swallowed by a caption, a
-                   figure without its picture or caption, a caption without its figure
+                   figure without its picture or caption, a caption without its figure, a figure's
+                   own text kept as a table or code block beside it
 L3     表格        the rendered table: flattened to text, cells still holding the source's "|", rows of
                    different widths, no header, mostly empty (a chart read as a table), code set as a
                    table, English cells left untranslated
@@ -118,6 +120,7 @@ _SPECS = (
     CheckSpec("L1.heading_is_prose", MAJOR, "正文句子被当成了标题", REPAIR_STRUCTURE),
     CheckSpec("L1.running_header_as_text", MAJOR, "页眉被当成了正文或脚注", REPAIR_STRUCTURE),
     CheckSpec("L1.heading_merged_into_text", MAJOR, "小标题和正文粘在了一起", REPAIR_STRUCTURE),
+    CheckSpec("L1.heading_as_text", MAJOR, "小标题被排成了正文段落", REPAIR_STRUCTURE),
     CheckSpec("L1.review_blocking", BLOCKING, "审校标记的结构阻断问题（如阅读顺序错乱）", REPAIR_REVIEW_RECHECK),
     CheckSpec("L2.figure_regions", BLOCKING, "图片裁剪不对（切掉了图，或框进了页眉、图注）", REPAIR_FIGURE_REGION),
     CheckSpec("L2.figure_without_image", BLOCKING, "图没有图片", REPAIR_FIGURE_REGION),
@@ -125,6 +128,8 @@ _SPECS = (
     CheckSpec("L2.caption_folds", BLOCKING, "正文被并进了图注", REPAIR_STRUCTURE),
     CheckSpec("L2.orphan_caption", MAJOR, "图注没有配到图", REPAIR_STRUCTURE),
     CheckSpec("L2.duplicated_labels", MAJOR, "图中的标注又作为正文出现", REPAIR_STRUCTURE),
+    # Blocking when the reader sees it as garbage (words split over cells, a token repeated over and over).
+    CheckSpec("L2.figure_residue", MAJOR, "图里的文字被当成表格或代码，留在了正文里", REPAIR_STRUCTURE),
     CheckSpec("L2.image_fragments", MAJOR, "碎片图片或空白图片", REPAIR_PARSE),
     CheckSpec("L2.figure_without_caption", MINOR, "图没有图注", REPAIR_STRUCTURE),
     CheckSpec("L2.review_blocking", BLOCKING, "审校标记的图片阻断问题", REPAIR_REVIEW_RECHECK),
@@ -208,6 +213,9 @@ class QaBlock:
     context_texts: tuple[str, ...] = ()
     # The parsed block's own text with its line breaks (the render joins lines): run-in headings show there.
     parsed_text: str = ""
+    # PDF evidence: the fonts the block is set in, and where it lies ((page, bbox) per region).
+    font_names: tuple[str, ...] = ()
+    regions: tuple[tuple[int, tuple[float, float, float, float]], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -876,6 +884,39 @@ def check_headings_and_headers(inputs: PilotQaInputs) -> list[CheckRun]:
     return [prose_headings, headers, glued]
 
 
+def check_headings_as_text(inputs: PilotQaInputs) -> CheckRun:
+    """Section headings the reading copy sets as body paragraphs ("1.2.1 什么是 LLM？", "小结").
+
+    Evidence from the page, not a pattern alone: a short standalone line set wholly in the book's
+    heading type (the fonts of its numbered headings, none of its body font), numbered like its
+    chapter's sections or a section label (``parse_health.section_heading_level``).
+    """
+    run = CheckRun("L1.heading_as_text")
+    style = parse_health.heading_style(
+        parse_health.StyledText(block.block_type, block.source_text, block.font_names) for block in inputs.blocks
+    )
+    if style is None:
+        return run
+    number_by_chapter = {chapter.id: parse_health.chapter_number(chapter.title_src) for chapter in inputs.chapters}
+    for block in inputs.blocks:
+        if block.block_type not in {"paragraph", "list_item", "caption", "quote"} or not _is_prose_block(block):
+            continue
+        level = parse_health.section_heading_level(
+            block.source_text, block.font_names, number_by_chapter.get(block.chapter_id), style
+        )
+        if level is None:
+            continue
+        run.findings.append(
+            _block_finding(
+                "L1.heading_as_text",
+                block,
+                f"小标题「{_snippet(block.target_text or block.source_text, 50)}」被排成了正文段落，目录和导航里没有它",
+                heading_level=level,
+            )
+        )
+    return run
+
+
 # ---------------------------------------------------------------------------
 # L2 图表
 
@@ -955,6 +996,44 @@ def check_figures(inputs: PilotQaInputs) -> list[CheckRun]:
                     )
                 )
     return [swallowed, no_image, orphan, no_caption]
+
+
+def check_figure_residue(inputs: PilotQaInputs) -> CheckRun:
+    """A figure's own text kept as a table, code or equation block next to it ("老师 老师", a chart's legend).
+
+    By geometry (``parse_health.figure_residue_kind``): the block lies inside a figure's region,
+    has no caption of its own, is not a listing set in a code font and not a data grid.
+    """
+    run = CheckRun("L2.figure_residue")
+    figures: dict[int, list[tuple[float, float, float, float]]] = defaultdict(list)
+    for block in inputs.blocks:
+        if _is_figure(block):
+            for page, bbox in block.regions:
+                if parse_health.image_fragment_kind(bbox) is None:
+                    figures[page].append(bbox)
+    if not figures:
+        return run
+    for block in inputs.blocks:
+        if _is_figure(block):
+            continue
+        kind = "code" if _is_code(block) else "table" if _is_table(block) else block.block_type
+        residue = parse_health.figure_residue_kind(
+            kind, block.source_text, block.regions, block.font_names, figures, has_caption=bool(block.caption_text)
+        )
+        if residue is None:
+            continue
+        garbage = residue == "garbage"
+        run.findings.append(
+            _block_finding(
+                "L2.figure_residue",
+                block,
+                f"图里的文字「{_snippet(block.target_text or block.source_text, 40)}」被当成{'表格' if kind == 'table' else '代码' if kind == 'code' else '公式'}留在了正文里"
+                + ("，读者看到的是乱码" if garbage else ""),
+                severity=BLOCKING if garbage else MAJOR,
+                detail=residue,
+            )
+        )
+    return run
 
 
 # ---------------------------------------------------------------------------
@@ -1865,7 +1944,9 @@ def run_layers(inputs: PilotQaInputs, extra_checks: Sequence[ExtraCheck] = ()) -
         *check_pilot_chapters(inputs),
         *check_exported_chapters(inputs),
         *check_headings_and_headers(inputs),
+        check_headings_as_text(inputs),
         *check_figures(inputs),
+        check_figure_residue(inputs),
         *check_tables(inputs),
         *check_code_and_format(inputs),
         check_locked_terms(inputs),
