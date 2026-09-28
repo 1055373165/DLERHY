@@ -23,7 +23,7 @@ function installFetchMock() {
 }
 
 describe("App navigation", () => {
-  it("has three places to go and reaches all books from the home page", async () => {
+  it("has four places to go, the library among them, and reaches it from the home page too", async () => {
     installFetchMock();
     const user = userEvent.setup();
 
@@ -35,9 +35,9 @@ describe("App navigation", () => {
 
     expect(await screen.findByRole("heading", { name: "把英文读成中文" })).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "主导航" });
-    expect([...nav.querySelectorAll("a")].map((link) => link.textContent)).toEqual(["首页", "需要你处理", "设置"]);
+    expect([...nav.querySelectorAll("a")].map((link) => link.textContent)).toEqual(["首页", "书库", "需要你处理", "设置"]);
 
-    await user.click(screen.getByRole("link", { name: "全部书 →" }));
+    await user.click(screen.getByRole("link", { name: "书库 →" }));
     // The library's own title is its h1: one per page, which axe checks for.
     await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: "全部书" })).toBeInTheDocument());
   });
