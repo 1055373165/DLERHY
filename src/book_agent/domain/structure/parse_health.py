@@ -21,6 +21,12 @@ figure_regions            blocking  a figure crop that takes in page furniture o
 image_fragments           major     image blocks that are hairline slivers or have nothing to show
 caption_folds             blocking  running prose that export would fold into a figure
 duplicated_labels         major     a figure's own labels also kept as body paragraphs
+headings_as_text          major     a section heading kept as a body paragraph: a short line set in the
+                                    book's heading type, numbered like the chapter's sections
+                                    ("1.2.1 What is an LLM?") or a section label ("Summary")
+figure_residue            major     a figure's own text kept as a code, table or equation block
+                                    ("| The | teacher |", a chart's legend): inside the figure, no
+                                    caption of its own, not a code listing or a data grid
 ========================  ========  ==================================================================
 
 The checks read parsed data only (blocks, chapters, the PDF outline and, for figure regions, the
@@ -156,6 +162,9 @@ THRESHOLDS: dict[str, Threshold] = {
     "image_fragments": Threshold(0, 0.02, "one picture in 50 may be a hairline rule set as an image"),
     "caption_folds": Threshold(0),
     "duplicated_labels": Threshold(3, 0.02, "a label or two kept as text is noise; one text block in 50 is a pattern"),
+    # A lost heading drops the section from the reader's contents; figure text in the flow is junk.
+    "headings_as_text": Threshold(0),
+    "figure_residue": Threshold(0),
 }
 
 SEVERITIES: dict[str, str] = {
@@ -169,10 +178,21 @@ SEVERITIES: dict[str, str] = {
     "image_fragments": MAJOR,
     "caption_folds": BLOCKING,
     "duplicated_labels": MAJOR,
+    "headings_as_text": MAJOR,
+    "figure_residue": MAJOR,
 }
 
 PDF_ONLY_CHECKS = frozenset(
-    {"chapters_vs_outline", "front_matter_sections", "line_break_hyphens", "figure_regions", "image_fragments", "duplicated_labels"}
+    {
+        "chapters_vs_outline",
+        "front_matter_sections",
+        "line_break_hyphens",
+        "figure_regions",
+        "image_fragments",
+        "duplicated_labels",
+        "headings_as_text",
+        "figure_residue",
+    }
 )
 
 
@@ -666,6 +686,206 @@ def check_duplicated_labels(blocks: Sequence[HealthBlock], page_sizes: dict[int,
     return _result("duplicated_labels", count, text_blocks, samples, {"pages": len(pages)})
 
 
+# ---------------------------------------------------------------------------
+# Headings kept as text, figure text kept as code or tables (shared with the pilot QA)
+
+# "1.2 Title", "1.2.3 Title": the chapter's number, then one or two section numbers.
+_SECTION_HEADING_RE = re.compile(r"^\s*(\d{1,2})((?:\.\d{1,2}){1,2})\.?\s+(?=[A-Z“\"'(])")
+# Section labels a book sets as headings without a number.
+SECTION_LABELS = frozenset({"summary", "chapter summary", "this chapter covers"})
+_CHAPTER_NUMBER_RE = re.compile(r"^\s*(?:chapter\s+)?(\d{1,2})\b", re.IGNORECASE)
+_HEADING_BLOCK_TYPES = frozenset({"paragraph", "list_item", "caption", "quote"})
+
+
+def chapter_number(title: str | None) -> int | None:
+    match = _CHAPTER_NUMBER_RE.match(title or "")
+    return int(match.group(1)) if match else None
+
+
+@dataclass(frozen=True, slots=True)
+class HeadingStyle:
+    """The type a book sets its section headings in, learned from its numbered headings."""
+
+    heading_fonts: frozenset[str]
+    body_font: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class StyledText:
+    block_type: str
+    source_text: str
+    font_names: tuple[str, ...]
+
+
+def heading_style(blocks: Iterable[StyledText]) -> HeadingStyle | None:
+    """The fonts of the book's numbered section headings, less its body font; None without evidence."""
+    heading_fonts: set[str] = set()
+    body_chars: Counter[str] = Counter()
+    numbered = 0
+    for block in blocks:
+        fonts = [str(name) for name in block.font_names if name]
+        if not fonts:
+            continue
+        text = " ".join((block.source_text or "").split())
+        if block.block_type == "heading" and _SECTION_HEADING_RE.match(text):
+            heading_fonts.update(fonts)
+            numbered += 1
+        elif block.block_type == "paragraph" and len(text) >= 120:
+            for name in fonts:
+                body_chars[name] += len(text) // len(fonts)
+    if numbered < 2 or not heading_fonts:
+        return None
+    body_font = body_chars.most_common(1)[0][0] if body_chars else None
+    return HeadingStyle(frozenset(heading_fonts - ({body_font} if body_font else set())), body_font)
+
+
+def section_heading_level(
+    text: str, font_names: Sequence[str], chapter_no: int | None, style: HeadingStyle | None
+) -> int | None:
+    """The level of a section heading kept as text, or None when the block is not one.
+
+    Needs the page's evidence: a short standalone line, set wholly in the book's heading type
+    (none of its body font), numbered like the sections of its chapter ("1.2.1 ..." in chapter 1)
+    or a section label ("Summary"). A list item "1. Install ..." or a sentence starting with a
+    number fails the numbering, and body text fails the type.
+    """
+    if style is None or not style.heading_fonts:
+        return None
+    normalized = " ".join((text or "").split())
+    if not normalized or len(normalized) > 90 or len(normalized.split()) > 14 or normalized.endswith((".", ",", ";", ":")):
+        return None
+    fonts = {str(name) for name in font_names or () if name}
+    if not fonts or not fonts <= style.heading_fonts:
+        return None
+    match = _SECTION_HEADING_RE.match(normalized)
+    if match is not None:
+        if chapter_no is None or int(match.group(1)) != chapter_no:
+            return None
+        return 1 + match.group(2).count(".")
+    if normalized.casefold() in SECTION_LABELS:
+        return 2
+    return None
+
+
+def _styled(block: HealthBlock) -> StyledText:
+    return StyledText(block.block_type, block.source_text or "", tuple(block.source_span_json.get("pdf_font_names") or ()))
+
+
+def check_headings_as_text(chapters: Sequence[HealthChapter], blocks: Sequence[HealthBlock]) -> CheckResult:
+    style = heading_style(_styled(block) for block in blocks)
+    number_by_chapter = {chapter.id: chapter_number(chapter.title) for chapter in chapters}
+    samples: list[Sample] = []
+    count = 0
+    candidates = 0
+    for block in blocks:
+        if block.block_type not in _HEADING_BLOCK_TYPES or block.role in {"header", "footer"}:
+            continue
+        candidates += 1
+        level = section_heading_level(
+            block.source_text, block.source_span_json.get("pdf_font_names") or (), number_by_chapter.get(block.chapter_id), style
+        )
+        if level is None:
+            continue
+        count += 1
+        samples.append(Sample(text=_snippet(block.source_text), page=block.page, block_id=block.id, detail=f"heading_level={level}"))
+    return _result("headings_as_text", count, candidates, samples)
+
+
+_RESIDUE_BLOCK_TYPES = frozenset({"code", "table", "equation"})
+# A word split over cells ("C | | laude Sonnet 4").
+_BROKEN_WORD_RE = re.compile(r"(?:^|\|)\s*[A-Za-z]\s*(?:\|\s*)+[a-z]{2,}")
+_TOKEN_RE = re.compile(r"\w+")
+
+
+def block_regions(metadata: dict[str, Any]) -> list[tuple[int, Bbox]]:
+    source_bbox = metadata.get("source_bbox_json")
+    regions = source_bbox.get("regions") if isinstance(source_bbox, dict) else None
+    found: list[tuple[int, Bbox]] = []
+    for region in regions or []:
+        if isinstance(region, dict) and isinstance(region.get("page_number"), int) and len(region.get("bbox") or []) == 4:
+            x0, y0, x1, y1 = (float(value) for value in region["bbox"])
+            found.append((region["page_number"], (x0, y0, x1, y1)))
+    return found
+
+
+def is_data_grid(text: str) -> bool:
+    """Three or more "|" rows of three or more columns, mostly filled: a table's data, not a diagram's labels."""
+    rows = [
+        [cell.strip() for cell in line.strip().strip("|").split("|")]
+        for line in (text or "").splitlines()
+        if line.strip().startswith("|")
+    ]
+    if len(rows) < 3:
+        return False
+    cells = [cell for row in rows for cell in row]
+    return max(len(row) for row in rows) >= 3 and sum(1 for cell in cells if cell) >= 0.6 * len(cells)
+
+
+def figure_residue_kind(
+    block_type: str,
+    text: str,
+    regions: Sequence[tuple[int, Bbox]],
+    font_names: Sequence[str],
+    figures_by_page: dict[int, list[Bbox]],
+    *,
+    has_caption: bool = False,
+) -> str | None:
+    """"garbage" or "labels" when a code, table or equation block is a figure's own text; else None.
+
+    The block lies inside a figure's region (70% of each piece, with 8pt of slack), has no caption
+    of its own, is not set in a code font (a listing) and is not a data grid. "garbage" is what a
+    reader sees as broken: a word split over cells ("C | laude") or tokens repeated over and over
+    ("The teacher The teacher").
+    """
+    if block_type not in _RESIDUE_BLOCK_TYPES or has_caption or not regions:
+        return None
+    if any(is_monospace_font(str(name)) for name in font_names or ()):
+        return None
+    if block_type == "table" and is_data_grid(text):
+        return None
+    for page, bbox in regions:
+        padded = [(box[0] - 8.0, box[1] - 8.0, box[2] + 8.0, box[3] + 8.0) for box in figures_by_page.get(page) or []]
+        if _area(bbox) <= 0 or not any(_overlap(bbox, box) >= 0.7 * _area(bbox) for box in padded):
+            return None
+    tokens = [token.casefold() for token in _TOKEN_RE.findall(text or "")]
+    repeated = len(tokens) >= 4 and len(set(tokens)) * 2 <= len(tokens)
+    if repeated or _BROKEN_WORD_RE.search(text or ""):
+        return "garbage"
+    return "labels"
+
+
+def figure_regions_by_page(
+    blocks: Iterable[HealthBlock], page_sizes: dict[int, tuple[float, float]] | None = None
+) -> dict[int, list[Bbox]]:
+    regions: dict[int, list[Bbox]] = defaultdict(list)
+    for block in picture_blocks(blocks):
+        for page, bbox in block_regions(block.source_span_json):
+            if image_fragment_kind(bbox) is None and not is_page_background(bbox, (page_sizes or {}).get(page)):
+                regions[page].append(bbox)
+    return regions
+
+
+def check_figure_residue(blocks: Sequence[HealthBlock], page_sizes: dict[int, tuple[float, float]] | None = None) -> CheckResult:
+    figures = figure_regions_by_page(blocks, page_sizes)
+    samples: list[Sample] = []
+    breakdown: Counter[str] = Counter()
+    candidates = [block for block in blocks if block.block_type in _RESIDUE_BLOCK_TYPES]
+    for block in candidates:
+        kind = figure_residue_kind(
+            block.block_type,
+            block.source_text or "",
+            block_regions(block.source_span_json),
+            block.source_span_json.get("pdf_font_names") or (),
+            figures,
+            has_caption=bool(block.source_span_json.get("linked_caption_text")),
+        )
+        if kind is None:
+            continue
+        breakdown[kind] += 1
+        samples.append(Sample(text=_snippet(block.source_text), page=block.page, block_id=block.id, detail=kind))
+    return _result("figure_residue", sum(breakdown.values()), len(candidates), samples, dict(breakdown))
+
+
 FigureProblemFinder = Callable[[int, Bbox, list[Bbox]], list[Any]]
 
 
@@ -822,4 +1042,6 @@ def run_checks(
     results.append(check_caption_folds(blocks, academic_paper=academic_paper))
     if is_pdf:
         results.append(check_duplicated_labels(blocks, page_sizes))
+        results.append(check_headings_as_text(chapters, blocks))
+        results.append(check_figure_residue(blocks, page_sizes))
     return [result for result in results if result is not None]

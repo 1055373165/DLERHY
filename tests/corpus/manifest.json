@@ -41,7 +41,9 @@
         "figure_regions": 0,
         "image_fragments": 0,
         "caption_folds": 0,
-        "duplicated_labels": 0
+        "duplicated_labels": 0,
+        "headings_as_text": 0,
+        "figure_residue": 0
       },
       "known_residuals": {
         "line_break_hyphens": "2 words split by ligature extraction, not by hyphens: 'fi rst' x2 on the back cover (p258). ('Applic ation' p174 and 'diff erence' p258 were figure labels and are now part of their figures.)"
@@ -86,7 +88,9 @@
         "figure_regions": 0,
         "image_fragments": 0,
         "caption_folds": 0,
-        "duplicated_labels": 0
+        "duplicated_labels": 0,
+        "headings_as_text": 0,
+        "figure_residue": 0
       },
       "known_residuals": {
         "line_break_hyphens": "10 compounds broken at their own hyphen keep a space after it ('general- purpose' p23, 'decision- making' p24/p38, 'domain- specific' p66, 'acid- free' p3) and 1 split word."

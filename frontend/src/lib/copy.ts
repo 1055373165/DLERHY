@@ -177,6 +177,8 @@ const PARSE_CHECKS: Record<string, IssueTypeCopy> = {
   image_fragments: { label: "碎片图片", meaning: "细条或空白的图片块，导出后是一张看不出内容的图。" },
   caption_folds: { label: "正文混入图注", meaning: "导出时会把图后面的正文段落并进图里，正文里就少了这一段。" },
   duplicated_labels: { label: "图中文字重复", meaning: "图里的标注又作为正文段落出现了一遍。" },
+  headings_as_text: { label: "小标题成了正文", meaning: "书里的小节标题（如“1.2.1 …”“Summary”）被当成了正文段落，目录和导航里没有它。" },
+  figure_residue: { label: "图里的文字成了表格或代码", meaning: "图中的标注被识别成表格或代码块，留在正文里，读者看到的是零散的词。" },
 };
 
 export function parseCheckCopy(name: string): IssueTypeCopy {
