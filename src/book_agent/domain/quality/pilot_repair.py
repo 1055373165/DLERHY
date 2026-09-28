@@ -95,6 +95,8 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L1.running_header_as_text": (RepairPath(TOOL_STRUCTURE, "hide_running_header"),),
     "L1.heading_merged_into_text": (RepairPath(TOOL_STRUCTURE, "split_run_in_heading"), _STRUCTURE_AGENT),
     "L1.heading_as_text": (RepairPath(TOOL_STRUCTURE, "relabel_as_heading"),),
+    # The icon and its lines become one callout block; its packets are retranslated line by line.
+    "L1.icon_callout_split": (RepairPath(TOOL_STRUCTURE, "merge_icon_callout", costs_model=True),),
     "L1.review_blocking": (_RECHECK,),
     # L2 图表
     "L2.figure_regions": (RepairPath(TOOL_FIGURE_REGION, "fit_to_figure"),),
@@ -107,6 +109,8 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L2.orphan_caption": (RepairPath(TOOL_STRUCTURE, "link_caption"),),
     "L2.duplicated_labels": (RepairPath(TOOL_STRUCTURE, "hide_duplicated_label"),),
     "L2.figure_residue": (RepairPath(TOOL_STRUCTURE, "hide_figure_residue"),),
+    # An icon drawn as a figure card: when it leads a callout, the callout takes it.
+    "L2.tiny_icon_figure": (RepairPath(TOOL_STRUCTURE, "merge_icon_callout", costs_model=True),),
     # The export gate's "no picture" is stale once the figure has one: its recheck resolves it.
     "L2.figure_without_image": (_RECHECK,),
     "L2.review_blocking": (_RECHECK,),
@@ -190,6 +194,13 @@ GENERIC_CAUSES: tuple[GenericCause, ...] = (
         "行内小标题（小写词组紧跟在句点后）没有从段落里拆出来",
     ),
     GenericCause("L1.heading_is_prose", "L1.heading_is_prose", "parser", "以句号结尾的整句被识别成了标题"),
+    GenericCause(
+        "L1.icon_callout_split",
+        "L1.icon_callout_split",
+        "parser",
+        "小图标引出的提示框（图标 + 非正文字体的几行）没有识别成一个整体，图标成了图片、每行成了段落",
+    ),
+    GenericCause("L2.tiny_icon_figure", "L2.tiny_icon_figure", "export", "一行字大小的小图标被当成整幅插图排版"),
     GenericCause(
         "L2.figure_regions:page_furniture",
         "L2.figure_regions",

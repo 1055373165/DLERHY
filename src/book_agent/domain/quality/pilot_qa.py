@@ -56,6 +56,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from book_agent.domain.structure import parse_health
+from book_agent.domain.structure.callouts import CALLOUT_KIND_CODE, LooseBlock, is_tiny_image, split_callouts
 from book_agent.domain.structure.parse_health import (
     BLOCKING,
     MAJOR,
@@ -121,6 +122,7 @@ _SPECS = (
     CheckSpec("L1.running_header_as_text", MAJOR, "页眉被当成了正文或脚注", REPAIR_STRUCTURE),
     CheckSpec("L1.heading_merged_into_text", MAJOR, "小标题和正文粘在了一起", REPAIR_STRUCTURE),
     CheckSpec("L1.heading_as_text", MAJOR, "小标题被排成了正文段落", REPAIR_STRUCTURE),
+    CheckSpec("L1.icon_callout_split", MAJOR, "图标引出的提示框被拆成了零散段落", REPAIR_STRUCTURE),
     CheckSpec("L1.review_blocking", BLOCKING, "审校标记的结构阻断问题（如阅读顺序错乱）", REPAIR_REVIEW_RECHECK),
     CheckSpec("L2.figure_regions", BLOCKING, "图片裁剪不对（切掉了图，或框进了页眉、图注）", REPAIR_FIGURE_REGION),
     CheckSpec("L2.figure_without_image", BLOCKING, "图没有图片", REPAIR_FIGURE_REGION),
@@ -131,6 +133,7 @@ _SPECS = (
     # Blocking when the reader sees it as garbage (words split over cells, a token repeated over and over).
     CheckSpec("L2.figure_residue", MAJOR, "图里的文字被当成表格或代码，留在了正文里", REPAIR_STRUCTURE),
     CheckSpec("L2.image_fragments", MAJOR, "碎片图片或空白图片", REPAIR_PARSE),
+    CheckSpec("L2.tiny_icon_figure", MAJOR, "小图标被排成了整幅插图", REPAIR_STRUCTURE),
     CheckSpec("L2.figure_without_caption", MINOR, "图没有图注", REPAIR_STRUCTURE),
     CheckSpec("L2.review_blocking", BLOCKING, "审校标记的图片阻断问题", REPAIR_REVIEW_RECHECK),
     CheckSpec("L3.table_flattened", BLOCKING, "表格被压成了文字", REPAIR_STRUCTURE),
@@ -1030,6 +1033,61 @@ def check_figures(inputs: PilotQaInputs) -> list[CheckRun]:
                     )
                 )
     return [swallowed, no_image, orphan, no_caption]
+
+
+def check_icon_callouts(inputs: PilotQaInputs) -> list[CheckRun]:
+    """A small icon and the lines beside it read as loose pieces (a book parsed before callouts were
+    recognised), and any icon-sized picture drawn as a whole figure card.
+
+    ``callouts.split_callouts`` finds the pieces by geometry and fonts: an icon-sized image block
+    followed by blocks that start at its right edge, level with it, in a face other than the body's.
+    """
+    split = CheckRun("L1.icon_callout_split")
+    tiny = CheckRun("L2.tiny_icon_figure")
+    by_id = {block.block_id: block for block in inputs.blocks}
+    loose = [
+        LooseBlock(
+            block_id=block.block_id,
+            block_type="image" if _is_figure(block) else block.block_type,
+            text=block.source_text,
+            font_names=block.font_names,
+            regions=block.regions,
+        )
+        for block in inputs.blocks
+    ]
+    split_icons: set[str] = set()
+    for callout in split_callouts(loose):
+        icon = by_id[callout.icon.block_id]
+        split_icons.add(icon.block_id)
+        split.findings.append(
+            _block_finding(
+                "L1.icon_callout_split",
+                icon,
+                f"图标后面的 {len(callout.lines)} 行（「{_snippet(callout.lines[0].text, 40)}」）是一个"
+                f"{'代码' if callout.kind == CALLOUT_KIND_CODE else '提示'}框，被拆成了零散段落",
+                icon_block_id=icon.block_id,
+                line_block_ids=[line.block_id for line in callout.lines],
+                callout_kind=callout.kind,
+            )
+        )
+    for block in inputs.blocks:
+        if not _is_figure(block) or not block.regions or "artifact-figure" not in block.html:
+            continue
+        if not all(is_tiny_image(bbox) for _page, bbox in block.regions):
+            continue
+        _page, (x0, y0, x1, y1) = block.regions[0]
+        tiny.findings.append(
+            _block_finding(
+                "L2.tiny_icon_figure",
+                block,
+                f"只有 {x1 - x0:.0f}×{y1 - y0:.0f} 点的小图标被排成了一整幅插图"
+                + ("，它其实是提示框的图标" if block.block_id in split_icons else ""),
+                width=round(x1 - x0, 1),
+                height=round(y1 - y0, 1),
+                leads_callout=block.block_id in split_icons,
+            )
+        )
+    return [split, tiny]
 
 
 def check_figure_residue(inputs: PilotQaInputs) -> CheckRun:
@@ -2002,6 +2060,7 @@ def run_layers(inputs: PilotQaInputs, extra_checks: Sequence[ExtraCheck] = ()) -
         *check_headings_and_headers(inputs),
         check_headings_as_text(inputs),
         *check_figures(inputs),
+        *check_icon_callouts(inputs),
         check_figure_residue(inputs),
         *check_tables(inputs),
         *check_code_and_format(inputs),

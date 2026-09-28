@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from statistics import median
 from typing import Any
@@ -436,3 +436,81 @@ def callout_line_is_code(line: str) -> bool:
     """A line of a prompt that is data, not words to translate: a brace, a JSON key, a lone ``{placeholder}``."""
     stripped = line.strip()
     return bool(_BRACKETS_ONLY.match(stripped) or _JSON_KEY_LINE.match(stripped) or _LONE_PLACEHOLDER.match(stripped))
+
+
+# ---------------------------------------------------------------------------
+# Callouts a parse left in pieces (books parsed before callouts were recognised): the icon an image
+# block, each line a paragraph. The pilot QA reports them and the pilot repair merges them.
+
+# Block types a loose callout line may have been given.
+_LOOSE_LINE_TYPES = frozenset({"paragraph", "list_item", "quote", "code", "caption"})
+_IMAGE_TYPES = frozenset({"image", "figure"})
+
+
+@dataclass(frozen=True, slots=True)
+class LooseBlock:
+    """What the check needs of a block: its type, text, fonts and where it lies ((page, bbox) per region)."""
+
+    block_id: str
+    block_type: str
+    text: str
+    font_names: tuple[str, ...]
+    regions: tuple[tuple[int, tuple[float, float, float, float]], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SplitCallout:
+    icon: LooseBlock
+    lines: tuple[LooseBlock, ...]
+
+    @property
+    def kind(self) -> str:
+        return CALLOUT_KIND_CODE if looks_like_code_callout(line.text for line in self.lines) else CALLOUT_KIND_PROSE
+
+
+def body_font_of(blocks: Iterable[LooseBlock]) -> str | None:
+    """The face most paragraph text is set in."""
+    chars: Counter[str] = Counter()
+    for block in blocks:
+        fonts = text_fonts(block.font_names)
+        if block.block_type == "paragraph" and len(fonts) == 1:
+            chars[next(iter(fonts))] += len(block.text)
+    return chars.most_common(1)[0][0] if chars else None
+
+
+def split_callouts(blocks: Sequence[LooseBlock]) -> list[SplitCallout]:
+    """Icon-sized image blocks followed by the lines set beside them in a non-body face, in order."""
+    body_font = body_font_of(blocks)
+    if body_font is None:
+        return []
+    found: list[SplitCallout] = []
+    index = 0
+    while index < len(blocks):
+        icon = blocks[index]
+        index += 1
+        if icon.block_type not in _IMAGE_TYPES or len(icon.regions) != 1 or not is_icon_sized(icon.regions[0][1]):
+            continue
+        page, (ix0, iy0, ix1, iy1) = icon.regions[0]
+        lines: list[LooseBlock] = []
+        callout_fonts: frozenset[str] = frozenset()
+        last_page = page
+        while index < len(blocks):
+            candidate = blocks[index]
+            fonts = text_fonts(candidate.font_names)
+            if candidate.block_type not in _LOOSE_LINE_TYPES or not candidate.regions or not fonts or body_font in fonts:
+                break
+            first_page, (x0, y0, _x1, _y1) = candidate.regions[0]
+            if not lines:
+                # The first line starts at the icon's right edge, level with it.
+                beside = ix1 - 3.0 <= x0 <= ix1 + _FIRST_LINE_MAX_OFFSET and iy0 - 4.0 <= y0 <= iy1
+                if first_page != page or not beside:
+                    break
+                callout_fonts = fonts
+            elif not fonts & callout_fonts or first_page > last_page + 1:
+                break
+            lines.append(candidate)
+            last_page = max(region_page for region_page, _bbox in candidate.regions)
+            index += 1
+        if lines:
+            found.append(SplitCallout(icon=icon, lines=tuple(lines)))
+    return found

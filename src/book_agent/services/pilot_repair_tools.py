@@ -69,6 +69,8 @@ from book_agent.domain.models.translation import (
 from book_agent.domain.quality import pilot_qa
 from book_agent.domain.quality import zh_text_fixes as fixes
 from book_agent.domain.quality.pilot_repair import WorkItem
+from book_agent.domain.structure import parse_health
+from book_agent.domain.structure.callouts import CALLOUT_KIND_CODE, LooseBlock, split_callouts
 from book_agent.domain.structure.figure_clustering import FIGURE_REGION_CONTENT_EXTENT
 from book_agent.domain.structure.parse_health import HealthBlock
 from book_agent.domain.terminology.matching import SourceTermIndex, source_term_key
@@ -745,6 +747,61 @@ class PilotRepairToolbox:
                 merged_with = second.id if first.id == block.id else first.id
                 break
         return ToolResult(params={"block_id": block.id, "merged_with": merged_with}, block_ids=list(dict.fromkeys(block_ids)))
+
+    def _structure_edit__merge_icon_callout(self, item: WorkItem) -> ToolResult:
+        """An icon block and the loose lines beside it become one callout block.
+
+        The lines are found again on the chapter's blocks (``callouts.split_callouts``: set at the
+        icon's right in a non-body face), merged with a structure edit, and the callout's packets are
+        retranslated line by line. A code callout (a JSON object, a string assigned to a name) stays
+        code and is not translated.
+        """
+        finding = item.findings[0]
+        evidence = finding.get("evidence") or {}
+        icon = self._block(evidence.get("icon_block_id") or (finding.get("location") or {}).get("block_id"))
+        if icon.block_type not in {BlockType.IMAGE, BlockType.FIGURE}:
+            raise NotApplicable(f"a {icon.block_type.value} block is not an icon")
+        loose = []
+        for block in self._chapter_blocks(icon.chapter_id):
+            span = block.source_span_json or {}
+            if span.get("pdf_block_role") in {"header", "footer"} or span.get("repair_hidden_from_export"):
+                continue
+            loose.append(
+                LooseBlock(
+                    block_id=block.id,
+                    block_type=block.block_type.value,
+                    text=block.source_text or "",
+                    font_names=tuple(str(name) for name in span.get("pdf_font_names") or () if name),
+                    regions=tuple(parse_health.block_regions(span)),
+                )
+            )
+        callout = next((found for found in split_callouts(loose) if found.icon.block_id == icon.id), None)
+        if callout is None:
+            raise NotApplicable("no lines set beside this icon: it does not lead a callout")
+        line_ids = [line.block_id for line in callout.lines]
+        outcome = self.structure.merge_callout(
+            self.ctx.document_id,
+            icon.id,
+            line_ids,
+            actor_id=ACTOR_ID,
+            reason=f"图标和它后面的 {len(line_ids)} 行是一个{'代码' if callout.kind == CALLOUT_KIND_CODE else '提示'}框",
+        )
+        packets: list[str] = []
+        if callout.kind != CALLOUT_KIND_CODE:
+            fork_packets = list(getattr(outcome.fork, "retranslate_packet_ids", []) or []) if outcome.fork else []
+            packets = list(dict.fromkeys([*fork_packets, *self._packets_of_blocks([line_ids[0]])]))
+        done = self.retranslate(
+            packets,
+            [
+                "这是书中的一段示例提示词（放在带图标的提示框里）：每一行单独翻译成中文，保持原来的分行和列表符号，"
+                "不要把几行并成一段；{query} 这类占位符、代码标识符、JSON 键名原样保留。"
+            ],
+        )
+        return ToolResult(
+            params={"icon_block_id": icon.id, "line_block_ids": line_ids, "callout_kind": callout.kind},
+            block_ids=outcome.block_ids,
+            packet_ids=done,
+        )
 
     def _structure_edit__relabel_table_as_code(self, item: WorkItem) -> ToolResult:
         """A listing typed as a table becomes code; the export gate then checks the chapter again,
