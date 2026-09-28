@@ -107,6 +107,19 @@ class PlanTests(unittest.TestCase):
         second = rules.plan_work([item], {("c1", f"structure_edit.{first}")})[0].path.path
         self.assertEqual((first, second), ("split_caption", "unfold_caption_context"))
 
+    def test_review_blockers_are_rechecked_after_every_repair_that_changes_the_book(self) -> None:
+        work = rules.plan_work(
+            [finding("L1.review_blocking", "r1"), finding("L3.table_is_code", "t1"), finding("L1.heading_is_prose", "h1")], set()
+        )
+        self.assertEqual(
+            [item.path.name for item in work],
+            ["structure_edit.relabel_as_paragraph", "structure_edit.relabel_table_as_code", "review_recheck.rerun_detectors"],
+        )
+        # Every layer's review blocker has the recheck, and a code-typed table falls back to it.
+        for layer in ("L1", "L2", "L3", "L4", "L5", "L6", "L7"):
+            self.assertEqual([path.tool for path in rules.paths_for(f"{layer}.review_blocking")], ["review_recheck"])
+        self.assertEqual([path.path for path in rules.paths_for("L3.table_is_code")], ["relabel_table_as_code", "rerun_detectors"])
+
     def test_a_check_without_a_path_is_not_planned(self) -> None:
         self.assertEqual(rules.plan_work([finding("L7.stray_glyph", "g1")], set()), [])
 
@@ -151,6 +164,14 @@ class QuestionTests(unittest.TestCase):
                 continue
             _title, question = rules.escalation_question(check_id, [finding(check_id, "k", page=3)])
             self.assertTrue(question.endswith("？"), check_id)
+
+
+    def test_a_review_blocker_that_stays_asks_about_what_the_review_saw(self) -> None:
+        item = finding("L1.review_blocking", "r1", page=42)
+        item["message"] = "审校标记为阻断：阅读顺序可能错乱（多栏或复杂版式）（第 42、45 页）"
+        _title, question = rules.escalation_question("L1.review_blocking", [item])
+        self.assertIn("阅读顺序可能错乱", question)
+        self.assertTrue(question.endswith("吗？"))
 
 
 class TextFixTests(unittest.TestCase):

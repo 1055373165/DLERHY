@@ -46,6 +46,9 @@ TOOL_GLOSSARY = "glossary"
 TOOL_RETRANSLATE = "retranslate_packets"
 # A reversible correction of the translation text (a new attempt through the segment edit service).
 TOOL_SEGMENT_EDIT = "segment_edit"
+# Run the detector behind a review issue again (the review pass, or the export gate): an issue a
+# repair or a fixed rule no longer finds is resolved; nothing is changed but the issue ledger.
+TOOL_REVIEW_RECHECK = "review_recheck"
 TOOLS: tuple[str, ...] = (
     TOOL_RECOVERY_SKILLS,
     TOOL_RESPLIT,
@@ -55,6 +58,7 @@ TOOLS: tuple[str, ...] = (
     TOOL_GLOSSARY,
     TOOL_RETRANSLATE,
     TOOL_SEGMENT_EDIT,
+    TOOL_REVIEW_RECHECK,
 )
 
 # How an attempt covers findings: one finding, every finding of the check at once, or the findings
@@ -81,6 +85,7 @@ class RepairPath:
 
 _RETRANSLATE = RepairPath(TOOL_RETRANSLATE, "with_hints", SCOPE_PACKET, costs_model=True)
 _STRUCTURE_AGENT = RepairPath(TOOL_STRUCTURE, "agent_proposal", SCOPE_FINDING, needs_agent=True)
+_RECHECK = RepairPath(TOOL_REVIEW_RECHECK, "rerun_detectors")
 
 REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     # L1 结构
@@ -89,6 +94,7 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L1.heading_is_prose": (RepairPath(TOOL_STRUCTURE, "relabel_as_paragraph"),),
     "L1.running_header_as_text": (RepairPath(TOOL_STRUCTURE, "hide_running_header"),),
     "L1.heading_merged_into_text": (RepairPath(TOOL_STRUCTURE, "split_run_in_heading"), _STRUCTURE_AGENT),
+    "L1.review_blocking": (_RECHECK,),
     # L2 图表
     "L2.figure_regions": (RepairPath(TOOL_FIGURE_REGION, "fit_to_figure"),),
     "L2.caption_swallows_body": (
@@ -99,10 +105,16 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L2.caption_folds": (RepairPath(TOOL_STRUCTURE, "unfold_caption_context"),),
     "L2.orphan_caption": (RepairPath(TOOL_STRUCTURE, "link_caption"),),
     "L2.duplicated_labels": (RepairPath(TOOL_STRUCTURE, "hide_duplicated_label"),),
+    # The export gate's "no picture" is stale once the figure has one: its recheck resolves it.
+    "L2.figure_without_image": (_RECHECK,),
+    "L2.review_blocking": (_RECHECK,),
     # L3 表格
     "L3.table_garbled": (RepairPath(TOOL_STRUCTURE, "rebuild_table_cells"),),
     "L3.table_flattened": (RepairPath(TOOL_STRUCTURE, "rebuild_table_cells"),),
     "L3.table_untranslated": (_RETRANSLATE,),
+    # The block becomes code (what the reading copy already shows) and the export gate checks it again.
+    "L3.table_is_code": (RepairPath(TOOL_STRUCTURE, "relabel_table_as_code"), _RECHECK),
+    "L3.review_blocking": (_RECHECK,),
     # L4 代码与格式
     "L4.code_translated": (_RETRANSLATE,),
     "L4.prose_in_code": (RepairPath(TOOL_STRUCTURE, "relabel_as_paragraph"),),
@@ -112,6 +124,7 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L4.list_marker_lost": (_RETRANSLATE,),
     "L4.footnote_marker_lost": (_RETRANSLATE,),
     "L4.equation_altered": (_RETRANSLATE,),
+    "L4.review_blocking": (_RECHECK,),
     # L5 术语: settle the rendering in the glossary (it stays for the whole book), then fix the pilot's text.
     "L5.locked_term": (RepairPath(TOOL_SEGMENT_EDIT, "use_locked_rendering"), _RETRANSLATE),
     # The model first: a rendering can be right in its context ("嵌入向量" for "embedding vector");
@@ -121,6 +134,7 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
         RepairPath(TOOL_GLOSSARY, "lock_majority_and_unify"),
     ),
     "L5.term_left_in_english": (RepairPath(TOOL_GLOSSARY, "lock_and_retranslate", costs_model=True),),
+    "L5.review_blocking": (_RECHECK,),
     "L5.label_rendering": (
         RepairPath(TOOL_GLOSSARY, "unify_label_rendering"),
         RepairPath(TOOL_GLOSSARY, "lock_label_and_retranslate", costs_model=True),
@@ -131,12 +145,14 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L6.short_translation": (_RETRANSLATE,),
     "L6.number_mismatch": (_RETRANSLATE,),
     "L6.negation_lost": (_RETRANSLATE,),
+    "L6.review_blocking": (_RECHECK,),
     # L7 排版与纯净: deterministic text fixes over every finding of the check; the book's convention
     # goes into BOOK.md so the whole-book run writes it that way from the start.
     "L7.leaked_marker": (RepairPath(TOOL_SEGMENT_EDIT, "strip_leaked_markers", SCOPE_CHECK), _RETRANSLATE),
     "L7.untranslated_prose": (_RETRANSLATE,),
     "L7.cjk_latin_spacing": (RepairPath(TOOL_SEGMENT_EDIT, "cjk_latin_spacing", SCOPE_CHECK),),
     "L7.halfwidth_punctuation": (RepairPath(TOOL_SEGMENT_EDIT, "fullwidth_punctuation", SCOPE_CHECK),),
+    "L7.review_blocking": (_RECHECK,),
 }
 
 
@@ -331,6 +347,8 @@ def plan_work(findings: Sequence[Mapping[str, Any]], tried: set[tuple[str, str]]
         TOOL_BOOK_MD: 5,
         TOOL_RETRANSLATE: 6,
         TOOL_SEGMENT_EDIT: 7,
+        # After the repairs that change the book, so the detectors see them.
+        TOOL_REVIEW_RECHECK: 8,
     }
     groups: dict[tuple[str, str, str], WorkItem] = {}
     for finding in findings:
@@ -478,7 +496,12 @@ def escalation_question(check_id: str, findings: Sequence[Mapping[str, Any]]) ->
         "L7.leaked_marker": f"{lead}译文里混进了{marker_text}，自动清除没有成功。要在全书翻译前先由我们修复再继续吗？",
         "L7.stray_glyph": f"{lead}有异常字符（如 ¡），是原书字体解码的问题。要在全书翻译前先由我们修复解析再继续吗？",
         "L4.code_translated": f"{lead}有代码被翻译了，重译后仍然如此。要把这些代码块改为原样保留、不翻译吗？",
+        "L3.table_is_code": f"{lead}有一段代码被识别成了表格，自动改为代码没有成功。要把它按代码原样保留吗？",
     }
+    if check_id.endswith(".review_blocking"):
+        labels = sorted({str(finding.get("message") or "") for finding in findings} - {""})
+        what = "；".join(labels[:2]) + (f" 等 {count} 项" if count > 2 else "")
+        questions[check_id] = f"{what}。重新检查后仍然存在，没有可用的自动修复。要由我们按原书页面核对、修复后再继续吗？"
     question = questions.get(
         check_id,
         f"{lead}「{title}」共 {count} 处，自动修复没有解决。要按现在的样子继续、在全书翻译时再处理吗？",

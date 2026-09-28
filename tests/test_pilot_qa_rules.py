@@ -24,6 +24,7 @@ from book_agent.domain.quality.pilot_qa import (
     QaBlock,
     QaChapter,
     QaSentence,
+    ReviewBlocker,
     ReviewFinding,
 )
 from book_agent.domain.structure.parse_health import HealthBlock, HealthChapter, OutlineEntry
@@ -198,6 +199,7 @@ def build(
     exported: list[ExportedChapter] | None | str = "default",
     glossary: list[GlossaryTerm] | None = None,
     model_issues: list[ReviewFinding] | None = None,
+    review_blockers: list[ReviewBlocker] | None = None,
     figure_problems: dict[str, list[Any]] | None = None,
     health_extra: list[HealthBlock] | None = None,
     outline: list[OutlineEntry] | None = None,
@@ -233,6 +235,7 @@ def build(
         if glossary is not None
         else [GlossaryTerm("agent", ("智能体",), locked=True), GlossaryTerm("tool", ("工具",))],
         model_issues=model_issues or [],
+        review_blockers=review_blockers or [],
         exported=[ExportedChapter(C1, "1 为什么需要智能体", ""), ExportedChapter(C2, "2 循环", "")]
         if exported == "default"
         else exported,  # type: ignore[arg-type]
@@ -246,6 +249,123 @@ def findings(inputs: PilotQaInputs) -> list[dict[str, Any]]:
 
 def replace_block(blocks: list[QaBlock], block_id: str, **changes: Any) -> list[QaBlock]:
     return [dataclasses.replace(block, **changes) if block.block_id == block_id else block for block in blocks]
+
+
+def blocker(issue_type: str, *, detector: str = "rule", root: str = "structure", **fields: Any) -> ReviewBlocker:
+    fields.setdefault("chapter_id", C2)
+    return ReviewBlocker(
+        issue_id=fields.pop("issue_id", f"issue-{issue_type.lower()}"),
+        issue_type=issue_type,
+        severity=fields.pop("severity", "critical"),
+        root_cause_layer=root,
+        detector=detector,
+        **fields,
+    )
+
+
+LISTING = (
+    'from litellm import completion\nresponse = completion(\nmodel="gpt-5-mini",\n'
+    'messages=[{"role": "user", "content": "Hello!"}]\n)'
+)
+
+
+def gate_issue(block_id: str, code: str, excerpt: str = "") -> ReviewBlocker:
+    """The export layout gate's issue (services/export.py sync_gate_issues) for one block."""
+    return blocker(
+        "LAYOUT_VALIDATION_FAILURE",
+        root="export",
+        issue_id=f"gate-{block_id}",
+        severity="high",
+        evidence={
+            "reason": "export_layout_validation",
+            "layout_issues": [
+                {
+                    "block_id": block_id,
+                    "issue_code": code,
+                    "blocking": True,
+                    "severity": "high",
+                    "evidence": {"artifact_kind": "code", "source_excerpt": excerpt},
+                }
+            ],
+        },
+    )
+
+
+class ReviewBlockerTests(unittest.TestCase):
+    """The pilot gate is the one verdict on "no blocking problems": every open blocking review
+    issue of the pilot chapters is a finding in its layer, with a repair path or a question."""
+
+    def found(self, inputs: PilotQaInputs, check_id: str) -> list[dict[str, Any]]:
+        return [finding for finding in findings(inputs) if finding["check_id"] == check_id]
+
+    def test_a_blocking_reading_order_issue_is_a_blocking_structure_finding(self) -> None:
+        # The RAG book: MISORDERING, review_policy default_blocking_layout_risk, pages 42 and 45.
+        issue = blocker(
+            "MISORDERING",
+            issue_id="i-mis",
+            evidence={"layout_risk": "high", "page_layout_risk_pages": [42, 45], "review_policy": "default_blocking_layout_risk"},
+        )
+        layers = pilot_qa.run_layers(build(review_blockers=[issue]))
+        [finding] = [f for layer in layers for f in layer["findings"] if f["check_id"] == "L1.review_blocking"]
+        self.assertEqual(finding["severity"], BLOCKING)
+        self.assertEqual(finding["repair"], "review_recheck")
+        self.assertEqual(finding["key"], "L1.review_blocking:issue:i-mis")
+        self.assertEqual(finding["location"], {"chapter_id": C2, "page": 42})
+        self.assertIn("阅读顺序", finding["message"])
+        self.assertIn("42、45", finding["message"])
+        self.assertEqual(finding["evidence"]["review_policy"], "default_blocking_layout_risk")
+        self.assertEqual(pilot_qa.summarize(layers)["counts"]["blocking"], 1)
+
+    def test_the_export_gate_blocking_a_code_listing_typed_as_a_table_is_one_blocking_table_is_code(self) -> None:
+        # The Agent book: listing 2.4 parsed as a table, rendered as code; the layout gate blocks it.
+        listing = rendered("b-lst", C2, "table", LISTING, "", mode="source_artifact_full_width", kind="code", page=36)
+        inputs = build([*clean_blocks(), listing], review_blockers=[gate_issue("b-lst", "TABLE_STRUCTURE_UNRENDERABLE")])
+        hits = self.found(inputs, "L3.table_is_code")
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["severity"], BLOCKING)
+        self.assertEqual(hits[0]["key"], "L3.table_is_code:block:b-lst")
+        self.assertEqual(hits[0]["evidence"]["issue_code"], "TABLE_STRUCTURE_UNRENDERABLE")
+        self.assertEqual(self.found(inputs, "L3.review_blocking"), [])
+
+    def test_a_gate_issue_on_a_block_the_pilot_does_not_render_still_counts(self) -> None:
+        inputs = build(review_blockers=[gate_issue("b-gone", "TABLE_STRUCTURE_UNRENDERABLE", excerpt=LISTING)])
+        [hit] = self.found(inputs, "L3.table_is_code")
+        self.assertEqual((hit["severity"], hit["target"]), (BLOCKING, {"kind": "block", "id": "b-gone"}))
+
+    def test_other_gate_codes_land_in_their_layer(self) -> None:
+        inputs = build(
+            review_blockers=[
+                gate_issue("b-fig", "FIGURE_ASSET_MISSING"),
+                gate_issue("b-h2", "HEADING_LEVEL_SKIP"),
+                gate_issue("b-t", "TABLE_EMPTY"),
+            ]
+        )
+        self.assertEqual([f["severity"] for f in self.found(inputs, "L2.figure_without_image")], [BLOCKING])
+        self.assertEqual([f["location"].get("block_id") for f in self.found(inputs, "L1.review_blocking")], ["b-h2"])
+        self.assertEqual([f["location"].get("block_id") for f in self.found(inputs, "L3.review_blocking")], ["b-t"])
+
+    def test_issues_without_a_layer_of_their_own_go_by_root_cause(self) -> None:
+        inputs = build(
+            review_blockers=[
+                blocker("OMISSION", root="translation", packet_id=P2, sentence_id="s-x"),
+                blocker("SOMETHING_NEW", root="export", detector="human"),
+            ]
+        )
+        [omission] = self.found(inputs, "L6.review_blocking")
+        self.assertEqual(omission["target"], {"kind": "packet", "id": P2})
+        [other] = self.found(inputs, "L7.review_blocking")
+        self.assertIn("人工审校", other["message"])
+
+    def test_the_reviewer_agents_translation_findings_are_not_counted_twice(self) -> None:
+        issue = blocker("MISTRANSLATION_SEMANTIC", detector="model", root="translation")
+        self.assertEqual(self.found(build(review_blockers=[issue]), "L6.review_blocking"), [])
+
+    def test_a_blocking_model_finding_is_blocking_whatever_its_severity(self) -> None:
+        issue = ReviewFinding(
+            issue_id="i-m", issue_type="OMISSION", severity="medium", chapter_id=C1, packet_id=P1, sentence_id="s-b-p1", blocking=True
+        )
+        [finding] = self.found(build(model_issues=[issue]), "L6.model_review")
+        self.assertEqual(finding["severity"], BLOCKING)
 
 
 class CleanPilotTests(unittest.TestCase):
@@ -538,12 +658,14 @@ class KnownIssueTests(unittest.TestCase):
         found = self.assertFound(build([*clean_blocks(), bold]), "L7.leaked_marker", BLOCKING, target_id="b-md")
         self.assertEqual(found["evidence"]["marker"], "**")
 
-    def test_code_parsed_as_a_table_is_flagged_unless_the_reading_copy_sets_it_as_code(self) -> None:
+    def test_code_parsed_as_a_table_is_flagged_even_when_the_reading_copy_sets_it_as_code(self) -> None:
         code = "| from litellm import completion |\n| response = completion( |\n| model=\"gpt-5-mini\", |"
         as_table = rendered("b-tc", C2, "table", code, "", mode="translated_wrapper_with_preserved_artifact", kind="table", page=36)
         self.assertFound(build([*clean_blocks(), as_table]), "L3.table_is_code", MAJOR, target_id="b-tc")
+        # The reader sees code, but the block is still a table to the export's layout gate.
         as_code = rendered("b-tc", C2, "table", code, "", mode="source_artifact_full_width", kind="code", page=36)
-        self.assertNotIn("L3.table_is_code", [finding["check_id"] for finding in findings(build([*clean_blocks(), as_code]))])
+        found = self.assertFound(build([*clean_blocks(), as_code]), "L3.table_is_code", MAJOR, target_id="b-tc")
+        self.assertEqual(found["repair"], "structure_edit")
 
     def test_a_running_header_kept_as_a_footnote(self) -> None:
         header = rendered("b-rh", C2, "footnote", "11\nThe loop", "11 循环", page=33)

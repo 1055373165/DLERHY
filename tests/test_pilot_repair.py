@@ -511,6 +511,66 @@ class RepairAgentTests(PilotRepairBenchCase):
 
 
 class AttemptRecordTests(PilotRepairBenchCase):
+    def _open_review_issue(self, chapter_id: str, issue_type: str, *, detector: str, evidence: dict) -> str:
+        from datetime import datetime, timezone
+
+        from book_agent.domain.enums import Detector, IssueStatus, RootCauseLayer, Severity
+        from book_agent.domain.models.review import ReviewIssue
+
+        with self.bench.session_factory() as session:
+            now = datetime.now(timezone.utc)
+            issue = ReviewIssue(
+                document_id=self.bench.document_id,
+                chapter_id=chapter_id,
+                issue_type=issue_type,
+                root_cause_layer=RootCauseLayer.STRUCTURE,
+                severity=Severity.CRITICAL,
+                blocking=True,
+                detector=Detector(detector),
+                evidence_json=evidence,
+                status=IssueStatus.OPEN,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(issue)
+            session.commit()
+            return issue.id
+
+    def test_a_stale_blocking_review_issue_is_a_finding_and_its_recheck_resolves_it(self) -> None:
+        # The RAG book: a MISORDERING the review pass opened under the old blanket policy.
+        from book_agent.domain.enums import IssueStatus
+        from book_agent.domain.models.review import ReviewIssue
+
+        chapter_ids = self.translate()
+        issue_id = self._open_review_issue(
+            chapter_ids[0],
+            "MISORDERING",
+            detector="rule",
+            evidence={"layout_risk": "high", "review_policy": "default_blocking_layout_risk", "page_layout_risk_pages": []},
+        )
+        (before,) = _findings(self.qa(), "L1.review_blocking")
+        self.assertEqual((before["severity"], before["key"]), ("blocking", f"L1.review_blocking:issue:{issue_id}"))
+
+        payload, final = self.repair()
+
+        (kept,) = self.attempts(payload, "kept")
+        self.assertEqual((kept["tool"], kept["path"]), ("review_recheck", "rerun_detectors"))
+        self.assertEqual(_findings(final, "L1.review_blocking"), [])
+        self.assertEqual(payload["questions"], [])
+        with self.bench.session_factory() as session:
+            self.assertEqual(session.get(ReviewIssue, issue_id).status, IssueStatus.RESOLVED)
+
+    def test_a_blocking_issue_no_detector_owns_goes_to_the_reader(self) -> None:
+        chapter_ids = self.translate()
+        self._open_review_issue(chapter_ids[0], "MISORDERING", detector="human", evidence={"page_layout_risk_pages": [2]})
+
+        payload, final = self.repair()
+
+        self.assertEqual(self.attempts(payload, "kept"), [])
+        self.assertEqual(len(_findings(final, "L1.review_blocking")), 1)
+        (question,) = payload["questions"]
+        self.assertEqual(question["check_id"], "L1.review_blocking")
+
     def test_every_attempt_is_recorded_for_the_ledger(self) -> None:
         with self.bench.session_factory() as session:
             (omitted,) = sentence_ids(session, self.bench.document_id, "Teams track the score")

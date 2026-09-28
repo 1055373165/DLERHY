@@ -28,6 +28,11 @@ L7     排版与纯净  program notes leaked into the text ("图片锚点保留"
                    convention, half-width punctuation in Chinese, odd whitespace
 =====  ==========  ==================================================================================
 
+The review ledger's open blocking issues in the pilot chapters (the review pass, the export gate,
+a person) are findings too, each in its layer (``check_review_blockers``): the pilot gate is the
+one verdict on "no blocking problems", so an issue either gets a repair path here, is resolved by
+running its detector again, or goes to the reader as a question.
+
 Every finding carries a stable ``check_id`` ("L2.caption_swallows_body"), its layer and severity,
 where it is (chapter, packet, block, sentence, page), evidence, and a ``key`` naming what a repair
 would act on ("L2.figure_without_image:block:<id>"), so the repair agent (Q5) can take the report
@@ -86,6 +91,8 @@ REPAIR_GLOSSARY = "glossary"
 REPAIR_PARSE = "parse_recovery"
 REPAIR_EXPORT_CODE = "export_code"
 REPAIR_PILOT = "pilot_selection"
+# Run the review pass or the export gate that opened a review issue again (a stale issue resolves).
+REPAIR_REVIEW_RECHECK = "review_recheck"
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +118,7 @@ _SPECS = (
     CheckSpec("L1.heading_is_prose", MAJOR, "正文句子被当成了标题", REPAIR_STRUCTURE),
     CheckSpec("L1.running_header_as_text", MAJOR, "页眉被当成了正文或脚注", REPAIR_STRUCTURE),
     CheckSpec("L1.heading_merged_into_text", MAJOR, "小标题和正文粘在了一起", REPAIR_STRUCTURE),
+    CheckSpec("L1.review_blocking", BLOCKING, "审校标记的结构阻断问题（如阅读顺序错乱）", REPAIR_REVIEW_RECHECK),
     CheckSpec("L2.figure_regions", BLOCKING, "图片裁剪不对（切掉了图，或框进了页眉、图注）", REPAIR_FIGURE_REGION),
     CheckSpec("L2.figure_without_image", BLOCKING, "图没有图片", REPAIR_FIGURE_REGION),
     CheckSpec("L2.caption_swallows_body", BLOCKING, "图注里混进了正文", REPAIR_STRUCTURE),
@@ -119,6 +127,7 @@ _SPECS = (
     CheckSpec("L2.duplicated_labels", MAJOR, "图中的标注又作为正文出现", REPAIR_STRUCTURE),
     CheckSpec("L2.image_fragments", MAJOR, "碎片图片或空白图片", REPAIR_PARSE),
     CheckSpec("L2.figure_without_caption", MINOR, "图没有图注", REPAIR_STRUCTURE),
+    CheckSpec("L2.review_blocking", BLOCKING, "审校标记的图片阻断问题", REPAIR_REVIEW_RECHECK),
     CheckSpec("L3.table_flattened", BLOCKING, "表格被压成了文字", REPAIR_STRUCTURE),
     CheckSpec("L3.table_garbled", BLOCKING, "表格没有拆开（单元格里还有竖线）", REPAIR_STRUCTURE),
     CheckSpec("L3.table_ragged", MAJOR, "表格各行列数不一致", REPAIR_STRUCTURE),
@@ -126,6 +135,7 @@ _SPECS = (
     CheckSpec("L3.table_sparse", MAJOR, "表格大半是空格子（多半是图被当成了表格）", REPAIR_STRUCTURE),
     CheckSpec("L3.table_is_code", MAJOR, "代码被当成了表格", REPAIR_STRUCTURE),
     CheckSpec("L3.table_untranslated", MAJOR, "表格内容没有翻译", REPAIR_RETRANSLATE),
+    CheckSpec("L3.review_blocking", BLOCKING, "审校标记的表格阻断问题", REPAIR_REVIEW_RECHECK),
     CheckSpec("L4.code_translated", BLOCKING, "代码被翻译了", REPAIR_RETRANSLATE),
     CheckSpec("L4.prose_in_code", MAJOR, "正文被当成代码，没有翻译", REPAIR_STRUCTURE),
     CheckSpec("L4.pseudo_headings", MAJOR, "代码注释被当成了标题", REPAIR_STRUCTURE),
@@ -135,17 +145,20 @@ _SPECS = (
     CheckSpec("L4.list_marker_lost", MAJOR, "列表编号丢了", REPAIR_RETRANSLATE),
     CheckSpec("L4.footnote_marker_lost", MAJOR, "脚注编号丢了", REPAIR_RETRANSLATE),
     CheckSpec("L4.equation_altered", MAJOR, "公式被改动了", REPAIR_RETRANSLATE),
+    CheckSpec("L4.review_blocking", BLOCKING, "审校标记的代码或格式阻断问题", REPAIR_REVIEW_RECHECK),
     CheckSpec("L5.locked_term", MAJOR, "没有遵守锁定的术语", REPAIR_RETRANSLATE),
     CheckSpec("L5.term_variants", MAJOR, "同一术语用了几种译法", REPAIR_GLOSSARY),
     CheckSpec("L5.term_left_in_english", MAJOR, "术语有时翻译、有时留英文", REPAIR_GLOSSARY),
     CheckSpec("L5.label_rendering", MAJOR, "图、表、代码清单的编号叫法前后不一", REPAIR_GLOSSARY),
     CheckSpec("L5.mixed_rendering", MINOR, "同一个词有时翻译、有时留英文", REPAIR_GLOSSARY),
+    CheckSpec("L5.review_blocking", BLOCKING, "审校标记的术语阻断问题", REPAIR_REVIEW_RECHECK),
     CheckSpec("L6.model_review", MAJOR, "模型审校发现的错译、漏译", REPAIR_RETRANSLATE),
     CheckSpec("L6.untranslated_sentence", BLOCKING, "有句子没有译文（漏译）", REPAIR_RETRANSLATE),
     CheckSpec("L6.short_translation", MAJOR, "译文比原文短得多，可能漏译", REPAIR_RETRANSLATE),
     CheckSpec("L6.number_mismatch", MAJOR, "原文里的数字在译文里不见了", REPAIR_RETRANSLATE),
     CheckSpec("L6.negation_lost", MAJOR, "原文是否定，译文里没有否定", REPAIR_RETRANSLATE),
     CheckSpec("L6.comparative_lost", MINOR, "原文的比较关系在译文里不见了", REPAIR_RETRANSLATE),
+    CheckSpec("L6.review_blocking", BLOCKING, "审校标记的译文阻断问题（漏译、对齐）", REPAIR_REVIEW_RECHECK),
     CheckSpec("L7.leaked_marker", BLOCKING, "译文里混进了程序提示", REPAIR_EXPORT_CODE),
     CheckSpec("L7.stray_glyph", BLOCKING, "异常字符（如 ¡、乱码）", REPAIR_PARSE),
     CheckSpec("L7.untranslated_prose", MAJOR, "整段没有翻译，读者看到的是英文", REPAIR_RETRANSLATE),
@@ -153,6 +166,7 @@ _SPECS = (
     CheckSpec("L7.halfwidth_punctuation", MAJOR, "中文里用了半角标点", REPAIR_RETRANSLATE),
     CheckSpec("L7.english_residue", MINOR, "译文里残留整句英文", REPAIR_RETRANSLATE),
     CheckSpec("L7.odd_whitespace", MINOR, "异常空白（全角空格、连续空格）", REPAIR_RETRANSLATE),
+    CheckSpec("L7.review_blocking", BLOCKING, "审校标记的导出阻断问题", REPAIR_REVIEW_RECHECK),
 )
 CHECKS: dict[str, CheckSpec] = {spec.check_id: spec for spec in _SPECS}
 
@@ -242,6 +256,27 @@ class ReviewFinding:
     target_text: str = ""
     explanation: str = ""
     suggested_target_text: str = ""
+    # The issue blocks the chapter (the review ledger's own verdict, whatever its severity).
+    blocking: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewBlocker:
+    """An open blocking ``review_issues`` row of a pilot chapter: the review pass's, the export
+    gate's, or a person's. The pilot gate is the one verdict on "no blocking problems", so each
+    of these is a finding (repaired, rechecked or escalated), never a second opinion beside it.
+    """
+
+    issue_id: str
+    issue_type: str
+    severity: str  # low | medium | high | critical
+    chapter_id: str | None
+    root_cause_layer: str
+    detector: str  # rule | model | human
+    block_id: str | None = None
+    sentence_id: str | None = None
+    packet_id: str | None = None
+    evidence: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -265,6 +300,7 @@ class PilotQaInputs:
     sentences: Sequence[QaSentence]
     glossary: Sequence[GlossaryTerm] = ()
     model_issues: Sequence[ReviewFinding] = ()
+    review_blockers: Sequence[ReviewBlocker] = ()
     # The exported reading copy's chapter sections; None when the pilot has no export to read.
     exported: Sequence[ExportedChapter] | None = None
     health: HealthInputs | None = None
@@ -960,9 +996,9 @@ def check_tables(inputs: PilotQaInputs) -> list[CheckRun]:
         if _is_table(block):
             label = _snippet(block.caption_text or block.target_text or "这个表格", 40)
             if looks_like_code(block.source_text):
-                # The reading copy already sets it as code: the reader sees code, not a broken table.
-                if block.artifact_kind != "code":
-                    is_code.findings.append(_block_finding("L3.table_is_code", block, f"{label}其实是一段代码"))
+                # Even when the reading copy already sets it as code, the block is still a table to
+                # the export's layout gate, which blocks it as a table it cannot draw.
+                is_code.findings.append(_block_finding("L3.table_is_code", block, f"{label}其实是一段代码"))
                 continue
             rows = _table_rows(block.html)
             if not rows:
@@ -1397,6 +1433,8 @@ def check_model_review(inputs: PilotQaInputs) -> CheckRun:
         if label is None:
             continue
         severity = MINOR if issue.issue_type == "STYLE_DRIFT" else _MODEL_SEVERITY.get(issue.severity, MAJOR)
+        if issue.blocking:
+            severity = BLOCKING
         target = (
             {"kind": "packet", "id": issue.packet_id}
             if issue.packet_id
@@ -1420,6 +1458,169 @@ def check_model_review(inputs: PilotQaInputs) -> CheckRun:
             )
         )
     return run
+
+
+# ---------------------------------------------------------------------------
+# The review ledger's blocking issues (review pass, export gate, people) in the pilot chapters
+
+_REVIEW_ISSUE_LAYERS = {
+    "MISORDERING": "L1",
+    "STRUCTURE_POLLUTION": "L1",
+    "DUPLICATION": "L1",
+    "IMAGE_CAPTION_RECOVERY_REQUIRED": "L2",
+    "ARTIFACT_GROUP_RECOVERY_REQUIRED": "L2",
+    "FOOTNOTE_RECOVERY_REQUIRED": "L4",
+    "TERM_CONFLICT": "L5",
+    "UNLOCKED_KEY_CONCEPT": "L5",
+    "OMISSION": "L6",
+    "ALIGNMENT_FAILURE": "L6",
+    "LOW_CONFIDENCE": "L6",
+    "CONTEXT_FAILURE": "L6",
+    "STALE_CHAPTER_BRIEF": "L6",
+    "FORMAT_POLLUTION": "L7",
+}
+_ROOT_CAUSE_LAYERS = {
+    "ingest": "L1",
+    "parse": "L1",
+    "structure": "L1",
+    "segment": "L1",
+    "memory": "L5",
+    "packet": "L6",
+    "translation": "L6",
+    "alignment": "L6",
+    "review": "L6",
+    "export": "L7",
+    "ops": "L7",
+}
+_REVIEW_ISSUE_LABELS = {
+    "MISORDERING": "阅读顺序可能错乱（多栏或复杂版式）",
+    "STRUCTURE_POLLUTION": "页眉页脚混进了正文",
+    "DUPLICATION": "内容重复",
+    "IMAGE_CAPTION_RECOVERY_REQUIRED": "图没有配上图注",
+    "ARTIFACT_GROUP_RECOVERY_REQUIRED": "图表没有和它的说明归在一起",
+    "FOOTNOTE_RECOVERY_REQUIRED": "脚注没有找回",
+    "TERM_CONFLICT": "术语与术语表冲突",
+    "UNLOCKED_KEY_CONCEPT": "关键概念没有锁定译法",
+    "OMISSION": "漏译",
+    "ALIGNMENT_FAILURE": "译文与原文没有对齐",
+    "LOW_CONFIDENCE": "译文可信度低",
+    "CONTEXT_FAILURE": "翻译上下文缺失",
+    "STALE_CHAPTER_BRIEF": "章节摘要过期",
+    "FORMAT_POLLUTION": "译文里混进了格式残留",
+}
+# The export layout gate's codes (services/layout_validate.py): layer and what the reader would see.
+_LAYOUT_CODES = {
+    "TABLE_STRUCTURE_UNRENDERABLE": ("L3", "表格没有可识别的行列，导出画不出来"),
+    "TABLE_EMPTY": ("L3", "表格是空的"),
+    "FIGURE_ASSET_MISSING": ("L2", "图没有可导出的图片"),
+    "HEADING_EMPTY": ("L1", "标题是空的"),
+    "HEADING_LEVEL_SKIP": ("L1", "标题层级跳级"),
+    "FOOTNOTE_EMPTY": ("L4", "脚注是空的"),
+    "FOOTNOTE_ANCHOR_ORPHANED": ("L4", "脚注找不到正文里的标号"),
+}
+_REVIEWER_LABELS = {"rule": "审校", "human": "人工审校", "model": "模型审校"}
+
+
+def _review_pages(evidence: dict[str, Any]) -> list[int]:
+    for key in ("high_layout_risk_pages", "page_layout_risk_pages", "suspicious_page_numbers", "uncaptioned_page_numbers", "missing_group_context_page_numbers"):
+        pages = [int(page) for page in evidence.get(key) or [] if isinstance(page, int)]
+        if pages:
+            return sorted(set(pages))
+    return []
+
+
+def check_review_blockers(inputs: PilotQaInputs) -> list[CheckRun]:
+    """Every open blocking review issue of the pilot chapters as a finding, in its layer.
+
+    The export gate's layout issues are one finding per blocked block: a table that is really code
+    is ``L3.table_is_code`` (its repair relabels the block), a figure without its picture is
+    ``L2.figure_without_image``; the rest is ``Lx.review_blocking``, whose repair runs the detector
+    that opened the issue again (a stale issue resolves) and otherwise asks the reader. The
+    Reviewer Agent's translation findings are ``L6.model_review`` already.
+    """
+    runs: dict[str, CheckRun] = {
+        check_id: CheckRun(check_id) for check_id in CHECKS if check_id.endswith(".review_blocking")
+    }
+    blocks = {block.block_id: block for block in inputs.blocks}
+
+    def add(finding: Finding) -> None:
+        runs.setdefault(finding.check_id, CheckRun(finding.check_id)).findings.append(finding)
+
+    for issue in inputs.review_blockers:
+        if issue.detector == "model" and issue.issue_type in _MODEL_ISSUE_TYPES:
+            continue
+        evidence = dict(issue.evidence or {})
+        who = _REVIEWER_LABELS.get(issue.detector, "审校")
+        layout_issues = [
+            entry for entry in evidence.get("layout_issues") or [] if isinstance(entry, dict) and entry.get("blocking", True)
+        ]
+        if issue.issue_type == "LAYOUT_VALIDATION_FAILURE" and layout_issues:
+            for entry in layout_issues:
+                code = str(entry.get("issue_code") or "")
+                layer, label = _LAYOUT_CODES.get(code, ("L7", str(entry.get("message") or code)))
+                block_id = str(entry.get("block_id") or issue.block_id or "") or None
+                block = blocks.get(block_id or "")
+                detail = entry.get("evidence") if isinstance(entry.get("evidence"), dict) else {}
+                source = block.source_text if block is not None else str(detail.get("source_excerpt") or "")
+                common = {"issue_id": issue.issue_id, "issue_type": issue.issue_type, "issue_code": code}
+                if code.startswith("TABLE_") and looks_like_code(source):
+                    check_id, message = "L3.table_is_code", f"导出检查拦下了一张表格：{label}；它其实是一段代码"
+                elif code == "FIGURE_ASSET_MISSING":
+                    check_id, message = "L2.figure_without_image", f"导出检查：{label}"
+                else:
+                    check_id, message = f"{layer}.review_blocking", f"导出检查：{label}"
+                if block is not None and check_id != f"{layer}.review_blocking":
+                    add(_block_finding(check_id, block, message, severity=BLOCKING, **common))
+                    continue
+                add(
+                    Finding(
+                        check_id,
+                        BLOCKING,
+                        {"kind": "block", "id": block_id} if block_id else {"kind": "chapter", "id": issue.chapter_id or ""},
+                        Location(chapter_id=issue.chapter_id, block_id=block_id, page=block.page if block is not None else None),
+                        message,
+                        {**common, "source": _snippet(source)},
+                        # The issue is the problem: its recheck resolves it, whatever else is on the block.
+                        subject=f"issue:{issue.issue_id}:{block_id or ''}:{code}" if check_id.endswith("review_blocking") else None,
+                    )
+                )
+            continue
+        layer = _REVIEW_ISSUE_LAYERS.get(issue.issue_type) or _ROOT_CAUSE_LAYERS.get(issue.root_cause_layer, "L1")
+        label = _REVIEW_ISSUE_LABELS.get(issue.issue_type, issue.issue_type)
+        pages = _review_pages(evidence)
+        where = f"（第 {'、'.join(str(page) for page in pages[:6])}{' 等' if len(pages) > 6 else ''} 页）" if pages else ""
+        target = (
+            {"kind": "packet", "id": issue.packet_id}
+            if issue.packet_id
+            else {"kind": "block", "id": issue.block_id}
+            if issue.block_id
+            else {"kind": "chapter", "id": issue.chapter_id or ""}
+        )
+        add(
+            Finding(
+                f"{layer}.review_blocking",
+                BLOCKING,
+                target,
+                Location(
+                    chapter_id=issue.chapter_id,
+                    packet_id=issue.packet_id,
+                    block_id=issue.block_id,
+                    sentence_id=issue.sentence_id,
+                    page=pages[0] if pages else None,
+                ),
+                f"{who}标记为阻断：{label}{where}",
+                {
+                    "issue_id": issue.issue_id,
+                    "issue_type": issue.issue_type,
+                    "root_cause_layer": issue.root_cause_layer,
+                    "detector": issue.detector,
+                    "review_policy": evidence.get("review_policy"),
+                    "pages": pages,
+                },
+                subject=f"issue:{issue.issue_id}",
+            )
+        )
+    return list(runs.values())
 
 
 # A translation shorter than this share of its source's length (Chinese characters count double) has lost content.
@@ -1672,6 +1873,7 @@ def run_layers(inputs: PilotQaInputs, extra_checks: Sequence[ExtraCheck] = ()) -
         check_label_rendering(inputs),
         check_mixed_rendering(inputs),
         check_model_review(inputs),
+        *check_review_blockers(inputs),
         *check_faithfulness(inputs),
         *check_purity(inputs),
         *health.values(),
@@ -1692,10 +1894,14 @@ def run_layers(inputs: PilotQaInputs, extra_checks: Sequence[ExtraCheck] = ()) -
         run = merged.get(spec.check_id)
         if run is None:
             continue
-        # One finding per repair target and check: the same block found twice is one problem.
+        # One finding per repair target and check: the same block found twice is one problem, at
+        # its most severe (a table the export gate blocks is blocking, not just "code set as a table").
+        order = {severity: index for index, severity in enumerate(SEVERITY_ORDER)}
         unique: dict[str, Finding] = {}
         for finding in run.findings:
-            unique.setdefault(finding.key, finding)
+            kept = unique.get(finding.key)
+            if kept is None or order.get(finding.severity, 9) < order.get(kept.severity, 9):
+                unique[finding.key] = finding
         run.findings = list(unique.values())[:MAX_FINDINGS_PER_CHECK]
         by_layer[spec.layer].append(run)
     return [layer_report(layer, by_layer.get(layer, [])) for layer, _name in LAYERS]
