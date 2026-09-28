@@ -247,6 +247,19 @@ class CalloutRenderTests(unittest.TestCase):
         )
         self.assertEqual(markup.callout_target_text(sentences, {}, target_map), "")
 
+    def test_lines_the_model_translated_together_stay_chinese(self) -> None:
+        sentences = [
+            SimpleNamespace(id="s1", ordinal_in_block=1, source_text="When intent is clear, act.", translatable=True),
+            SimpleNamespace(id="s2", ordinal_in_block=2, source_text="Only when unclear, ask.", translatable=True),
+        ]
+        joined = {"s1": ["t1"], "s2": ["t1"]}
+        # One translation per line inside the joined segment: the lines come back.
+        split = {"t1": SimpleNamespace(text_zh="意图明确时，直接执行。只有不明确时，才提问。")}
+        self.assertEqual(markup.callout_target_text(sentences, joined, split), "意图明确时，直接执行。\n只有不明确时，才提问。")
+        # Otherwise the joined translation stays on the first line; no English line is shown.
+        whole = {"t1": SimpleNamespace(text_zh="意图明确时直接执行，不明确时才提问。")}
+        self.assertEqual(markup.callout_target_text(sentences, joined, whole), "意图明确时直接执行，不明确时才提问。")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -123,6 +123,10 @@ def render_callout_html(
     )
 
 
+# After the end of a Chinese sentence (closing quotes stay with it).
+_ZH_SENTENCE_END = re.compile(r"(?<=[。！？!?])(?![”’」』）)])")
+
+
 def callout_target_text(
     block_sentences: list[object],
     sentence_targets: dict[str, list[str]],
@@ -133,22 +137,41 @@ def callout_target_text(
     A data line (a brace, a JSON key) stays as written; a line without a translation shows its
     source. Empty when nothing is translated yet, so the block falls back to its source.
     """
+    ordered = sorted(block_sentences, key=lambda item: getattr(item, "ordinal_in_block", 0))
+    # A translation the model wrote for several lines at once: split back into its sentences when
+    # there is one per line, else it stays on the first of those lines.
+    sharing: dict[str, list[str]] = {}
+    for sentence in ordered:
+        if getattr(sentence, "translatable", True):
+            for target_id in sentence_targets.get(sentence.id, []):
+                if target_id in target_map:
+                    sharing.setdefault(target_id, []).append(sentence.id)
+    parts_by_line: dict[str, list[str]] = {}
+    for target_id, sentence_ids in sharing.items():
+        text = str(getattr(target_map[target_id], "text_zh", "") or "").strip()
+        if not text:
+            continue
+        pieces = [piece.strip() for piece in _ZH_SENTENCE_END.split(text) if piece.strip()] if len(sentence_ids) > 1 else [text]
+        if len(pieces) != len(sentence_ids):
+            pieces = [text] + [""] * (len(sentence_ids) - 1)
+        for sentence_id, piece in zip(sentence_ids, pieces):
+            parts_by_line.setdefault(sentence_id, []).append(piece)
     lines: list[str] = []
-    seen: set[str] = set()
     translated = False
-    for sentence in sorted(block_sentences, key=lambda item: getattr(item, "ordinal_in_block", 0)):
+    for sentence in ordered:
         source_line = str(getattr(sentence, "source_text", "") or "").strip()
-        texts: list[str] = []
-        for target_id in sentence_targets.get(sentence.id, []):
-            if target_id in seen or target_id not in target_map:
-                continue
-            seen.add(target_id)
-            text = str(getattr(target_map[target_id], "text_zh", "") or "").strip()
-            if text:
-                texts.append(text)
-        if not getattr(sentence, "translatable", True) or not texts:
+        if not getattr(sentence, "translatable", True):
             if source_line:
                 lines.append(source_line)
+            continue
+        if sentence.id not in parts_by_line:
+            # Not translated at all: the reader sees the line as written rather than nothing.
+            if source_line:
+                lines.append(source_line)
+            continue
+        texts = [piece for piece in parts_by_line[sentence.id] if piece]
+        if not texts:
+            # Its translation is in an earlier line's (the model joined the lines).
             continue
         translated = True
         line = render_repair.inline_join_target_text(texts).replace("\n", " ").strip()
