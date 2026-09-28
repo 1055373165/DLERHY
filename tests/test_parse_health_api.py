@@ -63,6 +63,8 @@ PDF_CHECKS = {
     "image_fragments",
     "caption_folds",
     "duplicated_labels",
+    "headings_as_text",
+    "figure_residue",
 }
 
 

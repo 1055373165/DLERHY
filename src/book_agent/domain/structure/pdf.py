@@ -37,6 +37,7 @@ from book_agent.domain.structure.models import (
 )
 from book_agent.ingestion.pdf import chapters as pdf_chapters
 from book_agent.ingestion.pdf.classify import (
+    ARTIFACT_TITLE_PATTERN,
     _CHAPTER_PREFIX_PATTERN,
     _FOOTNOTE_PATTERN,
     _LEADING_SECTION_NUMBER_PATTERN,
@@ -616,10 +617,12 @@ class PdfStructureRecoveryService:
                     emphasis_line_count = 0 if code_font_only else leading_emphasis_line_count(raw_block.line_styles)
                     if emphasis_line_count:
                         metadata["pdf_leading_emphasis_text"] = "\n".join(raw_block.line_texts[:emphasis_line_count])
+                        metadata["pdf_leading_emphasis_size"] = max(size for size, _bold in raw_block.line_styles[:emphasis_line_count])
                     elif len(raw_block.line_styles) == 1 and all_lines_bold and not code_font_only:
                         # A one-line bold block may merge with the body block below it;
                         # remember the line so the heading can be split back out.
                         metadata["pdf_leading_emphasis_text"] = raw_block.line_texts[0]
+                        metadata["pdf_leading_emphasis_size"] = raw_block.line_styles[0][0]
                     if raw_block.font_names and _has_monospace_font(raw_block.font_names):
                         metadata["has_monospace_font"] = True
                         if role == "code_like":
@@ -1211,7 +1214,7 @@ class PdfStructureRecoveryService:
             # on every pipeline diagram) repeats like a running header but is
             # part of the figure, not page furniture.
             zone = "middle"
-        if zone == "top" and ((zone, signature) in repeated_edge_text):
+        if zone == "top" and ((zone, signature) in repeated_edge_text) and not _is_heading_at_page_top(raw_block, text, page_font_median):
             return "header"
         if zone == "bottom" and (_is_page_number_text(text) or (zone, signature) in repeated_edge_text):
             return "footer"
@@ -1244,6 +1247,8 @@ class PdfStructureRecoveryService:
             raw_block.font_size_max >= page_font_median * 1.25
             and len(text) <= 120
             and _looks_like_visual_heading(text, raw_block.line_count)
+            # A listing's title on a page of small figure labels is large only next to them.
+            and not ARTIFACT_TITLE_PATTERN.match(text)
         ):
             if zone != "bottom":
                 return "heading"
@@ -1259,7 +1264,7 @@ class PdfStructureRecoveryService:
             return "list_item"
         if _looks_like_list_item(text, raw_block.line_count):
             return "list_item"
-        if _looks_like_code(text, raw_block.line_count):
+        if _looks_like_code(text, raw_block.line_count) and not _is_prose_with_code_identifiers(raw_block.font_names, text):
             return "code_like"
         # Font-based code detection: a block that uses ONLY monospace
         # font(s) is almost certainly real code. But many book pages
@@ -1410,6 +1415,13 @@ class PdfStructureRecoveryService:
             if self._should_keep_inline_book_heading_separate(previous, current):
                 return False
             if self._looks_like_contextual_image_legend_block(previous, page_lookup):
+                return False
+            if (
+                previous.metadata.get("pdf_all_lines_bold")
+                and current.metadata.get("pdf_all_lines_bold")
+                and abs(previous.font_size_avg - current.font_size_avg) > _HEADING_STYLE_SIZE_TOLERANCE
+            ):
+                # Two bold lines set at different sizes are two headings ("Summary" over "Data loading").
                 return False
             prev_bottom = previous.bbox_regions[-1]["bbox"][3]
             curr_top = current.bbox_regions[0]["bbox"][1]
@@ -2516,6 +2528,8 @@ class PdfStructureRecoveryService:
             return False
         if _looks_like_table(len(normalized_lines), normalized_lines) or _looks_like_numeric_table_fragment(normalized_lines):
             return False
+        if _is_prose_with_code_identifiers(frozenset(block.metadata.get("pdf_font_names") or ()), block.text):
+            return False
         if _looks_like_code("\n".join(normalized_lines), max(2, len(normalized_lines))):
             return True
         if not (_looks_like_code_docstring_text(block.text) or _looks_like_code_comment_text(block.text)):
@@ -3031,6 +3045,54 @@ class PdfStructureRecoveryService:
             last_body_heading_page = block.page_start
         return normalized_blocks
 
+    def _assign_styled_heading_levels(
+        self,
+        recovered_blocks: list[_RecoveredBlock],
+    ) -> list[_RecoveredBlock]:
+        """A heading found by its type style takes the level of the numbered headings set that way.
+
+        The book's numbered headings ("1.2 ...", "1.2.3 ...") show the size each level is set in:
+        "Summary", set like "1.2 ...", is a level-2 heading; a run-in heading set smaller than every
+        numbered one ("core definition: ..." in small caps) sits a level below the deepest.
+        """
+        sizes_by_level: dict[int, list[float]] = defaultdict(list)
+        for block in recovered_blocks:
+            if block.role != "heading" or block.font_size_avg <= 0:
+                continue
+            match = _NUMBERED_SECTION_HEADING_PATTERN.match(_normalize_text(block.text))
+            if match is not None:
+                sizes_by_level[len(match.group(1).split("."))].append(block.font_size_avg)
+        # A level needs a few headings before its size is evidence.
+        styles = {level: median(sizes) for level, sizes in sizes_by_level.items() if len(sizes) >= 3}
+        if not styles:
+            return recovered_blocks
+        deepest = max(styles)
+        smallest = min(styles.values())
+        leveled: list[_RecoveredBlock] = []
+        for block in recovered_blocks:
+            if (
+                block.role != "heading"
+                or block.metadata.get("pdf_heading_recovery_source") != "embedded_book_styled_heading_recovered"
+                or re.match(r"^\d", _normalize_text(block.text))
+            ):
+                leveled.append(block)
+                continue
+            size = float(block.metadata.get("pdf_leading_emphasis_size") or block.font_size_avg or 0.0)
+            nearest = min(styles, key=lambda level: abs(styles[level] - size))
+            if size <= 0:
+                level = None
+            elif abs(styles[nearest] - size) <= _HEADING_STYLE_SIZE_TOLERANCE:
+                level = nearest
+            elif size < smallest:
+                level = deepest + 1
+            else:
+                level = None
+            if level is None or level == block.metadata.get("heading_level"):
+                leveled.append(block)
+                continue
+            leveled.append(replace(block, metadata={**block.metadata, "heading_level": level}))
+        return leveled
+
     def _promote_inline_book_heading_blocks(
         self,
         recovered_blocks: list[_RecoveredBlock],
@@ -3069,6 +3131,8 @@ class PdfStructureRecoveryService:
         if emphasis_text and _normalize_text(block.text) != emphasis_text:
             # Only a styled prefix is emphasized ("Index" above a TOC entry);
             # the embedded-heading pass splits it off instead.
+            return False
+        if ARTIFACT_TITLE_PATTERN.match(_normalize_text(block.text)):
             return False
         if _normalize_text(block.text).casefold() in _TOC_HEADING_TITLES:
             if block.page_start != block.page_end or not block.bbox_regions:
@@ -3321,7 +3385,8 @@ class PdfStructureRecoveryService:
                 recovery_flag = "academic_section_heading_recovered"
             elif styled_heading is not None:
                 heading_text, remainder = styled_heading
-                recovered_heading_level = 2
+                # "1.2.1 Title" set over its paragraph is level 3 like any numbered heading.
+                recovered_heading_level = _book_heading_level(heading_text, fallback=2)
                 recovery_flag = "embedded_book_styled_heading_recovered"
             else:
                 numbered_book_heading = _leading_numbered_book_heading_and_remainder(block.text)
@@ -3373,6 +3438,8 @@ class PdfStructureRecoveryService:
         if not text or text != _normalize_text(str(block.metadata.get("pdf_leading_emphasis_text") or "")):
             return False
         if "\n" in block.text.strip() or not 1 <= len(text.split()) <= 12:
+            return False
+        if ARTIFACT_TITLE_PATTERN.match(text):
             return False
         return text[:1].isupper() and not text.endswith((".", ",", ";", ":", "!"))
 
@@ -4488,6 +4555,25 @@ def _is_figure_label_block(block: _RecoveredBlock) -> bool:
     return bool(regions) and all(isinstance(region, dict) and region.get(FIGURE_LABEL_REGION_KEY) for region in regions)
 
 
+def _is_prose_with_code_identifiers(font_names: frozenset[str], text: str) -> bool:
+    """Sentences set in the body face with a few identifiers in the code face ("The call_llm function
+    wraps acompletion ... The semaphore ensures ...") are the prose that explains a listing, not code."""
+    return _has_prose_body_font(font_names) and len(_PROSE_SENTENCE_END_PATTERN.findall(text)) >= 2
+
+
+def _is_heading_at_page_top(raw_block: PdfTextBlock, text: str, page_font_median: float) -> bool:
+    """A section heading that opens a page ("Summary") repeats the running head's words, not its type.
+
+    The running head is set at or below the body size and carries the folio; the heading is one
+    line, set larger, without a number.
+    """
+    return bool(
+        raw_block.line_count == 1
+        and raw_block.font_size_avg >= page_font_median * 1.15
+        and not re.search(r"\d", text)
+    )
+
+
 def _inside_page_figure(page: PdfPage, bbox: tuple[float, float, float, float]) -> bool:
     """Whether ``bbox`` lies inside one of the page's figure regions.
 
@@ -4607,6 +4693,14 @@ def _in_place(method_name: str, *context_args: str, **context_kwargs: str) -> Bl
     return run
 
 
+# "1.2 Title" / "1.2.3 Title": a section number with at least one dot, then the title.
+_NUMBERED_SECTION_HEADING_PATTERN = re.compile(r"^(\d{1,2}(?:\.\d{1,2}){1,3})\.?\s+\S")
+# A word, then the end of a sentence and the start of the next ("... protections. The semaphore").
+_PROSE_SENTENCE_END_PATTERN = re.compile(r"[a-z]{2,}[.!?]\s+[A-Z]")
+# How far (pt) a heading's size may be from a level's size and still be set in that level's style.
+_HEADING_STYLE_SIZE_TOLERANCE = 0.6
+
+
 def _is_styled_heading_line_continuation(
     previous_bbox: Any,
     previous_size: float,
@@ -4698,6 +4792,7 @@ _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
     BlockRecoveryPass("recover_document_title_headings", _document_title_pass),
     BlockRecoveryPass("recover_academic_sections", _returning("_recover_academic_section_blocks", "profile")),
     BlockRecoveryPass("populate_missing_heading_levels", _returning("_populate_missing_heading_levels")),
+    BlockRecoveryPass("assign_styled_heading_levels", _returning("_assign_styled_heading_levels")),
     BlockRecoveryPass("merge_heading_continuations", _returning("_merge_adjacent_heading_continuations", "ordered_pages")),
     BlockRecoveryPass("repair_prose_artifact_continuations", _returning("_repair_prose_artifact_continuations", "ordered_pages")),
     BlockRecoveryPass("merge_same_anchor_code", _returning("_merge_same_anchor_code_continuations")),

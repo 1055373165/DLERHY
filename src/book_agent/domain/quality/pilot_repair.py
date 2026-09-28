@@ -94,6 +94,7 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L1.heading_is_prose": (RepairPath(TOOL_STRUCTURE, "relabel_as_paragraph"),),
     "L1.running_header_as_text": (RepairPath(TOOL_STRUCTURE, "hide_running_header"),),
     "L1.heading_merged_into_text": (RepairPath(TOOL_STRUCTURE, "split_run_in_heading"), _STRUCTURE_AGENT),
+    "L1.heading_as_text": (RepairPath(TOOL_STRUCTURE, "relabel_as_heading"),),
     "L1.review_blocking": (_RECHECK,),
     # L2 图表
     "L2.figure_regions": (RepairPath(TOOL_FIGURE_REGION, "fit_to_figure"),),
@@ -105,6 +106,7 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L2.caption_folds": (RepairPath(TOOL_STRUCTURE, "unfold_caption_context"),),
     "L2.orphan_caption": (RepairPath(TOOL_STRUCTURE, "link_caption"),),
     "L2.duplicated_labels": (RepairPath(TOOL_STRUCTURE, "hide_duplicated_label"),),
+    "L2.figure_residue": (RepairPath(TOOL_STRUCTURE, "hide_figure_residue"),),
     # The export gate's "no picture" is stale once the figure has one: its recheck resolves it.
     "L2.figure_without_image": (_RECHECK,),
     "L2.review_blocking": (_RECHECK,),

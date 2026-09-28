@@ -43,6 +43,7 @@ from book_agent.domain.enums import (
     SentenceStatus,
     TargetSegmentStatus,
 )
+from book_agent.domain.block_rules import block_is_context_translatable
 from book_agent.domain.event_kinds import DOCUMENT_REPARSED
 from book_agent.domain.models import Block, Chapter, Document, DocumentParseRevision, Sentence, SentenceLineage
 from book_agent.domain.models.ops import AuditEvent
@@ -325,16 +326,49 @@ class ParseRevisionForkService:
                     select(PacketSentenceMap.packet_id).where(PacketSentenceMap.sentence_id.in_(retired_ids))
                 ).all()
             )
+        # Blocks whose old sentences were in a packet: that packet already takes their new ones.
+        packeted_blocks: set[str] = set()
+        if retired_ids:
+            packeted_blocks.update(
+                self.session.scalars(
+                    select(Sentence.block_id)
+                    .join(PacketSentenceMap, PacketSentenceMap.sentence_id == Sentence.id)
+                    .where(Sentence.id.in_(retired_ids))
+                ).all()
+            )
         # Blocks that had no sentences yet belong to the packet whose block range covers them.
         for block_id in block_ids:
             block = self.session.get(Block, block_id)
             if block is None:
                 continue
+            ranges: list[tuple[TranslationPacket, Block, Block]] = []
             for packet in self.session.scalars(select(TranslationPacket).where(TranslationPacket.chapter_id == block.chapter_id)).all():
                 start = self.session.get(Block, packet.block_start_id) if packet.block_start_id else None
                 end = self.session.get(Block, packet.block_end_id or packet.block_start_id) if packet.block_start_id else None
-                if start is not None and end is not None and start.ordinal <= block.ordinal <= end.ordinal:
-                    packet_ids.add(packet.id)
+                if start is not None and end is not None:
+                    ranges.append((packet, start, end))
+            covering = [packet for packet, start, end in ranges if start.ordinal <= block.ordinal <= end.ordinal]
+            packet_ids.update(packet.id for packet in covering)
+            if (
+                covering
+                or block.status != ArtifactStatus.ACTIVE
+                or block.id in packeted_blocks
+                or not block_is_context_translatable(block)
+            ):
+                continue
+            # A block that became translatable between packets (code relabelled as the prose it is)
+            # joins the packet before it, or the one after it, so it is translated.
+            before = [(end.ordinal, packet) for packet, _start, end in ranges if end.ordinal < block.ordinal]
+            after = [(start.ordinal, packet) for packet, start, _end in ranges if start.ordinal > block.ordinal]
+            if before:
+                packet = max(before, key=lambda item: item[0])[1]
+                packet.block_end_id = block.id
+            elif after:
+                packet = min(after, key=lambda item: item[0])[1]
+                packet.block_start_id = block.id
+            else:
+                continue
+            packet_ids.add(packet.id)
         grouped: dict[str, list[str]] = {}
         for packet in self.session.scalars(select(TranslationPacket).where(TranslationPacket.id.in_(packet_ids))).all():
             grouped.setdefault(packet.chapter_id, []).append(packet.id)

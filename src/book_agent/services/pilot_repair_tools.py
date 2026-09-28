@@ -709,6 +709,25 @@ class PilotRepairToolbox:
         done = self._retranslate_fork(outcome, self._hints(item.findings))
         return ToolResult(params={"block_id": block.id, "from": outcome.kind}, block_ids=outcome.block_ids, packet_ids=done)
 
+    def _structure_edit__relabel_as_heading(self, item: WorkItem) -> ToolResult:
+        """A section heading kept as a paragraph becomes a heading of the level the check read off
+        its numbering ("1.2.1" is level 3; "Summary" is level 2)."""
+        finding = item.findings[0]
+        block = self._finding_block(finding)
+        if block.block_type == BlockType.HEADING:
+            raise NotApplicable("the block is already a heading: the export sets it as a paragraph")
+        level = int((finding.get("evidence") or {}).get("heading_level") or 2)
+        outcome = self.structure.relabel_block(
+            self.ctx.document_id,
+            block.id,
+            BlockType.HEADING.value,
+            heading_level=max(1, min(level, 6)),
+            actor_id=ACTOR_ID,
+            reason=f"小标题「{(block.source_text or '').strip()[:60]}」被排成了正文",
+        )
+        done = self._retranslate_fork(outcome, [f"「{(block.source_text or '').strip()[:60]}」是小标题，译成简短的标题。"])
+        return ToolResult(params={"block_id": block.id, "heading_level": level}, block_ids=outcome.block_ids, packet_ids=done)
+
     def _structure_edit__relabel_as_code(self, item: WorkItem) -> ToolResult:
         block = self._finding_block(item.findings[0])
         outcome = self.structure.relabel_block(
@@ -802,6 +821,15 @@ class PilotRepairToolbox:
         self._hide(block, "图中的标注，不作为正文重复出现")
         return ToolResult(params={"block_id": block.id}, block_ids=[block.id])
 
+    def _structure_edit__hide_figure_residue(self, item: WorkItem) -> ToolResult:
+        """A figure's own text kept as a table, code or equation block leaves the reading copy: the
+        figure's picture already shows it."""
+        block = self._finding_block(item.findings[0])
+        if block.block_type not in {BlockType.TABLE, BlockType.CODE, BlockType.EQUATION}:
+            raise NotApplicable(f"a {block.block_type.value} block is not a figure's residue")
+        self._hide(block, "图里的文字，图片里已经有，不作为表格或代码重复出现")
+        return ToolResult(params={"block_id": block.id, "block_type": block.block_type.value}, block_ids=[block.id])
+
     def _heading_titles(self, chapter_id: str) -> list[str]:
         titles = [block.source_text for block in self._chapter_blocks(chapter_id) if block.block_type == BlockType.HEADING]
         chapters = self.session.scalars(select(Chapter.title_src).where(Chapter.document_id == self.ctx.document_id)).all()
@@ -856,12 +884,15 @@ class PilotRepairToolbox:
         """
         finding = item.findings[0]
         block = self._finding_block(finding)
-        levels = [
+        # A run-in heading sits below the chapter's numbered sections ("1.2.1 ..." is level 3, so 4).
+        numbered_levels = [
             int((b.source_span_json or {}).get("heading_level") or 0)
             for b in self._chapter_blocks(block.chapter_id)
-            if b.block_type == BlockType.HEADING and (b.source_span_json or {}).get("heading_level")
+            if b.block_type == BlockType.HEADING
+            and (b.source_span_json or {}).get("heading_level")
+            and pilot_qa._SECTION_NUMBER_RE.match(b.source_text or "")
         ]
-        level = max(2, max(levels) if levels else 3)
+        level = min(6, max(numbered_levels) + 1) if numbered_levels else 3
         outcomes: list[Any] = []
         headings: list[str] = []
         heading_ids: list[str] = []

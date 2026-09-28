@@ -675,8 +675,23 @@ class StructureEditService:
         span["structure_edit_previous_type"] = block.block_type.value
         if new_type == BlockType.CODE and span.get("pdf_block_role") == "table_like":
             span["pdf_block_role"] = "code_like"
+        # The parser's role follows the new type: the export reads a "code_like" paragraph as code
+        # and joins it back into the listing before it.
+        if new_type in {BlockType.PARAGRAPH, BlockType.LIST_ITEM, BlockType.QUOTE} and span.get("pdf_block_role") in {
+            "code_like",
+            "table_like",
+            "heading",
+        }:
+            span["pdf_block_role"] = "body"
         if new_type == BlockType.HEADING:
             span["heading_level"] = heading_level or span.get("heading_level") or 2
+            if span.get("pdf_block_role") in {"header", "footer"}:
+                # A heading the parser took for page furniture ("Summary" opening a page): it is text to
+                # translate again.
+                span["translatable"] = True
+                span["nontranslatable_reason"] = None
+            if span.get("pdf_block_role") in {"body", "code_like", "table_like", "list_item", "header", "footer"}:
+                span["pdf_block_role"] = "heading"
         block.block_type = new_type
         block.source_span_json = span
         block.protected_policy = protected_policy_for_block(new_type, span)

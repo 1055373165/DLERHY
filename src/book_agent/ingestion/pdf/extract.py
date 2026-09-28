@@ -46,7 +46,8 @@ from book_agent.ingestion.text import (
 )
 
 
-_BOLD_FONT_NAME = re.compile(r"bold|black|heavy|semibold|demi", re.IGNORECASE)
+# "-Dem" is the demibold cut's short name (Manning sets its headings in ITCFranklinGothicStd-Dem).
+_BOLD_FONT_NAME = re.compile(r"bold|black|heavy|semibold|demi|-dem\b", re.IGNORECASE)
 
 
 def _span_is_bold(span: dict[str, Any]) -> bool:

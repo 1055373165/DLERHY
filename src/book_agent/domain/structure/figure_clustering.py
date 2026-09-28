@@ -327,6 +327,15 @@ def _is_anchor(block: BlockLike) -> bool:
 _PAGE_FURNITURE_ROLES = frozenset({"header", "footer"})
 
 
+# Code, tables and equations are never folded into a figure for being short or near it; one is
+# taken in only as the figure's residue (``_is_structural_residue``): lying wholly inside the
+# drawing, without a listing or table title of its own, and not a real listing or data grid.
+_STRUCTURAL_RESIDUE_TYPES = frozenset({BlockType.CODE, BlockType.TABLE, BlockType.EQUATION})
+
+# A listing's or table's own title: what it has is a table or listing, whatever drawing is around it.
+_ARTIFACT_TITLE_PATTERN = re.compile(r"^\s*(?:listing|table|tab\.)\s+[A-Z]?\d+(?:[.\-]\d+)*\b", re.IGNORECASE)
+
+
 def _is_text_candidate(block: BlockLike) -> bool:
     # A block of measured figure labels is a candidate whatever it was typed as
     # (a label row of numbers reads as code, a formula as an equation).
@@ -587,6 +596,40 @@ def _classify_text_for_anchor(
     return "inline_label", "inside anchor + short + non-caption"
 
 
+def _is_structural_residue(block: BlockLike, anchor_bbox: _Bbox, *, bare_drawing: bool = True) -> bool:
+    """Whether a code, table or equation block is text of the figure it lies in.
+
+    A diagram's boxes and a chart's legend come out of the text layer as a "table" of label
+    fragments ("| The | teacher |", "| C | laude Sonnet 4 |") or a line of "code"; the picture
+    already shows them. Kept: anything reaching outside the drawing, a listing set in a code
+    font, a block filling a drawing that has no figure caption (a ruled table's own rules), and a
+    data grid of three or more rows and columns, mostly filled (a table drawn as a figure keeps
+    its translatable text).
+    """
+    page_number = _block_page_number(block)
+    pieces = _block_page_bboxes(block, page_number) if page_number is not None else []
+    if not pieces:
+        return False
+    zone = _bbox_pad(anchor_bbox, 2.0)
+    if not all(_bbox_contains_point(zone, bbox[0], bbox[1]) and _bbox_contains_point(zone, bbox[2], bbox[3]) for bbox in pieces):
+        return False
+    if (block.metadata or {}).get("has_monospace_font"):
+        return False
+    if bare_drawing and sum(_bbox_area(bbox) for bbox in pieces) >= 0.85 * max(_bbox_area(anchor_bbox), 1e-6):
+        return False
+    if block.block_type == BlockType.TABLE and _is_data_grid(block.text or ""):
+        return False
+    return True
+
+
+def _is_data_grid(text: str) -> bool:
+    rows = [[cell.strip() for cell in line.strip().strip("|").split("|")] for line in text.splitlines() if line.strip().startswith("|")]
+    if len(rows) < 3:
+        return False
+    cells = [cell for row in rows for cell in row]
+    return max(len(row) for row in rows) >= 3 and sum(1 for cell in cells if cell) >= 0.6 * len(cells)
+
+
 def _all_regions_labelled(block: BlockLike) -> bool:
     regions = block.bbox_regions or []
     return bool(regions) and all(isinstance(region, dict) and region.get(FIGURE_LABEL_REGION_KEY) for region in regions)
@@ -720,6 +763,7 @@ def cluster_figure_regions(
 
         anchors: list[tuple[int, _Bbox, str]] = []
         text_entries: list[tuple[int, BlockLike, _Bbox]] = []
+        residue_entries: list[tuple[int, BlockLike, _Bbox]] = []
         for local_idx, block in zip(page_block_indices, page_blocks):
             bbox = _block_bbox(block)
             if bbox is None:
@@ -729,6 +773,8 @@ def cluster_figure_regions(
                 anchors.append((local_idx, bbox, str(image_type)))
             elif _is_text_candidate(block):
                 text_entries.append((local_idx, block, bbox))
+            elif block.block_type in _STRUCTURAL_RESIDUE_TYPES and getattr(block, "role", None) not in _PAGE_FURNITURE_ROLES:
+                residue_entries.append((local_idx, block, bbox))
 
         if not anchors:
             continue
@@ -767,6 +813,12 @@ def cluster_figure_regions(
                 cluster_bbox, text_entries, absorbed_local, config=cfg
             )
             density_blocked = prose_density > cfg.max_prose_neighbors_in_zone
+            # A table or listing titled in this zone is that artifact, not a figure's residue.
+            titled_artifact_in_zone = any(
+                _ARTIFACT_TITLE_PATTERN.match(block.text or "")
+                and _bbox_contains_point(search_zone, *_bbox_center(bbox))
+                for _idx, block, bbox in text_entries
+            )
 
             for text_idx, text_block, text_bbox in text_entries:
                 text_center = _bbox_center(text_bbox)
@@ -839,6 +891,32 @@ def cluster_figure_regions(
                         action="absorb_inline_label",
                         block_anchors=[text_block.anchor],
                         reason=reason,
+                    )
+                )
+
+            for residue_idx, residue_block, residue_bbox in residue_entries:
+                if residue_idx in absorbed_local or _owner_anchor_for_text(residue_bbox, anchor_bboxes_only) != anchor_bboxes_only.index(cluster_bbox):
+                    continue
+                # A drawing with a figure caption is a figure, not the rules of a table it holds.
+                bare_drawing = image_type != "embedded_image" and not caption_candidates
+                if titled_artifact_in_zone or not _is_structural_residue(residue_block, cluster_bbox, bare_drawing=bare_drawing):
+                    decisions.append(
+                        ClusterDecision(
+                            page_number=page_number,
+                            action="reject_structural",
+                            block_anchors=[residue_block.anchor],
+                            reason=f"a {residue_block.block_type.value} of its own, not the figure's residue",
+                        )
+                    )
+                    continue
+                inline_label_indices.append(residue_idx)
+                absorbed_local.add(residue_idx)
+                decisions.append(
+                    ClusterDecision(
+                        page_number=page_number,
+                        action="absorb_structural_residue",
+                        block_anchors=[residue_block.anchor],
+                        reason=f"{residue_block.block_type.value} made of the figure's own text, wholly inside it",
                     )
                 )
 
