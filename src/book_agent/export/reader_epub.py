@@ -58,6 +58,13 @@ h3,h4{font-size:1.1em;margin:1em 0 .5em}
 .quote{border-left:3px solid #999;padding-left:.8em;color:#333}
 .footnote .zh,.caption .zh,figcaption{font-size:.9em;color:#444}
 figure{margin:1em 0;text-align:center}
+.callout{display:flex;align-items:flex-start;border:1px solid #bbb;border-radius:.4em;padding:.6em .8em;margin:1em 0}
+.callout-icon{flex:none;width:1.1em;height:1.1em;margin:.3em .6em 0 0}
+.callout-icon-mark{display:inline-block;border-radius:50%;background:#4f9a6a}
+.callout-body{flex:1}
+.callout-line{margin:0 0 .25em;text-indent:0}
+.callout-list{margin:.1em 0 .4em;padding-left:1.3em}
+.inline-icon{width:1.2em;height:1.2em;vertical-align:middle}
 img{max-width:100%;height:auto}
 pre,code{font-family:monospace;font-size:.85em}
 pre{white-space:pre-wrap;word-break:break-all;background:#f4f4f4;padding:.6em}

@@ -14,6 +14,14 @@ from pathlib import PurePosixPath
 from book_agent.domain.enums import (
     BlockType,
 )
+from book_agent.domain.structure.callouts import (
+    CALLOUT_KIND_CODE,
+    CALLOUT_KIND_KEY,
+    CALLOUT_KIND_PROSE,
+    callout_lines,
+    is_callout_metadata,
+    is_tiny_image,
+)
 # Table parsing lives in the domain now; the names stay importable from here for existing callers.
 from book_agent.domain.structure.table_cells import (  # noqa: F401
     is_table_separator_row,
@@ -43,6 +51,152 @@ ARTIFACT_PLACEHOLDER_TEXTS = frozenset({"", "[Image]", "[Figure]"})
 _LEADING_BULLET_GLYPH = re.compile(r"^(\s*(?:[A-Z]{2}::)?)\s*[\u2022\u25cf\u25e6\u25aa\u2023\u2219\u25a0-]\s+")
 
 
+def is_callout_block(block: MergedRenderBlock) -> bool:
+    return is_callout_metadata(block.source_metadata)
+
+
+def is_tiny_image_block(block: MergedRenderBlock) -> bool:
+    """An uncaptioned image no bigger than a line of text (every region at most 24pt a side)."""
+    if block.artifact_kind not in {"image", "figure"}:
+        return False
+    source_bbox = (block.source_metadata or {}).get("source_bbox_json")
+    regions = source_bbox.get("regions") if isinstance(source_bbox, dict) else None
+    boxes = [region.get("bbox") for region in regions or [] if isinstance(region, dict)]
+    return bool(boxes) and all(isinstance(box, list) and len(box) == 4 and is_tiny_image(box) for box in boxes)
+
+
+def callout_kind(block: MergedRenderBlock) -> str:
+    if block.block_type == BlockType.CODE.value:
+        return CALLOUT_KIND_CODE
+    kind = str((block.source_metadata or {}).get(CALLOUT_KIND_KEY) or CALLOUT_KIND_PROSE)
+    return kind if re.fullmatch(r"[a-z_]+", kind) else CALLOUT_KIND_PROSE
+
+
+def callout_lines_html(text: str, *, code_spans: bool = False) -> str:
+    """A callout's lines as HTML: each line its own paragraph, runs of bulleted lines one list."""
+    parts: list[str] = []
+    items: list[str] = []
+    for line in callout_lines(text):
+        unbulleted = _LEADING_BULLET_GLYPH.sub(r"\1", line, count=1)
+        if unbulleted != line:
+            items.append(f"<li>{format_inline_text(unbulleted, code_spans=code_spans)}</li>")
+            continue
+        if items:
+            parts.append(f"<ul class='callout-list'>{''.join(items)}</ul>")
+            items = []
+        parts.append(f"<p class='callout-line'>{format_inline_text(line, code_spans=code_spans)}</p>")
+    if items:
+        parts.append(f"<ul class='callout-list'>{''.join(items)}</ul>")
+    return "".join(parts)
+
+
+def _callout_icon_html(block: MergedRenderBlock, asset_src: str) -> str:
+    if asset_src:
+        return f"<img class='callout-icon' src='{html.escape(asset_src)}' alt=''/>"
+    # No icon file: a small round marker stands in for it.
+    return "<span class='callout-icon callout-icon-mark'></span>"
+
+
+def render_callout_html(
+    block: MergedRenderBlock,
+    asset_src: str = "",
+    *,
+    include_source_toggle: bool = True,
+    source_label: str = "原文",
+) -> str:
+    """An icon-led callout as the book sets it: a box, the small icon at its left, the lines inside."""
+    kind = callout_kind(block)
+    icon_html = _callout_icon_html(block, asset_src)
+    if kind == CALLOUT_KIND_CODE:
+        body = f"<pre><code>{format_preformatted_text(block.source_text, block=block)}</code></pre>"
+    else:
+        target = block.target_text or ""
+        body = f"<div class='zh'>{callout_lines_html(target or block.source_text, code_spans=bool(target))}</div>"
+        if include_source_toggle and target and block.source_text and target != block.source_text:
+            body += (
+                f"<details open><summary>{html.escape(source_label)}</summary>"
+                f"<div class='source'>{callout_lines_html(block.source_text)}</div></details>"
+            )
+    return (
+        f"<section class='block callout callout-{html.escape(kind)}'>"
+        f"{icon_html}<div class='callout-body'>{body}</div></section>"
+    )
+
+
+# After the end of a Chinese sentence (closing quotes stay with it).
+_ZH_SENTENCE_END = re.compile(r"(?<=[。！？!?])(?![”’」』）)])")
+# Before a labelled line ("行动：…" "响应：…"): prompt lines often start with a short label.
+_ZH_LABEL_START = re.compile(r"\s+(?=[一-鿿]{1,6}\s?\d*\s?[：:])")
+
+
+def callout_target_text(
+    block_sentences: list[object],
+    sentence_targets: dict[str, list[str]],
+    target_map: dict[str, object],
+) -> str:
+    """A prose callout's translation, one line per source line (each line is one sentence).
+
+    A data line (a brace, a JSON key) stays as written; a line without a translation shows its
+    source. Empty when nothing is translated yet, so the block falls back to its source.
+    """
+    ordered = sorted(block_sentences, key=lambda item: getattr(item, "ordinal_in_block", 0))
+    # A translation the model wrote for several lines at once: split back into its sentences when
+    # there is one per line, else it stays on the first of those lines.
+    sharing: dict[str, list[str]] = {}
+    for sentence in ordered:
+        if getattr(sentence, "translatable", True):
+            for target_id in sentence_targets.get(sentence.id, []):
+                if target_id in target_map:
+                    sharing.setdefault(target_id, []).append(sentence.id)
+    parts_by_line: dict[str, list[str]] = {}
+    for target_id, sentence_ids in sharing.items():
+        text = str(getattr(target_map[target_id], "text_zh", "") or "").strip()
+        if not text:
+            continue
+        pieces = [text]
+        if len(sentence_ids) > 1:
+            for boundary in (_ZH_SENTENCE_END, _ZH_LABEL_START):
+                pieces = [piece.strip() for piece in boundary.split(text) if piece.strip()]
+                if len(pieces) == len(sentence_ids):
+                    break
+        if len(pieces) != len(sentence_ids):
+            pieces = [text] + [""] * (len(sentence_ids) - 1)
+        for sentence_id, piece in zip(sentence_ids, pieces):
+            parts_by_line.setdefault(sentence_id, []).append(piece)
+    lines: list[str] = []
+    translated = False
+    for sentence in ordered:
+        source_line = str(getattr(sentence, "source_text", "") or "").strip()
+        if not getattr(sentence, "translatable", True):
+            if source_line:
+                lines.append(source_line)
+            continue
+        if sentence.id not in parts_by_line:
+            # Not translated at all: the reader sees the line as written rather than nothing.
+            if source_line:
+                lines.append(source_line)
+            continue
+        texts = [piece for piece in parts_by_line[sentence.id] if piece]
+        if not texts:
+            # Its translation is in an earlier line's (the model joined the lines).
+            continue
+        translated = True
+        line = render_repair.inline_join_target_text(texts).replace("\n", " ").strip()
+        if _LEADING_BULLET_GLYPH.match(source_line) and not _LEADING_BULLET_GLYPH.match(line):
+            # The translation dropped the line's bullet: it is still an item of the callout's list.
+            line = f"• {line}"
+        lines.append(line)
+    return "\n".join(lines) if translated else ""
+
+
+def render_callout_markdown(block: MergedRenderBlock, asset_src: str = "") -> str:
+    if callout_kind(block) == CALLOUT_KIND_CODE:
+        return markdown_fenced_block(block.source_text or "")
+    lines = callout_lines(block.target_text or block.source_text or "")
+    # Hard line breaks (two trailing spaces) keep the callout's lines apart inside the quote.
+    return "\n".join(f"> {line}  " if index < len(lines) - 1 else f"> {line}" for index, line in enumerate(lines))
+
+
 def render_block_markdown(
     block: MergedRenderBlock,
     asset_path_by_block_id: dict[str, str] | None = None,
@@ -50,6 +204,8 @@ def render_block_markdown(
     include_notice: bool = False,
     include_source_caption: bool = True,
 ) -> str:
+    if is_callout_block(block):
+        return render_callout_markdown(block)
     source_text = block.source_text or ""
     target_text = block.target_text or ""
     notice = str(block.notice or "").strip() if include_notice else ""
@@ -412,6 +568,13 @@ def render_block_html(
     include_notice: bool = False,
     include_source_caption: bool = True,
 ) -> str:
+    if is_callout_block(block):
+        asset_src = str((asset_path_by_block_id or {}).get(block.block_id) or "")
+        return render_callout_html(
+            block,
+            url_encode_asset_path(asset_src) if asset_src else "",
+            include_source_toggle=include_source_toggle,
+        )
     notice_text = str(block.notice or "") if include_notice else ""
     source_html = format_inline_text(block.source_text)
     target_html = format_inline_text(block.target_text or "", code_spans=True)
@@ -419,6 +582,12 @@ def render_block_html(
         asset_src = ""
         if asset_path_by_block_id is not None:
             asset_src = str(asset_path_by_block_id.get(block.block_id) or "")
+        if asset_src and is_tiny_image_block(block):
+            # A line-high pictogram (an emoji, a margin icon) is not a figure: drawn at its size, no card.
+            return (
+                f"<section class='block inline-icon-block'>"
+                f"<img class='inline-icon' src='{html.escape(url_encode_asset_path(asset_src))}' alt=''/></section>"
+            )
         if asset_src and block.artifact_kind in {"image", "figure"}:
             note = f"<div class='artifact-note'>{html.escape(notice_text)}</div>" if notice_text else ""
             image_alt_text = str(block.source_metadata.get("image_alt") or "PDF image")
@@ -843,10 +1012,14 @@ def render_block_rebuilt_epub_xhtml(
     asset_src = str((asset_path_by_block_id or {}).get(block.block_id) or "").strip()
     if asset_src:
         asset_src = epub_relative_asset_path(asset_src)
+    if is_callout_block(block):
+        return render_callout_html(block, asset_src, source_label="Source")
     image_alt_text = html.escape(str(block.source_metadata.get("image_alt") or block.source_text or "Embedded image"))
 
     if block.render_mode == "source_artifact_full_width":
         note_html = f"<div class='artifact-note'>{notice}</div>" if notice else ""
+        if asset_src and is_tiny_image_block(block):
+            return f"<p class='inline-icon-block'><img class='inline-icon' src='{html.escape(asset_src)}' alt='' /></p>"
         if asset_src and block.artifact_kind in {"image", "figure"}:
             caption_html = ""
             if block.source_text and block.source_text not in ARTIFACT_PLACEHOLDER_TEXTS:

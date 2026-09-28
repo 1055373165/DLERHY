@@ -34,6 +34,15 @@ from book_agent.domain.block_rules import protected_policy_for_block
 from book_agent.domain.enums import ArtifactStatus, BlockType
 from book_agent.domain.models import Block, Chapter, StructureEdit
 from book_agent.domain.models.translation import TranslationPacket
+from book_agent.domain.structure.callouts import (
+    CALLOUT_ICON_KEY,
+    CALLOUT_KIND_CODE,
+    CALLOUT_KIND_KEY,
+    CALLOUT_KIND_PROSE,
+    CALLOUT_LINE_COUNT_KEY,
+    CALLOUT_ROLE,
+    looks_like_code_callout,
+)
 from book_agent.domain.structure.sentence_alignment import normalize_sentence
 from book_agent.services.parse_revision_fork import ForkResult, ParseRevisionForkService
 
@@ -47,6 +56,7 @@ SPLIT_OF_KEY = "structure_split_of"
 MIN_SPLIT_MARKER = 3
 LINK_CAPTION = "link_caption"
 OVERRIDE_METADATA = "override_metadata"
+MERGE_CALLOUT = "merge_callout"
 # Block metadata an override may set: what the reading copy shows of a block, not what the parser read.
 # repair_hidden_from_export hides a block (a running header, a figure's own label kept as text);
 # source_bbox_json / figure_region set a figure's crop by hand; table_markdown gives a table its cells;
@@ -80,6 +90,10 @@ MERGEABLE_TYPES = frozenset(
     {BlockType.PARAGRAPH, BlockType.QUOTE, BlockType.FOOTNOTE, BlockType.LIST_ITEM, BlockType.CODE, BlockType.CAPTION}
 )
 CAPTIONED_TYPES = frozenset({BlockType.FIGURE, BlockType.IMAGE, BlockType.TABLE, BlockType.EQUATION, BlockType.CODE})
+# What the loose lines of a callout were parsed as.
+CALLOUT_LINE_TYPES = frozenset(
+    {BlockType.PARAGRAPH, BlockType.LIST_ITEM, BlockType.QUOTE, BlockType.CODE, BlockType.CAPTION}
+)
 
 
 class StructureEditRejected(ValueError):
@@ -259,6 +273,45 @@ class StructureEditService:
             turn_id=turn_id,
         )
         return EditOutcome(edit_id=edit.id, kind=MERGE, block_ids=[first.id, second.id], fork=fork)
+
+    def merge_callout(
+        self,
+        document_id: str,
+        icon_block_id: str,
+        line_block_ids: list[str],
+        *,
+        actor_id: str,
+        reason: str,
+        line_texts: list[str] | None = None,
+        turn_id: str | None = None,
+    ) -> EditOutcome:
+        """An icon block and the loose lines after it become one callout block (the parser's view today).
+
+        The first line's block takes the callout: its lines joined by newlines, a quote (or code when
+        the lines are code), the icon's page and bbox under ``callout_icon``. The icon block and the
+        other lines are invalidated, merged into it. ``line_texts`` are the callout's lines as the page
+        sets them (read again from the PDF: an old parse may have joined two lines into one block);
+        without them each block is one line.
+        """
+        icon = self._active_block(document_id, icon_block_id)
+        lines = [self._active_block(document_id, block_id) for block_id in dict.fromkeys(line_block_ids)]
+        self._check_callout(icon, lines)
+        texts = [" ".join(text.split()) for text in line_texts or [] if text and text.strip()] or None
+        snapshot = [_snapshot(icon), *(_snapshot(line) for line in lines)]
+        self._apply_callout(icon, lines, texts)
+        block_ids = [line.id for line in lines] + [icon.id]
+        fork = self._fork(document_id, block_ids, reason=f"structure edit: callout {lines[0].id}", actor_id=actor_id)
+        edit = self._log(
+            document_id,
+            MERGE_CALLOUT,
+            {"icon_block_id": icon.id, "line_block_ids": [line.id for line in lines], **({"line_texts": texts} if texts else {})},
+            snapshot,
+            fork=fork,
+            actor_id=actor_id,
+            reason=reason,
+            turn_id=turn_id,
+        )
+        return EditOutcome(edit_id=edit.id, kind=MERGE_CALLOUT, block_ids=block_ids, fork=fork)
 
     def link_caption(
         self,
@@ -443,6 +496,31 @@ class StructureEditService:
                 return "stale", []
             self._apply_merge(first, second)
             return "reapplied", [first.id, second.id]
+        if edit.kind == MERGE_CALLOUT:
+            icon = blocks[args["icon_block_id"]]
+            lines = [blocks[block_id] for block_id in args["line_block_ids"]]
+            first = lines[0]
+            if (
+                first.status == ArtifactStatus.ACTIVE
+                and (first.source_span_json or {}).get("pdf_block_role") == CALLOUT_ROLE
+                and all(
+                    other.status == ArtifactStatus.INVALIDATED
+                    and (other.source_span_json or {}).get("structure_merged_into") == first.id
+                    for other in [*lines[1:], icon]
+                )
+            ):
+                return None
+            if any(
+                block.status != ArtifactStatus.ACTIVE or _fingerprint(block.source_text) != before[block.id]["text_sha1"]
+                for block in [icon, *lines]
+            ):
+                return "stale", []
+            try:
+                self._check_callout(icon, lines)
+            except StructureEditRejected:
+                return "stale", []
+            self._apply_callout(icon, lines, args.get("line_texts"))
+            return "reapplied", [line.id for line in lines] + [icon.id]
         if edit.kind == LINK_CAPTION:
             caption, artifact = blocks[args["caption_block_id"]], blocks[args["artifact_block_id"]]
             if (artifact.source_span_json or {}).get("linked_caption_block_id") == caption.id and (
@@ -736,6 +814,101 @@ class StructureEditService:
                 if following is not None:
                     packet.block_start_id = following.id
             packet.updated_at = now
+        self.session.flush()
+
+    def _check_callout(self, icon: Block, lines: list[Block]) -> None:
+        if icon.block_type not in {BlockType.IMAGE, BlockType.FIGURE}:
+            raise StructureEditRejected(f"the icon must be an image block, not {icon.block_type.value}")
+        if not lines:
+            raise StructureEditRejected("a callout needs at least one line")
+        if any(line.chapter_id != icon.chapter_id for line in lines):
+            raise StructureEditRejected("the icon and its lines must be in the same chapter")
+        if any(line.block_type not in CALLOUT_LINE_TYPES for line in lines):
+            raise StructureEditRejected(
+                "callout lines must be " + ", ".join(sorted(t.value for t in CALLOUT_LINE_TYPES))
+            )
+        following = list(
+            self.session.scalars(
+                select(Block)
+                .where(
+                    Block.chapter_id == icon.chapter_id,
+                    Block.ordinal > icon.ordinal,
+                    Block.ordinal < PARKED_ORDINAL_BASE,
+                    Block.status == ArtifactStatus.ACTIVE,
+                )
+                .order_by(Block.ordinal)
+                .limit(len(lines) + 12)
+            ).all()
+        )
+        # A running head between two pages of a callout is page furniture, not text in between.
+        following = [
+            block
+            for block in following
+            if (block.source_span_json or {}).get("pdf_block_role") not in {"header", "footer"}
+            and not (block.source_span_json or {}).get("repair_hidden_from_export")
+        ][: len(lines)]
+        if [block.id for block in following] != [line.id for line in lines]:
+            raise StructureEditRejected("the lines must directly follow the icon, in order")
+
+    def _apply_callout(self, icon: Block, lines: list[Block], line_texts: list[str] | None = None) -> None:
+        now = _utcnow()
+        first = lines[0]
+        texts = list(line_texts or [" ".join((line.source_text or "").split()) for line in lines])
+        texts = [text for text in texts if text]
+        kind = CALLOUT_KIND_CODE if looks_like_code_callout(texts) else CALLOUT_KIND_PROSE
+        new_type = BlockType.CODE if kind == CALLOUT_KIND_CODE else BlockType.QUOTE
+        icon_span = dict(icon.source_span_json or {})
+        icon_regions = ((icon_span.get("source_bbox_json") or {}).get("regions")) or []
+        icon_region = icon_regions[0] if icon_regions and isinstance(icon_regions[0], dict) else {}
+        icon_json: dict[str, Any] = {
+            "page_number": icon_region.get("page_number") or icon_span.get("source_page_start"),
+            "bbox": list(icon_region.get("bbox") or []),
+            "block_id": icon.id,
+        }
+        for key, name in (("image_xref", "image_xref"), ("image_ext", "image_ext"), ("image_width_px", "width_px"), ("image_height_px", "height_px")):
+            if icon_span.get(key) is not None:
+                icon_json[name] = icon_span[key]
+        span = dict(first.source_span_json or {})
+        regions: list[Any] = [*icon_regions]
+        for line in lines:
+            line_span = line.source_span_json or {}
+            regions.extend(((line_span.get("source_bbox_json") or {}).get("regions")) or [])
+            if isinstance(line_span.get("source_page_end"), int):
+                span["source_page_end"] = max(int(span.get("source_page_end") or 0), line_span["source_page_end"])
+        span.update(
+            {
+                "pdf_block_role": CALLOUT_ROLE,
+                CALLOUT_KIND_KEY: kind,
+                CALLOUT_LINE_COUNT_KEY: len(texts),
+                CALLOUT_ICON_KEY: icon_json,
+                "source_bbox_json": {**(span.get("source_bbox_json") or {}), "regions": regions},
+                "pdf_font_names": sorted(
+                    {name for line in lines for name in ((line.source_span_json or {}).get("pdf_font_names") or [])}
+                ),
+                "translatable": True,
+                "nontranslatable_reason": None,
+                "structure_edit_previous_type": first.block_type.value,
+                "structure_merged_block_ids": [
+                    *span.get("structure_merged_block_ids", []),
+                    *[line.id for line in lines[1:]],
+                    icon.id,
+                ],
+            }
+        )
+        if isinstance(icon_span.get("source_page_start"), int):
+            span["source_page_start"] = min(int(span.get("source_page_start") or icon_span["source_page_start"]), icon_span["source_page_start"])
+        text = "\n".join(texts)
+        first.block_type = new_type
+        first.source_text = text
+        first.normalized_text = " ".join(text.split())
+        first.source_span_json = span
+        first.protected_policy = protected_policy_for_block(new_type, span)
+        first.updated_at = now
+        for merged in [*lines[1:], icon]:
+            merged.status = ArtifactStatus.INVALIDATED
+            merged.source_span_json = {**(merged.source_span_json or {}), "structure_merged_into": first.id}
+            merged.updated_at = now
+            self._move_packet_bounds(merged, first)
         self.session.flush()
 
     def _apply_link(self, caption: Block, artifact: Block) -> None:

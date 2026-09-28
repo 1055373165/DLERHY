@@ -10,3 +10,5 @@ code{font-family:'SFMono-Regular',Menlo,monospace;}figure{margin:1rem 0;}img{max
 .source-note{margin-top:0.5rem;font-style:italic;}.toc ol{padding-left:1.2rem;}
 table{border-collapse:collapse;width:100%;margin:1rem 0;}th,td{border:1px solid #dbe4ef;padding:0.45rem 0.6rem;text-align:left;}
 thead th{background:#eef4fb;}
+.callout{display:flex;gap:0.6rem;align-items:flex-start;border:1px solid #c9d8cf;border-radius:0.5rem;background:#f6faf7;padding:0.7rem 0.9rem;margin:1rem 0;}.callout-icon{flex:none;width:1.1em;height:1.1em;margin-top:0.3em;}.callout-icon-mark{display:inline-block;border-radius:50%;background:#4f9a6a;}.callout-body{flex:1;}.callout-line{margin:0 0 0.25rem;}.callout-list{margin:0.1rem 0 0.4rem;padding-left:1.3em;}.callout pre{margin:0;white-space:pre-wrap;}
+.inline-icon{width:1.2em;height:1.2em;vertical-align:middle;}

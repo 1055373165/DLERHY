@@ -14,6 +14,7 @@ from book_agent.domain.enums import (
     BlockType,
     SentenceStatus,
 )
+from book_agent.domain.structure.callouts import is_callout_metadata
 from book_agent.domain.structure.geometry import horizontal_overlap_ratio
 from book_agent.domain.structure.parse_health import is_monospace_font
 from book_agent.domain.structure.table_cells import table_grid
@@ -983,6 +984,9 @@ def should_merge_adjacent_heading_render_blocks(
     previous: MergedRenderBlock,
     current: MergedRenderBlock,
 ) -> bool:
+    if is_callout_metadata(previous.source_metadata) or is_callout_metadata(current.source_metadata):
+        # A callout is one box: never joined to the block before or after it.
+        return False
     if previous.block_type != BlockType.HEADING.value or current.block_type != BlockType.HEADING.value:
         return False
     if previous.render_mode != "zh_primary_with_optional_source" or current.render_mode != "zh_primary_with_optional_source":
@@ -1173,6 +1177,9 @@ def code_line_overlap_size(previous_lines: list[str], current_lines: list[str]) 
 
 
 def should_merge_adjacent_code_blocks(previous: MergedRenderBlock, current: MergedRenderBlock) -> bool:
+    if is_callout_metadata(previous.source_metadata) or is_callout_metadata(current.source_metadata):
+        # A callout is one box: never joined to the block before or after it.
+        return False
     if previous.artifact_kind != "code" or current.artifact_kind != "code":
         return False
     if previous.render_mode != "source_artifact_full_width" or current.render_mode != "source_artifact_full_width":
@@ -1193,6 +1200,8 @@ def should_bridge_code_blocks_across_inline_artifact(
     middle: MergedRenderBlock,
     following: MergedRenderBlock,
 ) -> bool:
+    if is_callout_metadata(middle.source_metadata):
+        return False
     if not should_merge_adjacent_code_blocks(previous, following):
         return False
     if middle.chapter_id != previous.chapter_id or middle.chapter_id != following.chapter_id:
@@ -1286,6 +1295,9 @@ def should_merge_adjacent_book_paragraph_fragments(
     previous: MergedRenderBlock,
     current: MergedRenderBlock,
 ) -> bool:
+    if is_callout_metadata(previous.source_metadata) or is_callout_metadata(current.source_metadata):
+        # A callout is one box: never joined to the block before or after it.
+        return False
     if previous.block_type != BlockType.PARAGRAPH.value or current.block_type != BlockType.PARAGRAPH.value:
         return False
     if previous.render_mode not in {"zh_primary_with_optional_source", "zh_primary_with_inline_protected_spans"}:
@@ -1358,6 +1370,9 @@ def should_merge_adjacent_prose_artifact_continuations(
     previous: MergedRenderBlock,
     current: MergedRenderBlock,
 ) -> bool:
+    if is_callout_metadata(previous.source_metadata) or is_callout_metadata(current.source_metadata):
+        # A callout is one box: never joined to the block before or after it.
+        return False
     if previous.block_type != BlockType.PARAGRAPH.value:
         return False
     if previous.render_mode not in {"zh_primary_with_optional_source", "zh_primary_with_inline_protected_spans"}:
