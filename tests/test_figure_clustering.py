@@ -784,5 +784,64 @@ class ParserIntegrationTests(unittest.TestCase):
         self.assertEqual(result[0].block_type, BlockType.IMAGE)
 
 
+
+class FigureResidueTests(unittest.TestCase):
+    """Code, tables and equations made of a figure's own text (RAG figure 1.3, Agent figures 1.6 and 9.10)."""
+
+    FIGURE = (99.0, 51.0, 465.0, 305.0)
+    CAPTION = "Figure 1.3 The teacher teaches the student how to answer."
+
+    def cluster(self, *blocks: _StubBlock, caption: bool = True, image_type: str = "vector_drawing"):
+        page = [_image_block(self.FIGURE, image_type=image_type)]
+        if caption:
+            page.append(_text_block(self.CAPTION, (99.0, 312.0, 465.0, 330.0), block_type=BlockType.CAPTION, anchor="cap"))
+        return cluster_figure_regions([*page, *blocks])
+
+    def absorbed(self, report) -> list[int]:
+        return sorted(index for cluster in report.clusters for index in cluster.inline_label_indices)
+
+    def test_a_table_of_repeated_labels_inside_the_figure_is_absorbed(self) -> None:
+        table = _text_block("| The | teacher |\n| The | teacher |", (102.0, 132.0, 165.0, 158.0), block_type=BlockType.TABLE, anchor="t")
+        self.assertEqual(self.absorbed(self.cluster(table)), [2])
+
+    def test_a_legend_filling_a_captioned_drawing_is_absorbed(self) -> None:
+        # Figure 9.10: the diagram's boxes read as a two-column "table" nearly as big as the drawing.
+        legend = _text_block(
+            "| User: 'What is 15 squared?' | |\n| Router agent | |\n| tools= [transfer] | |",
+            (101.0, 53.0, 463.0, 303.0),
+            block_type=BlockType.TABLE,
+            anchor="t",
+        )
+        self.assertEqual(self.absorbed(self.cluster(legend)), [2])
+
+    def test_labels_read_as_code_or_an_equation_are_absorbed(self) -> None:
+        code = _text_block("{Query + Information} Retrieve", (234.0, 108.0, 301.0, 117.0), block_type=BlockType.CODE, anchor="c")
+        equation = _text_block("MRR = 13/24 = 0.54", (150.0, 200.0, 260.0, 214.0), block_type=BlockType.EQUATION, anchor="e")
+        self.assertEqual(self.absorbed(self.cluster(code, equation)), [2, 3])
+
+    def test_real_listings_and_tables_are_never_absorbed(self) -> None:
+        listing = _text_block("from openai import OpenAI\nclient = OpenAI()", (110.0, 60.0, 300.0, 90.0), block_type=BlockType.CODE, anchor="k")
+        listing.metadata["has_monospace_font"] = True
+        grid = _text_block(
+            "| Use case | Needs data? | RAG? |\n| Chat bot | Yes: product data | Yes |\n| Translation | No: all in the prompt | No |",
+            (110.0, 150.0, 400.0, 290.0),
+            block_type=BlockType.TABLE,
+            anchor="g",
+        )
+        outside = _text_block("| The | teacher |\n| The | teacher |", (102.0, 340.0, 165.0, 370.0), block_type=BlockType.TABLE, anchor="o")
+        self.assertEqual(self.absorbed(self.cluster(listing, grid, outside)), [])
+
+    def test_a_titled_table_inside_a_drawing_stays_a_table(self) -> None:
+        # A ruled table's rules are a drawing too; its "Table 1.1" title says what it is.
+        title = _text_block("Table 1.1 Models and prices", (99.0, 40.0, 300.0, 50.0), block_type=BlockType.CAPTION, anchor="title")
+        table = _text_block("| Model | Price |\n| GPT-5 | 10 |", (102.0, 60.0, 300.0, 120.0), block_type=BlockType.TABLE, anchor="t")
+        report = cluster_figure_regions([_image_block(self.FIGURE), title, table])
+        self.assertNotIn(2, self.absorbed(report))
+
+    def test_a_table_that_is_the_whole_uncaptioned_drawing_stays_a_table(self) -> None:
+        table = _text_block("| Model | Price |\n| GPT-5 | 10 |", (100.0, 52.0, 464.0, 304.0), block_type=BlockType.TABLE, anchor="t")
+        self.assertEqual(self.absorbed(self.cluster(table, caption=False)), [])
+
+
 if __name__ == "__main__":
     unittest.main()
