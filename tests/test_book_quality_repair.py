@@ -341,6 +341,62 @@ class HintedStructureEditTests(ToolboxCase):
             self.assertEqual(session.get(Block, code).source_span_json["linked_caption_block_id"], caption)
 
 
+class BookScopeRepairTests(ToolboxCase):
+    """The whole book's QA and repair (services/book_quality.py) on every chapter, with the fake model."""
+
+    def test_the_book_repair_covers_chapters_the_pilot_never_saw(self) -> None:
+        from book_agent.domain.models.review import PilotQualityReport
+        from book_agent.services.book_quality import BOOK_QA_TRIGGER, book_chapter_ids, book_repair_budget
+        from book_agent.services.pilot_quality import PilotQualityService
+        from book_agent.services.pilot_repair import PilotRepairService, repair_payload
+
+        with self.bench.session_factory() as session:
+            # Chapter 3 is outside the pilot: a sentence the model left out there.
+            third = self.bench.chapters(session)[2].id
+            from book_agent.domain.models import Sentence
+
+            omitted = session.scalars(
+                select(Sentence.id)
+                .where(Sentence.chapter_id == third, Sentence.translatable.is_(True), Sentence.retired_by_revision_id.is_(None))
+                .order_by(Sentence.id)
+            ).first()
+            session.commit()
+        self.worker.omit_sentences.add(omitted)
+        pilot = self.translate(all_chapters=True)
+        with self.bench.session_factory() as session:
+            chapters = book_chapter_ids(session, self.bench.document_id)
+            self.assertGreater(len(chapters), len(pilot))
+            before = PilotQualityService(session).run(
+                self.bench.document_id, trigger=BOOK_QA_TRIGGER, chapter_ids=chapters, scope="book"
+            )
+            session.commit()
+            self.assertEqual(before.scope, "book")
+            keys = [f["key"] for layer in before.layers_json for f in layer["findings"] if f["check_id"] == "L6.untranslated_sentence"]
+            self.assertTrue(keys)
+            budget = book_repair_budget(session, chapters)
+            # No prices in the bench: 15% of the book's packets bound the retranslations.
+            self.assertIsNone(budget.budget_usd)
+            self.assertGreaterEqual(budget.max_packets, 1)
+
+            service = PilotRepairService(session, workflow_factory=self.bench.workflow, scope="book")
+            repair = service.run(self.bench.document_id)
+            payload = repair_payload(session, repair)
+            final = session.get(PilotQualityReport, repair.after_report_id)
+        self.assertEqual((payload["scope"], final.scope, final.trigger), ("book", "book", "book_repair"))
+        self.assertEqual(set(final.chapter_ids_json), set(chapters))
+        kept = [a for a in payload["attempts"] if a["outcome"] == "kept" and a["check_id"] == "L6.untranslated_sentence"]
+        self.assertTrue(kept, [(a["check_id"], a["path"], a["outcome"], a["reason"]) for a in payload["attempts"]] + [payload.get("stop_reason"), payload.get("summary")])
+        self.assertEqual([f for layer in final.layers_json for f in layer["findings"] if f["key"] in keys], [])
+        with self.bench.session_factory() as session:
+            self.assertTrue(active_target_texts(session, [omitted]).get(omitted))
+        # The pilot's own report is untouched by the book's.
+        with self.bench.session_factory() as session:
+            from book_agent.services.pilot_quality import latest_report
+
+            self.assertIsNone(latest_report(session, self.bench.document_id))
+            self.assertEqual(latest_report(session, self.bench.document_id, scope="book").id, final.id)
+
+
 class DefectTicketTests(ToolboxCase):
     def test_a_defect_seen_again_updates_its_ticket(self) -> None:
         from book_agent.domain.models.review import PilotDefectTicket

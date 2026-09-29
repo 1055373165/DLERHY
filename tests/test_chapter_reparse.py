@@ -138,6 +138,84 @@ class ChapterReparseTests(unittest.TestCase):
                 ChapterReparseService(session).reparse_untranslated(self.bench.document_id)
             self.assertIn("找不到", str(caught.exception))
 
+    def _whole_book_run(self, session, request: dict | None = None) -> str:
+        from book_agent.domain.enums import DocumentRunType
+        from book_agent.infra.repositories.run_control import RunControlRepository
+        from book_agent.services.run_control import RunControlService
+
+        summary = RunControlService(RunControlRepository(session)).create_run(
+            document_id=self.bench.document_id,
+            run_type=DocumentRunType.TRANSLATE_FULL,
+            requested_by="test",
+            status_detail_json={"run_request": dict(request or {})},
+        )
+        session.commit()
+        return summary.run_id
+
+    def _finish(self, session, run_id: str) -> None:
+        from book_agent.domain.enums import DocumentRunStatus
+        from book_agent.domain.models.ops import DocumentRun
+
+        # One open run per book: the next test run needs this one closed.
+        session.get(DocumentRun, run_id).status = DocumentRunStatus.CANCELLED
+        session.commit()
+
+    def _executor(self):
+        from book_agent.app.runtime.document_run_executor import DocumentRunExecutor
+
+        return DocumentRunExecutor(session_factory=self.bench.session_factory, export_root=self.bench.export_root, translation_worker=self.bench.worker)
+
+    def test_a_whole_book_run_reparses_first_when_the_parser_changed(self) -> None:
+        from book_agent.domain.models.ops import DocumentRun
+        from book_agent.orchestrator.run_plan import plan_for_run
+
+        with self.bench.session_factory() as session:
+            chapter = self._third_chapter(session)
+            self._damage(session, chapter.id)
+            document = self.bench.document(session)
+            document.metadata_json = {**document.metadata_json, PARSER_FINGERPRINT_KEY: "older-parser"}
+            session.commit()
+            run_id = self._whole_book_run(session)
+            run = session.get(DocumentRun, run_id)
+            plan = plan_for_run(run.run_type, run.status_detail_json)
+            self.assertEqual(plan.stages[-2:], ("book_qa", "book_repair"))
+        executor = self._executor()
+        executor._maybe_reparse_untranslated(run_id, plan)
+        executor._maybe_reparse_untranslated(run_id, plan)  # once only
+        with self.bench.session_factory() as session:
+            outcome = session.get(DocumentRun, run_id).status_detail_json["chapter_reparse"]
+            self.assertEqual(outcome["refreshed_chapter_ids"], [chapter.id])
+            self.assertEqual(self.bench.document(session).metadata_json[PARSER_FINGERPRINT_KEY], parser_fingerprint())
+            self.assertFalse(any(b.block_type == BlockType.CODE for b in self._active(session, chapter.id)))
+
+    def test_a_whole_book_run_skips_the_reparse_when_unchanged_off_or_the_file_is_gone(self) -> None:
+        from book_agent.domain.models.ops import DocumentRun
+        from book_agent.orchestrator.run_plan import plan_for_run
+
+        executor = self._executor()
+
+        def check(request: dict | None = None) -> dict:
+            with self.bench.session_factory() as session:
+                run_id = self._whole_book_run(session, request)
+                run = session.get(DocumentRun, run_id)
+                plan = plan_for_run(run.run_type, run.status_detail_json)
+            executor._maybe_reparse_untranslated(run_id, plan)
+            with self.bench.session_factory() as session:
+                outcome = session.get(DocumentRun, run_id).status_detail_json["chapter_reparse"]
+                self._finish(session, run_id)
+            return outcome
+
+        self.assertEqual(check(), {"skipped": "parser_unchanged"})
+        with self.bench.session_factory() as session:
+            document = self.bench.document(session)
+            document.metadata_json = {**document.metadata_json, PARSER_FINGERPRINT_KEY: "older-parser"}
+            session.commit()
+        self.assertEqual(check({"reparse_untranslated": "off"}), {"skipped": "off"})
+        with self.bench.session_factory() as session:
+            self.bench.document(session).source_path = str(self.bench.root / "gone.pdf")
+            session.commit()
+        self.assertIn("找不到", check()["refused"])
+
     def test_changed_chapter_boundaries_are_refused(self) -> None:
         class OneChapterFewer:
             def __init__(self, inner) -> None:
