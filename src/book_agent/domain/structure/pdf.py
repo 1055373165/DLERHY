@@ -203,6 +203,10 @@ _LISTING_ANNOTATION_PROSE_RE = re.compile(
 )
 
 
+# Markers of a list item split out by its hanging indent (``PdfTextBlock.list_marker``).
+_LIST_ITEM_MARKERS = frozenset({"bullet", "dash", "number"})
+
+
 class PdfStructureRecoveryService:
     def __init__(
         self,
@@ -635,6 +639,8 @@ class PdfStructureRecoveryService:
                     metadata, flags = self._metadata_for_block(role, raw_block.text, page_context)
                     if all_lines_bold:
                         metadata["pdf_all_lines_bold"] = True
+                    if raw_block.list_marker:
+                        metadata["pdf_list_marker"] = raw_block.list_marker
                     # Font metadata enrichment
                     metadata["pdf_font_names"] = sorted(raw_block.font_names) if raw_block.font_names else []
                     # Bold lines in a block set wholly in a monospace font are
@@ -1310,6 +1316,8 @@ class PdfStructureRecoveryService:
             return "toc_entry"
         if page_context.is_toc_page and text.casefold() in page_context.toc_entries_by_text:
             return "toc_entry"
+        if raw_block.list_marker in _LIST_ITEM_MARKERS:
+            return "list_item"
         if zone == "bottom" and raw_block.font_size_avg and raw_block.font_size_avg < page_font_median * 0.95:
             if _FOOTNOTE_PATTERN.match(text):
                 return "footnote"
@@ -1326,7 +1334,7 @@ class PdfStructureRecoveryService:
             # then the title over two lines. Each piece of the page's outline
             # title, in heading type, is part of that heading.
             return "heading"
-        if _HEADING_PATTERN.match(text) and len(text) <= 150:
+        if _HEADING_PATTERN.match(text) and len(text) <= 150 and not _is_body_sentence(raw_block, text, page_font_median):
             return "heading"
         if (
             raw_block.font_size_max >= page_font_median * 1.25
@@ -1490,6 +1498,16 @@ class PdfStructureRecoveryService:
         pages: list[PdfPage],
     ) -> bool:
         if previous.role not in {"body", "list_item"} or current.role != "body":
+            return False
+        if current.metadata.get("pdf_list_marker"):
+            # The page set it apart from the list item above: a label inside the list, or the body after it.
+            return False
+        if (
+            previous.metadata.get("pdf_list_marker") in _LIST_ITEM_MARKERS
+            and current.page_start == previous.page_start
+            and current.bbox_regions[0]["bbox"][0] < previous.bbox_regions[0]["bbox"][0] - 2.0
+        ):
+            # Set left of the item's marker: the body after the list, not the item's wrapped text.
             return False
         if previous.block_type not in {BlockType.PARAGRAPH, BlockType.LIST_ITEM} or current.block_type != BlockType.PARAGRAPH:
             return False
@@ -2395,6 +2413,58 @@ class PdfStructureRecoveryService:
         if self._should_merge_cross_page_prose_continuation(recovered[index], current, pages):
             return index
         return None
+
+    def _nest_list_items(self, recovered_blocks: list[_RecoveredBlock]) -> list[_RecoveredBlock]:
+        """Give each list item its level, and mark text set inside a list as the list's own.
+
+        A run of list items opens with a marker kind ("•"); an item of another kind
+        inside the run ("– Basic data structures ...") is a sub-item, level 2,
+        unless the page sets it no further in than the item above. A paragraph
+        after an item that the page indents to the items' text ("If you're
+        unfamiliar with these topics ...", "Cost considerations:") continues the
+        list at level 1 instead of starting the body again.
+        """
+        body_left = _page_body_left_edges(recovered_blocks)
+        run_kind: str | None = None
+        top_item: _RecoveredBlock | None = None
+        last_in_run: _RecoveredBlock | None = None
+        for block in recovered_blocks:
+            if self._is_ignorable_prose_separator(block) or _is_page_number_text((block.text or "").split("\n", 1)[0]):
+                continue
+            marker = str(block.metadata.get("pdf_list_marker") or "")
+            if block.block_type == BlockType.LIST_ITEM and block.role == "list_item":
+                kind = marker if marker in _LIST_ITEM_MARKERS else _list_kind_of_text(block.text)
+                level = 1
+                if run_kind is not None and kind != run_kind and top_item is not None:
+                    nested_on_page = not (
+                        block.page_start == top_item.page_start
+                        and block.bbox_regions[0]["bbox"][0] <= top_item.bbox_regions[0]["bbox"][0] + 2.0
+                    )
+                    level = 2 if nested_on_page else 1
+                if level == 1:
+                    run_kind = kind
+                    top_item = block
+                block.metadata["list_kind"] = kind
+                block.metadata["list_level"] = level
+                last_in_run = block
+                continue
+            if (
+                run_kind is not None
+                and block.role == "body"
+                and block.block_type == BlockType.PARAGRAPH
+                and (
+                    marker == "list_text"
+                    or (_is_indented_past_body(block, body_left) and _sits_under(block, last_in_run))
+                )
+            ):
+                block.metadata["list_level"] = 1
+                block.metadata["list_continuation"] = True
+                last_in_run = block
+                continue
+            run_kind = None
+            top_item = None
+            last_in_run = None
+        return recovered_blocks
 
     def _is_ignorable_prose_separator(self, block: _RecoveredBlock) -> bool:
         if block.role in {"header", "footer", "footnote"}:
@@ -4634,6 +4704,67 @@ def _is_running_prose(text: str) -> bool:
     return sum(1 for words in sentences if words >= 4) >= 2 or any(words >= 12 for words in sentences)
 
 
+# How far (pt) past a page's body edge text must start to be set inside a list.
+_LIST_TEXT_MIN_INDENT = 20.0
+
+
+def _list_kind_of_text(text: str) -> str:
+    stripped = (text or "").lstrip()
+    if stripped[:1] in {"–", "—"}:
+        return "dash"
+    if stripped[:1].isdigit():
+        return "number"
+    return "bullet"
+
+
+def _page_body_left_edges(blocks: list[_RecoveredBlock]) -> dict[int, float]:
+    """The body edge of left and right pages: where most unlisted body paragraphs of the book start.
+
+    Facing pages mirror their margins, so odd and even pages each have one edge.
+    Counted over the book, not the page: a page with two paragraphs, one of
+    them inside a list, has no majority of its own.
+    """
+    edges: dict[int, Counter[float]] = defaultdict(Counter)
+    for block in blocks:
+        if block.role != "body" or block.block_type != BlockType.PARAGRAPH or block.metadata.get("pdf_list_marker"):
+            continue
+        for region in block.bbox_regions:
+            bbox = region.get("bbox") if isinstance(region, dict) else None
+            if bbox:
+                edges[int(region.get("page_number") or block.page_start) % 2][round(float(bbox[0]))] += 1
+    return {parity: counts.most_common(1)[0][0] for parity, counts in edges.items() if counts}
+
+
+def _is_body_sentence(raw_block: PdfTextBlock, text: str, page_font_median: float) -> bool:
+    """A sentence set in the body size ("Chapter 7 explores the various layers ... systems."), not a title."""
+    return bool(
+        page_font_median > 0
+        and raw_block.font_size_max <= page_font_median * 1.15
+        and not any(bold for _size, bold in raw_block.line_styles)
+        and text.rstrip().endswith((".", "!", "?"))
+        and len(text.split()) >= 6
+    )
+
+
+def _sits_under(block: _RecoveredBlock, above: _RecoveredBlock | None) -> bool:
+    """Whether ``block`` follows ``above`` at a paragraph's distance (or opens the next page)."""
+    if above is None or not above.bbox_regions or not block.bbox_regions:
+        return False
+    if block.page_start != above.page_end:
+        return block.page_start == above.page_end + 1
+    gap = float(block.bbox_regions[0]["bbox"][1]) - float(above.bbox_regions[-1]["bbox"][3])
+    return gap <= max(block.font_size_avg, 8.0) * 2.0
+
+
+def _is_indented_past_body(block: _RecoveredBlock, body_left: dict[int, float]) -> bool:
+    edge = body_left.get(block.page_start % 2)
+    if edge is None or not block.bbox_regions:
+        return False
+    if str(block.metadata.get("pdf_page_family") or "body") != "body":
+        return False
+    return float(block.bbox_regions[0]["bbox"][0]) - edge >= _LIST_TEXT_MIN_INDENT
+
+
 def _is_figure_label_block(block: _RecoveredBlock) -> bool:
     """Whether every region of ``block`` holds only labels of a figure measured on its page."""
     regions = block.bbox_regions or []
@@ -4912,6 +5043,7 @@ _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
     BlockRecoveryPass("recover_text_only_figures", _returning("_recover_text_only_figures")),
     BlockRecoveryPass("link_artifact_captions", _in_place("_link_artifact_captions")),
     BlockRecoveryPass("link_artifact_group_contexts", _in_place("_link_artifact_group_contexts", academic_paper="academic_lane")),
+    BlockRecoveryPass("nest_list_items", _returning("_nest_list_items")),
     BlockRecoveryPass("rejoin_line_break_hyphens", _rejoin_line_break_hyphens_pass),
     BlockRecoveryPass("rejoin_split_identifiers", _rejoin_split_identifiers_pass),
 )

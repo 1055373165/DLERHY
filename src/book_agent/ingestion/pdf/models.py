@@ -123,6 +123,12 @@ class PdfTextBlock:
     # Every line of the block is a label of a vector figure measured on the page
     # (``figure_extent.figure_label_blocks``): part of the picture, not body text.
     figure_label: bool = False
+    # Set when the block is one piece of a list the page sets with hanging indents
+    # (``extract._split_hanging_list_blocks``): "bullet", "dash" or "number" for an
+    # item, "list_text" for a line set at an item's text indent without a marker
+    # ("Cost considerations:" between two runs of dash items), "body" for the
+    # text of such a block outside the list. Empty for a block that was not split.
+    list_marker: str = ""
 
 
 @dataclass(slots=True, frozen=True)

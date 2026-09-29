@@ -105,5 +105,91 @@ class SplitIdentifierTest(unittest.TestCase):
             self.assertEqual(rejoin_split_identifiers(source, counts), expected, source)
 
 
+def _write_nested_list_page(path: Path) -> None:
+    """Build an AI Agent 1.6: a bullet with dash sub-items, a label inside the list, the body after it."""
+    document = fitz.open()
+    page = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    page.insert_text((102, 80), "To follow the exercises you need the following things set up first:", fontname="tiro", fontsize=10)
+    # One text block holds the bullet, its sub-items, a label, more sub-items and the body after the list.
+    lines = [
+        (118, "• Development-environment setup—To complete the exercises effectively, a local"),
+        (130, "Python development environment is necessary:"),
+        (130, "– Install the latest version of Python in your local environment (recommended:"),
+        (142, "Python 3.12 or later)."),
+        (130, "– Prepare a code editor or IDE (recommended: Visual Studio Code)."),
+        (130, "Cost considerations:"),
+        (130, "– OpenAI—The total cost of completing all exercises should be less than $10"),
+        (102, "When you have completed these preparations, you are ready to begin your journey into"),
+        (102, "agent development with this book and the chapters that follow it."),
+    ]
+    writer = fitz.TextWriter(page.rect)
+    font = fitz.Font("tiro")
+    for index, (x, line) in enumerate(lines):
+        writer.append((x, 110 + 13 * index), line, font=font, fontsize=10)
+    writer.write_text(page)
+    document.save(path)
+
+
+def _write_numbered_list_page(path: Path) -> None:
+    """A Simple Guide to RAG 2.6: numbers set apart from the items, each line its own text block."""
+    document = fitz.open()
+    page = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    page.insert_text((93, 80), "The infrastructure can be understood in several layers:", fontname="tiro", fontsize=10)
+    font = fitz.Font("tiro")
+    top = 110
+    for number, text, wrap in [
+        (1, "Data layer—Tools and platforms used to process and store data in the form of", "embeddings"),
+        (2, "Model layer—Providers of proprietary or open source LLMs", None),
+        (3, "Prompt layer—Tools offering maintenance and evaluation of prompts", None),
+    ]:
+        # Each item and each wrapped line is a text block of its own, as the book's text layer has it.
+        writer = fitz.TextWriter(page.rect)
+        writer.append((105, top), f"{number}  {text}", font=font, fontsize=10)
+        writer.write_text(page)
+        top += 16
+        if wrap:
+            page.insert_text((117, top), wrap, fontname="tiro", fontsize=10)
+            top += 16
+    page.insert_text((93, top + 10), "Chapter 7 explores the various layers of infrastructure that support RAG.", fontname="tiro", fontsize=10)
+    document.save(path)
+
+
+class NestedListTest(unittest.TestCase):
+    """Dash sub-items are items of their bullet's list; the body after the list is a paragraph again."""
+
+    def test_sub_items_nest_under_their_bullet(self) -> None:
+        blocks = _blocks(_parse(_write_nested_list_page, "nested.pdf"))
+        shape = [
+            (block.block_type, block.metadata.get("list_level"), " ".join(block.text.split())[:30])
+            for block in blocks
+            if block.metadata.get("list_level") or block.text.startswith("When you")
+        ]
+        self.assertEqual(
+            shape,
+            [
+                ("list_item", 1, "• Development-environment setu"),
+                ("list_item", 2, "– Install the latest version o"),
+                ("list_item", 2, "– Prepare a code editor or IDE"),
+                ("paragraph", 1, "Cost considerations:"),
+                ("list_item", 2, "– OpenAI—The total cost of com"),
+                ("paragraph", None, "When you have completed these "),
+            ],
+        )
+        self.assertEqual(blocks[-1].metadata.get("list_continuation"), None)
+        label = next(block for block in blocks if block.text.startswith("Cost"))
+        self.assertTrue(label.metadata["list_continuation"])
+        # A wrapped sub-item keeps its wrapped line.
+        install = next(block for block in blocks if block.text.startswith("– Install"))
+        self.assertIn("Python 3.12 or later).", install.text)
+
+    def test_numbered_items_set_one_per_line_are_list_items(self) -> None:
+        blocks = _blocks(_parse(_write_numbered_list_page, "numbered.pdf"))
+        items = [block for block in blocks if block.block_type == "list_item"]
+        self.assertEqual([block.metadata.get("list_kind") for block in items], ["number"] * 3)
+        self.assertEqual(" ".join(items[0].text.split()), "1 Data layer—Tools and platforms used to process and store data in the form of embeddings")
+        closing = next(block for block in blocks if block.text.startswith("Chapter 7"))
+        self.assertEqual(closing.block_type, "paragraph")
+
+
 if __name__ == "__main__":
     unittest.main()
