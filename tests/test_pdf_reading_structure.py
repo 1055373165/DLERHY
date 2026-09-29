@@ -242,5 +242,54 @@ class SidebarTest(unittest.TestCase):
         self.assertIsNone(heading.metadata.get("sidebar_id"))
 
 
+def _png(width: int = 200, height: int = 120) -> bytes:
+    pixmap = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, width, height), False)
+    pixmap.clear_with(180)
+    return pixmap.tobytes("png")
+
+
+def _running_head(page: fitz.Page, folio: int) -> None:
+    page.insert_text((200, 34), "chapter 1 What is an AI agent?", fontname="tiit", fontsize=9)
+    page.insert_text((57, 34), str(folio), fontname="tibo", fontsize=9)
+
+
+def _write_sentence_around_figure(path: Path) -> None:
+    """Build an AI Agent 1.2.1: a sentence stops at the foot of a page, a figure follows, the next page goes on."""
+    document = fitz.open()
+    first = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    first.insert_textbox(fitz.Rect(102, 300, 470, 420), _BODY, fontname="tiro", fontsize=10)
+    first.insert_textbox(
+        fitz.Rect(102, 420, 470, 470),
+        "Recently, reasoning models have emerged that analyze tasks before producing results; first, it generates thinking tokens starting",
+        fontname="tiro",
+        fontsize=10,
+    )
+    first.insert_image(fitz.Rect(265, 480, 470, 580), stream=_png())
+    first.insert_text((268, 595), "Figure 1.1 Example of a language model's generalization", fontname="hebo", fontsize=8)
+    _running_head(first, 5)
+    second = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    _running_head(second, 6)
+    second.insert_textbox(
+        fitz.Rect(93, 52, 465, 90),
+        "with a think tag. This advance enables agents to tackle complex and unfamiliar problems effectively.",
+        fontname="tiro",
+        fontsize=10,
+    )
+    second.insert_textbox(fitz.Rect(93, 100, 465, 200), _BODY, fontname="tiro", fontsize=10)
+    document.save(path)
+
+
+class ContinuationAcrossFigureTest(unittest.TestCase):
+    """A sentence cut by a figure and a page break is one paragraph; the figure stays after it."""
+
+    def test_second_half_joins_the_first_past_the_figure(self) -> None:
+        blocks = _blocks(_parse(_write_sentence_around_figure, "continuation.pdf"))
+        joined = next(block for block in blocks if "thinking tokens starting" in block.text)
+        self.assertIn("thinking tokens starting with a think tag. This advance", " ".join(joined.text.split()))
+        self.assertFalse(any(block.text.startswith("with a think tag") for block in blocks))
+        order = [block.block_type for block in blocks]
+        self.assertLess(blocks.index(joined), order.index("caption"))
+
+
 if __name__ == "__main__":
     unittest.main()

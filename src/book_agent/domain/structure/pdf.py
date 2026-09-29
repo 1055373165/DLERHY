@@ -2408,13 +2408,15 @@ class PdfStructureRecoveryService:
         if not recovered:
             return None
         index = len(recovered) - 1
-        while index >= 0 and self._is_ignorable_prose_separator(recovered[index]):
+        across_figure = False
+        while index >= 0 and (
+            self._is_ignorable_prose_separator(recovered[index]) or _is_figure_between_prose(recovered[index])
+        ):
+            across_figure = across_figure or _is_figure_between_prose(recovered[index])
             index -= 1
         if index < 0:
             return None
-        if any(not self._is_ignorable_prose_separator(block) for block in recovered[index + 1 :]):
-            return None
-        if self._should_merge_cross_page_prose_continuation(recovered[index], current, pages):
+        if self._should_merge_cross_page_prose_continuation(recovered[index], current, pages, across_figure=across_figure):
             return index
         return None
 
@@ -2534,6 +2536,16 @@ class PdfStructureRecoveryService:
         # cross-page sentence continuation chain.
         if block.block_type == BlockType.PARAGRAPH and _is_book_running_header_text(text):
             return True
+        lines = text.strip().splitlines()
+        if (
+            block.block_type == BlockType.PARAGRAPH
+            and len(lines) == 2
+            and _is_page_number_text(lines[0])
+            and len(lines[1]) <= 80
+            and not lines[1].rstrip().endswith((".", "!", "?"))
+        ):
+            # A folio over the running title ("27\nThe RAGOps Stack").
+            return True
         return False
 
     def _should_merge_cross_page_prose_continuation(
@@ -2541,12 +2553,19 @@ class PdfStructureRecoveryService:
         previous: _RecoveredBlock,
         current: _RecoveredBlock,
         pages: list[PdfPage],
+        *,
+        across_figure: bool = False,
     ) -> bool:
-        if previous.role != "body" or current.role != "body":
+        # An item's sentence runs on past a figure or a page break too ("• Rejection rate— ... is also" / "evaluated").
+        if previous.role not in {"body", "list_item"} or current.role != "body":
             return False
-        if previous.block_type != BlockType.PARAGRAPH or current.block_type != BlockType.PARAGRAPH:
+        if previous.block_type not in {BlockType.PARAGRAPH, BlockType.LIST_ITEM} or current.block_type != BlockType.PARAGRAPH:
             return False
-        if current.page_start <= previous.page_end:
+        if current.page_start < previous.page_end or (current.page_start == previous.page_end and not across_figure):
+            # On one page only a figure set between them splits a sentence in two.
+            return False
+        if across_figure and current.font_size_avg < previous.font_size_avg - 1.0:
+            # The figure's own words (its labels, set small) are not the rest of the sentence.
             return False
         if current.page_start > previous.page_end + 2:
             return False
@@ -2578,7 +2597,8 @@ class PdfStructureRecoveryService:
             return False
         # Mid-word hyphen break or trailing connector (comma, dash, ampersand,
         # open-paren leftover, alphabetic char) signals continuation.
-        if last_char not in {",", "-", "–", "—", "&"} and not last_char.isalpha():
+        # An identifier broken after its underscore ("get_" / "user_by_id") runs on as well.
+        if last_char not in {",", "-", "–", "—", "&", "_"} and not last_char.isalpha():
             return False
 
         first_char = curr_text[0]
@@ -4813,6 +4833,15 @@ def _opens_sidebar_panel(block: _RecoveredBlock) -> bool:
         return False
     top = float(block.bbox_regions[0]["bbox"][1])
     return top - panel[1][1] <= _SIDEBAR_TITLE_TOP_GAP and len(block.text or "") <= 120
+
+
+def _is_figure_between_prose(block: _RecoveredBlock) -> bool:
+    """A figure, its caption or its labels: set where the page had room, even inside a sentence."""
+    return (
+        block.role in {"image", "caption"}
+        or block.block_type in {BlockType.IMAGE, BlockType.FIGURE, BlockType.CAPTION}
+        or _is_figure_label_block(block)
+    )
 
 
 def _crosses_sidebar_edge(previous: _RecoveredBlock, current: _RecoveredBlock) -> bool:
