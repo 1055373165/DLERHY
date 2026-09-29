@@ -97,6 +97,7 @@ from book_agent.ingestion.pdf.extract import (
     PdfTextExtractor,
 )
 from book_agent.ingestion.pdf.hyphenation import inline_word_counts, rejoin_line_break_hyphens
+from book_agent.ingestion.pdf.identifiers import inline_identifier_counts, rejoin_split_identifiers
 from book_agent.ingestion.pdf.models import (
     PdfExtraction,
     PdfFileProfile,
@@ -4858,6 +4859,25 @@ def _rejoin_line_break_hyphens_pass(service, blocks, context):
     return blocks
 
 
+def _rejoin_split_identifiers_pass(service, blocks, context):
+    """Remove spaces that split an identifier ("final_ answer"), using the book's own identifiers as evidence."""
+    identifier_counts = inline_identifier_counts(
+        line
+        for page in context.extraction.pages
+        for block in page.blocks
+        if not block.ruled_table
+        for line in (block.line_texts or [block.text])
+    )
+    for block in blocks:
+        if block.block_type == BlockType.CODE:
+            continue
+        rejoined = rejoin_split_identifiers(block.text, identifier_counts)
+        if rejoined != block.text:
+            block.text = rejoined
+            block.flags = list(dict.fromkeys([*block.flags, "identifier_rejoined"]))
+    return blocks
+
+
 # Ordered block-shaping passes run by PdfStructureRecoveryService.recover after
 # the per-page block recovery and before chapters are built.
 _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
@@ -4893,4 +4913,5 @@ _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
     BlockRecoveryPass("link_artifact_captions", _in_place("_link_artifact_captions")),
     BlockRecoveryPass("link_artifact_group_contexts", _in_place("_link_artifact_group_contexts", academic_paper="academic_lane")),
     BlockRecoveryPass("rejoin_line_break_hyphens", _rejoin_line_break_hyphens_pass),
+    BlockRecoveryPass("rejoin_split_identifiers", _rejoin_split_identifiers_pass),
 )
