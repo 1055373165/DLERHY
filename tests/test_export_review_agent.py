@@ -151,7 +151,8 @@ class ExportReviewAgentTests(unittest.TestCase):
     def test_plan_makes_export_review_opt_in_and_last(self) -> None:
         self.assertNotIn("export_review", plan_for_run(DocumentRunType.TRANSLATE_FULL, {}).stages)
         plan = plan_for_run(DocumentRunType.TRANSLATE_FULL, {"run_request": {"export_review": "sampled"}})
-        self.assertEqual(plan.stages[-1], "export_review")
+        # Last of the pipeline; the whole book's QA and repair follow it.
+        self.assertEqual(plan.stages[-3:], ("export_review", "book_qa", "book_repair"))
         self.assertIn("export_review", plan.agent_stages)
         self.assertNotIn("export_review", plan.export_stages)
         self.assertEqual(STAGE_DEPENDENCIES["export_review"], ("bilingual_html", "merged_html", "web_html"))
