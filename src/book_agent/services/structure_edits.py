@@ -69,6 +69,8 @@ OVERRIDABLE_METADATA_KEYS = frozenset(
         "figure_region_override",
         "table_markdown",
         "artifact_group_context_excluded",
+        # A figure its page gives no caption: accepted without one (the QA stops asking for it).
+        "figure_caption_absent",
     }
 )
 

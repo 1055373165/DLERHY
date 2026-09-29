@@ -112,6 +112,104 @@ class TranslationMemoryTests(ToolboxCase):
         self.assertTrue(any("「LLM」译为「大语言模型」" in hint for hint in hints), hints)
 
 
+class FigurePathTests(ToolboxCase):
+    def _figure(self, session) -> Block:
+        return next(
+            block
+            for block in session.scalars(select(Block).where(Block.source_text.in_(["[Figure]", "[Image]"]))).all()
+            if (block.source_span_json or {}).get("source_page_start") == 2
+        )
+
+    def _finding(self, check_id: str, block_id: str) -> dict:
+        return {
+            "key": f"{check_id}:block:{block_id}",
+            "check_id": check_id,
+            "severity": "minor",
+            "location": {"block_id": block_id},
+            "target": {"kind": "block", "id": block_id},
+            "evidence": {},
+        }
+
+    def test_an_uncaptioned_figure_is_linked_to_the_caption_beside_it_or_accepted(self) -> None:
+        from book_agent.domain.enums import ArtifactStatus
+        from book_agent.services.pilot_repair_tools import NotApplicable
+
+        chapter_ids = self.translate()
+        with self.bench.session_factory() as session:
+            figure = self._figure(session)
+            caption_id = (figure.source_span_json or {}).get("linked_caption_block_id")
+            # The link is lost (the parser did not pair them): the figure has no caption.
+            span = dict(figure.source_span_json)
+            span.pop("linked_caption_block_id", None)
+            figure.source_span_json = span
+            session.commit()
+            found = [f for f in self._findings_now(chapter_ids) if f["check_id"] == "L2.figure_without_caption"]
+            self.assertTrue(caption_id)
+            if caption_id:
+                self.assertTrue(found)
+                toolbox = self.toolbox(session, chapter_ids)
+                item = WorkItem("L2.figure_without_caption", _path("L2.figure_without_caption", "structure_edit.link_adjacent_caption"), [self._finding("L2.figure_without_caption", figure.id)])
+                result = toolbox.apply(item)
+                self.assertEqual(result.params["caption_block_id"], caption_id)
+                session.commit()
+                self.assertEqual(session.get(Block, figure.id).source_span_json.get("linked_caption_block_id"), caption_id)
+                # With its caption taken, nothing is left to accept on the page... unless it has none at all.
+                caption = session.get(Block, caption_id)
+                caption.status = ArtifactStatus.INVALIDATED
+                span = dict(session.get(Block, figure.id).source_span_json)
+                span.pop("linked_caption_block_id", None)
+                session.get(Block, figure.id).source_span_json = span
+                session.commit()
+            accept = WorkItem(
+                "L2.figure_without_caption",
+                _path("L2.figure_without_caption", "structure_edit.accept_uncaptioned_figure"),
+                [self._finding("L2.figure_without_caption", figure.id)],
+            )
+            try:
+                self.toolbox(session, chapter_ids).apply(accept)
+            except NotApplicable as exc:  # pragma: no cover - a caption left on the page
+                self.fail(str(exc))
+            session.commit()
+            self.assertTrue(session.get(Block, figure.id).source_span_json.get("figure_caption_absent"))
+        self.assertEqual([f for f in self._findings_now(chapter_ids) if f["check_id"] == "L2.figure_without_caption" and f["location"].get("block_id") == figure.id], [])
+
+    def _findings_now(self, chapter_ids: list[str]) -> list[dict]:
+        return [finding for layer in self.qa(chapter_ids) for finding in layer["findings"]]
+
+    def test_a_sparse_table_next_to_a_figure_is_absorbed(self) -> None:
+        chapter_ids = self.translate()
+        with self.bench.session_factory() as session:
+            figure = self._figure(session)
+            (left, top, right, bottom) = figure.source_span_json["source_bbox_json"]["regions"][0]["bbox"]
+        table_id = self.restyle("The first technique reads", text="| a |  |  |\n|  |  | b |\n|  |  |  |", block_type="table")
+        below = [left, bottom + 4.0, right, bottom + 30.0]
+        with self.bench.session_factory() as session:
+            table = session.get(Block, table_id)
+            table.source_span_json = {**table.source_span_json, "source_bbox_json": {"regions": [{"page_number": 2, "bbox": below}]}}
+            session.commit()
+            item = WorkItem("L3.table_sparse", _path("L3.table_sparse", "structure_edit.absorb_sparse_table_into_figure"), [self._finding("L3.table_sparse", table_id)])
+            result = self.toolbox(session, chapter_ids).apply(item)
+            session.commit()
+            self.assertFalse(result.params["inside"])
+            self.assertTrue(session.get(Block, table_id).source_span_json.get("repair_hidden_from_export"))
+            grown = session.get(Block, figure.id).source_span_json["source_bbox_json"]["regions"][0]["bbox"]
+            self.assertAlmostEqual(grown[3], below[3], places=1)
+            self.assertAlmostEqual(grown[1], top, places=1)
+
+    def test_a_sparse_table_far_from_any_figure_is_left_alone(self) -> None:
+        from book_agent.services.pilot_repair_tools import NotApplicable
+
+        chapter_ids = self.translate()
+        table_id = self.restyle("An indexing pipeline splits", text="| a |  |  |\n|  |  | b |", block_type="table")
+        with self.bench.session_factory() as session:
+            table = session.get(Block, table_id)
+            table.source_span_json = {**table.source_span_json, "source_bbox_json": {"regions": [{"page_number": 3, "bbox": [100, 300, 400, 340]}]}}
+            session.commit()
+            item = WorkItem("L3.table_sparse", _path("L3.table_sparse", "structure_edit.absorb_sparse_table_into_figure"), [self._finding("L3.table_sparse", table_id)])
+            with self.assertRaises(NotApplicable):
+                self.toolbox(session, chapter_ids).apply(item)
+
+
 class StaleDraftTests(ToolboxCase):
     """After a merge, one sentence had the current translation of several packets (the p.53 callout)."""
 

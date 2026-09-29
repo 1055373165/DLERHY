@@ -1084,6 +1084,140 @@ class PilotRepairToolbox:
         self._hide(block, "图里的文字，图片里已经有，不作为表格或代码重复出现")
         return ToolResult(params={"block_id": block.id, "block_type": block.block_type.value}, block_ids=[block.id])
 
+    # --- figures without captions, sparse tables ---------------------------------------------------
+
+    @staticmethod
+    def _regions(block: Block) -> list[tuple[int, tuple[float, float, float, float]]]:
+        return parse_health.block_regions(dict(block.source_span_json or {}))
+
+    def _is_caption_like(self, block: Block) -> bool:
+        if (block.source_span_json or {}).get("repair_hidden_from_export"):
+            return False
+        text = " ".join((block.source_text or "").split())
+        label = pilot_qa._FIGURE_CAPTION_RE.match(text)
+        return block.block_type == BlockType.CAPTION or bool(label and not re.match(r"\s*[a-z]", text[label.end() :]))
+
+    def _structure_edit__link_adjacent_caption(self, item: WorkItem) -> ToolResult:
+        """A figure without a caption, with a caption block right before or after it on its page: link them."""
+        figure = self._finding_block(item.findings[0])
+        if figure.block_type not in {BlockType.FIGURE, BlockType.IMAGE}:
+            raise NotApplicable(f"a {figure.block_type.value} block is not a figure")
+        page = (figure.source_span_json or {}).get("source_page_start")
+        linked = {
+            str((b.source_span_json or {}).get("linked_caption_block_id"))
+            for b in self._chapter_blocks(figure.chapter_id)
+            if (b.source_span_json or {}).get("linked_caption_block_id")
+        }
+        previous, following = self._neighbours(figure)
+        caption = next(
+            (
+                b
+                for b in (following, previous)
+                if b is not None
+                and b.id not in linked
+                and (b.source_span_json or {}).get("source_page_start") == page
+                and self._is_caption_like(b)
+            ),
+            None,
+        )
+        if caption is None:
+            raise NotApplicable("no unlinked caption right next to the figure on its page")
+        if caption.block_type != BlockType.CAPTION:
+            self.structure.relabel_block(self.ctx.document_id, caption.id, BlockType.CAPTION.value, actor_id=ACTOR_ID, reason="图注")
+        self.structure.link_caption(self.ctx.document_id, caption.id, figure.id, actor_id=ACTOR_ID, reason="紧挨着图的图注配给这张图")
+        return ToolResult(params={"figure_block_id": figure.id, "caption_block_id": caption.id}, block_ids=[figure.id, caption.id])
+
+    def _structure_edit__accept_uncaptioned_figure(self, item: WorkItem) -> ToolResult:
+        """A figure whose page has no caption for it (an icon, a decorative image, an unlabelled diagram) is fine."""
+        figure = self._finding_block(item.findings[0])
+        if figure.block_type not in {BlockType.FIGURE, BlockType.IMAGE}:
+            raise NotApplicable(f"a {figure.block_type.value} block is not a figure")
+        page = (figure.source_span_json or {}).get("source_page_start")
+        linked = {
+            str((b.source_span_json or {}).get("linked_caption_block_id"))
+            for b in self._chapter_blocks(figure.chapter_id)
+            if (b.source_span_json or {}).get("linked_caption_block_id")
+        }
+        unlinked = [
+            b
+            for b in self._chapter_blocks(figure.chapter_id)
+            if b.id not in linked and (b.source_span_json or {}).get("source_page_start") == page and self._is_caption_like(b)
+        ]
+        if unlinked:
+            raise NotApplicable("the page has a caption no figure took: it may be this figure's")
+        self.structure.override_metadata(
+            self.ctx.document_id, figure.id, {"figure_caption_absent": True}, actor_id=ACTOR_ID, reason="原书这张图没有图注"
+        )
+        return ToolResult(params={"figure_block_id": figure.id, "page": page}, block_ids=[figure.id])
+
+    def _structure_edit__absorb_sparse_table_into_figure(self, item: WorkItem) -> ToolResult:
+        """A mostly empty table inside or right next to a figure is the figure's own text.
+
+        Inside the figure's crop: the table is hidden (the picture shows it). Next to it (touching or
+        within ``ADJACENT_GAP`` points, overlapping horizontally): the figure's crop grows to take it in,
+        then the table is hidden. Without a figure on its page the table is left alone.
+        """
+        table = self._finding_block(item.findings[0])
+        if table.block_type != BlockType.TABLE:
+            raise NotApplicable(f"a {table.block_type.value} block is not a table")
+        regions = self._regions(table)
+        if not regions:
+            raise NotApplicable("the table has no region on its page")
+        page, box = regions[0]
+        figures = [
+            b
+            for b in self._chapter_blocks(table.chapter_id)
+            if b.block_type in {BlockType.FIGURE, BlockType.IMAGE}
+            and any(region_page == page for region_page, _bbox in self._regions(b))
+            and parse_health.image_fragment_kind(next(bbox for region_page, bbox in self._regions(b) if region_page == page)) is None
+        ]
+
+        def gap(a: tuple[float, ...], b: tuple[float, ...]) -> float:
+            dx = max(0.0, max(a[0], b[0]) - min(a[2], b[2]))
+            dy = max(0.0, max(a[1], b[1]) - min(a[3], b[3]))
+            return max(dx, dy)
+
+        candidates = []
+        for figure in figures:
+            figure_box = next(bbox for region_page, bbox in self._regions(figure) if region_page == page)
+            overlap_x = min(box[2], figure_box[2]) - max(box[0], figure_box[0])
+            distance = gap(box, figure_box)
+            if distance <= ADJACENT_GAP and overlap_x > 0:
+                candidates.append((distance, figure, figure_box))
+        if not candidates:
+            raise NotApplicable("no figure on the table's page is next to it")
+        _distance, figure, figure_box = min(candidates, key=lambda entry: entry[0])
+        inside = box[0] >= figure_box[0] - 1 and box[1] >= figure_box[1] - 1 and box[2] <= figure_box[2] + 1 and box[3] <= figure_box[3] + 1
+        grown = None
+        if not inside:
+            grown = [min(box[0], figure_box[0]), min(box[1], figure_box[1]), max(box[2], figure_box[2]), max(box[3], figure_box[3])]
+            span = dict(figure.source_span_json or {})
+            bbox_json = dict(span.get("source_bbox_json") or {})
+            new_regions = []
+            for region in bbox_json.get("regions") or []:
+                region = dict(region)
+                if region.get("page_number") == page:
+                    region["bbox"] = [round(value, 2) for value in grown]
+                new_regions.append(region)
+            self.structure.override_metadata(
+                self.ctx.document_id,
+                figure.id,
+                {
+                    "source_bbox_json": {**bbox_json, "regions": new_regions},
+                    "figure_region": FIGURE_REGION_CONTENT_EXTENT,
+                    "figure_region_override": {"previous_bbox": list(figure_box), "absorbed_block_id": table.id},
+                },
+                actor_id=ACTOR_ID,
+                reason="图旁边的文字（被当成了表格）并进图片区域",
+            )
+            for image in self.session.scalars(select(DocumentImage).where(DocumentImage.block_id == figure.id)).all():
+                image.metadata_json = {**(image.metadata_json or {}), "storage_status": "stale", "stale_reason": "figure_region_override"}
+        self._hide(table, "图里的文字，图片里已经有，不作为表格重复出现")
+        return ToolResult(
+            params={"table_block_id": table.id, "figure_block_id": figure.id, "inside": inside, "grown_to": grown},
+            block_ids=[table.id, figure.id],
+        )
+
     def _heading_titles(self, chapter_id: str) -> list[str]:
         titles = [block.source_text for block in self._chapter_blocks(chapter_id) if block.block_type == BlockType.HEADING]
         chapters = self.session.scalars(select(Chapter.title_src).where(Chapter.document_id == self.ctx.document_id)).all()
@@ -1631,6 +1765,8 @@ def _marker(text: str, at: int) -> str:
     return text[at:]
 
 
+# A sparse table this close to a figure (points) is the figure's text set beside it.
+ADJACENT_GAP = 24.0
 # Clear of the check's touch gap (2pt): an edge this close to a line counts as cutting it.
 EDGE_MARGIN = 3.0
 

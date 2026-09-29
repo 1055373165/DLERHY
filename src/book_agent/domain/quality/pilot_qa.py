@@ -221,6 +221,8 @@ class QaBlock:
     regions: tuple[tuple[int, tuple[float, float, float, float]], ...] = ()
     # The parsed blocks the export joined into this one ((id, text)): a code block and the prose after it.
     merged_blocks: tuple[tuple[str, str], ...] = ()
+    # A figure whose page gives it no caption, accepted as such (the repair's ``accept_uncaptioned_figure``).
+    caption_absent_accepted: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -1025,7 +1027,7 @@ def check_figures(inputs: PilotQaInputs) -> list[CheckRun]:
                         f"{_snippet(block.source_text, 40) if captioned else '这张图'}在中文版里没有图片",
                     )
                 )
-            if not captioned and block.has_image is not False:
+            if not captioned and block.has_image is not False and not block.caption_absent_accepted:
                 no_caption.findings.append(_block_finding("L2.figure_without_caption", block, "这张图没有图注"))
             continue
         label = _FIGURE_CAPTION_RE.match(block.source_text or "") if block.block_type in {"caption", "paragraph"} else None

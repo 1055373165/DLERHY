@@ -61,6 +61,7 @@ from book_agent.domain.quality.pilot_repair import (
     escalation_question,
     findings_of,
     judge,
+    repairable_findings,
     plan_work,
 )
 from book_agent.domain.structure.parse_health import BLOCKING, MAJOR
@@ -241,7 +242,7 @@ class PilotRepairService:
         qa = PilotQualityService(self.session)
         try:
             layers, _source = qa.evaluate(document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope)
-            initial = findings_of(layers)
+            initial = repairable_findings(layers)
             classes = self._classes(initial)
             self.session.commit()
             self._begin_write()
@@ -255,10 +256,10 @@ class PilotRepairService:
             round_no = 0
             while round_no < self.max_rounds:
                 round_no += 1
-                round_keys = {finding["key"] for finding in findings_of(layers)}
+                round_keys = {finding["key"] for finding in repairable_findings(layers)}
                 kept_in_round = 0
                 while True:
-                    current = [finding for finding in findings_of(layers) if finding["key"] in round_keys]
+                    current = [finding for finding in repairable_findings(layers) if finding["key"] in round_keys]
                     work = plan_work(current, tried)
                     if not work:
                         break
@@ -292,7 +293,7 @@ class PilotRepairService:
                 self.session.commit()
                 if stop_reason is not None:
                     break
-                remaining = findings_of(layers)
+                remaining = repairable_findings(layers)
                 if not remaining:
                     stop_reason = "clean"
                     break

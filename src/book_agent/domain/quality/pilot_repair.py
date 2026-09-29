@@ -109,6 +109,11 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L2.orphan_caption": (RepairPath(TOOL_STRUCTURE, "link_caption"),),
     "L2.duplicated_labels": (RepairPath(TOOL_STRUCTURE, "hide_duplicated_label"),),
     "L2.figure_residue": (RepairPath(TOOL_STRUCTURE, "hide_figure_residue"),),
+    # Minor: link the caption set right next to it, else accept a figure its page gives no caption.
+    "L2.figure_without_caption": (
+        RepairPath(TOOL_STRUCTURE, "link_adjacent_caption"),
+        RepairPath(TOOL_STRUCTURE, "accept_uncaptioned_figure"),
+    ),
     # An icon drawn as a figure card: when it leads a callout, the callout takes it.
     "L2.tiny_icon_figure": (RepairPath(TOOL_STRUCTURE, "merge_icon_callout", costs_model=True),),
     # The export gate's "no picture" is stale once the figure has one: its recheck resolves it.
@@ -120,6 +125,8 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L3.table_untranslated": (_RETRANSLATE,),
     # The block becomes code (what the reading copy already shows) and the export gate checks it again.
     "L3.table_is_code": (RepairPath(TOOL_STRUCTURE, "relabel_table_as_code"), _RECHECK),
+    # A mostly empty "table" inside or next to a figure is the figure's text: the figure takes it.
+    "L3.table_sparse": (RepairPath(TOOL_STRUCTURE, "absorb_sparse_table_into_figure"),),
     "L3.review_blocking": (_RECHECK,),
     # L4 代码与格式
     "L4.code_translated": (_RETRANSLATE,),
@@ -164,6 +171,10 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
 
 def paths_for(check_id: str) -> tuple[RepairPath, ...]:
     return REPAIR_PATHS.get(check_id, ())
+
+
+# Minor checks the loop still takes on: their repair is cheap and deterministic (no model call).
+MINOR_REPAIRABLE_CHECKS = frozenset({"L2.figure_without_caption"})
 
 
 # ---------------------------------------------------------------------------
@@ -325,6 +336,14 @@ def findings_of(layers: Sequence[Mapping[str, Any]], severities: Iterable[str] =
     order = {BLOCKING: 0, MAJOR: 1, MINOR: 2}
     findings = [dict(finding) for layer in layers for finding in layer.get("findings") or [] if finding.get("severity") in wanted]
     return sorted(findings, key=lambda finding: (order.get(finding.get("severity"), 9), str(finding.get("layer")), str(finding.get("check_id"))))
+
+
+def repairable_findings(layers: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """The loop's work: blocking and major findings, then the minor ones it repairs cheaply."""
+    return [
+        *findings_of(layers),
+        *[finding for finding in findings_of(layers, (MINOR,)) if finding.get("check_id") in MINOR_REPAIRABLE_CHECKS],
+    ]
 
 
 @dataclass(slots=True)

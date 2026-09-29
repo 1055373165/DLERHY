@@ -421,6 +421,7 @@ def load_pilot_inputs(
                         (str(merged_id), str(block_texts.get(str(merged_id)) or ""))
                         for merged_id in block.source_metadata.get("export_merged_block_ids") or ()
                     ),
+                    caption_absent_accepted=bool(block.source_metadata.get("figure_caption_absent")),
                 )
             )
 
