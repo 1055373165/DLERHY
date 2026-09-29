@@ -98,6 +98,12 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     # The icon and its lines become one callout block; its packets are retranslated line by line.
     "L1.icon_callout_split": (RepairPath(TOOL_STRUCTURE, "merge_icon_callout", costs_model=True),),
     "L1.review_blocking": (_RECHECK,),
+    # Structure the reading copy draws (lists, sidebars, split paragraphs, listing captions): the parser
+    # side's QA rules name these paths in their repair hints; the findings carry the block ids.
+    "L1.list_not_nested": (RepairPath(TOOL_STRUCTURE, "nest_list_items"),),
+    "L1.sidebar_as_section": (RepairPath(TOOL_STRUCTURE, "relabel_as_sidebar"),),
+    "L1.paragraph_split": (RepairPath(TOOL_STRUCTURE, "join_continuation"),),
+    "L4.listing_caption_orphan": (RepairPath(TOOL_STRUCTURE, "link_listing_caption"),),
     # L2 图表
     "L2.figure_regions": (RepairPath(TOOL_FIGURE_REGION, "fit_to_figure"),),
     "L2.caption_swallows_body": (
@@ -169,8 +175,23 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
 }
 
 
-def paths_for(check_id: str) -> tuple[RepairPath, ...]:
-    return REPAIR_PATHS.get(check_id, ())
+STRUCTURE_HINT_PREFIX = "structure_edit."
+
+
+def paths_for(check_id: str, finding: Mapping[str, Any] | None = None) -> tuple[RepairPath, ...]:
+    """The check's paths; a check this table does not know may name its path in its finding's repair
+    hint ("structure_edit.nest_list_items"), taken when the toolbox has that structure edit."""
+    paths = REPAIR_PATHS.get(check_id, ())
+    hint = str((finding or {}).get("repair") or ((finding or {}).get("evidence") or {}).get("repair_path") or "")
+    if hint.startswith(STRUCTURE_HINT_PREFIX) and hint[len(STRUCTURE_HINT_PREFIX) :] in HINTED_STRUCTURE_EDITS:
+        hinted = RepairPath(TOOL_STRUCTURE, hint[len(STRUCTURE_HINT_PREFIX) :], costs_model=True)
+        if all(path.name != hinted.name for path in paths):
+            paths = (hinted, *paths)
+    return paths
+
+
+# Structure edits a finding's repair hint may ask for by name.
+HINTED_STRUCTURE_EDITS = frozenset({"nest_list_items", "relabel_as_sidebar", "join_continuation", "link_listing_caption"})
 
 
 # Minor checks the loop still takes on: their repair is cheap and deterministic (no model call).
@@ -385,7 +406,7 @@ def plan_work(findings: Sequence[Mapping[str, Any]], tried: set[tuple[str, str]]
     groups: dict[tuple[str, str, str], WorkItem] = {}
     for finding in findings:
         check_id = str(finding.get("check_id") or "")
-        path = next((path for path in paths_for(check_id) if (str(finding.get("key")), path.name) not in tried), None)
+        path = next((path for path in paths_for(check_id, finding) if (str(finding.get("key")), path.name) not in tried), None)
         if path is None:
             continue
         if path.scope == SCOPE_CHECK:

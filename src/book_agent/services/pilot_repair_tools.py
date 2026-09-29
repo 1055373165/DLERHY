@@ -1218,6 +1218,143 @@ class PilotRepairToolbox:
             block_ids=[table.id, figure.id],
         )
 
+    # --- lists, sidebars, split paragraphs, listing captions (the parser side's QA hints) ------------
+
+    def _hint_blocks(self, finding: dict[str, Any], *keys: str) -> list[Block]:
+        """The blocks a finding names: its evidence's id lists (in the given keys), else its own block."""
+        evidence = finding.get("evidence") or {}
+        ids: list[str] = []
+        for key in keys:
+            value = evidence.get(key)
+            if isinstance(value, str) and value:
+                ids.append(value)
+            elif isinstance(value, (list, tuple)):
+                ids.extend(str(item) for item in value if item)
+        if not ids:
+            return [self._finding_block(finding)]
+        blocks = [self._block(block_id) for block_id in dict.fromkeys(ids)]
+        return sorted(blocks, key=lambda block: block.ordinal)
+
+    def _fork_packets(self, outcomes: Sequence[Any]) -> list[str]:
+        return list(
+            dict.fromkeys(
+                packet for outcome in outcomes for packet in (getattr(getattr(outcome, "fork", None), "retranslate_packet_ids", []) or [])
+            )
+        )
+
+    def _structure_edit__nest_list_items(self, item: WorkItem) -> ToolResult:
+        """Sub-items ("– Basic data structures") and numbered items the parse kept flat: drawn as a nested list."""
+        finding = item.findings[0]
+        evidence = finding.get("evidence") or {}
+        blocks = self._hint_blocks(finding, "item_block_ids", "block_ids")
+        level = int(evidence.get("list_level") or 2)
+        outcomes: list[Any] = []
+        changed: list[dict[str, Any]] = []
+        for block in blocks:
+            if block.block_type not in {BlockType.LIST_ITEM, BlockType.PARAGRAPH}:
+                raise NotApplicable(f"a {block.block_type.value} block is not a list item")
+            text = (block.source_text or "").lstrip()
+            kind = str(evidence.get("list_kind") or "") or (
+                "dash" if re.match(r"[\u2013\u2014-]\s", text) else "number" if re.match(r"\d{1,3}(?:[.)]\s*|\s+)\S", text) else ""
+            )
+            if block.block_type == BlockType.PARAGRAPH:
+                outcomes.append(
+                    self.structure.relabel_block(self.ctx.document_id, block.id, BlockType.LIST_ITEM.value, actor_id=ACTOR_ID, reason="列表的子项")
+                )
+            updates: dict[str, Any] = {"list_level": level}
+            if kind:
+                updates["list_kind"] = kind
+            span = self.session.get(Block, block.id).source_span_json or {}
+            if all(span.get(key) == value for key, value in updates.items()) and block.block_type == BlockType.LIST_ITEM:
+                continue
+            self.structure.override_metadata(self.ctx.document_id, block.id, updates, actor_id=ACTOR_ID, reason="列表子项按层级缩进")
+            changed.append({"block_id": block.id, **updates})
+        if not changed:
+            raise NotApplicable("the items are already nested")
+        done = self.retranslate(self._fork_packets(outcomes), [])
+        return ToolResult(params={"items": changed}, block_ids=[entry["block_id"] for entry in changed], packet_ids=done)
+
+    def _structure_edit__relabel_as_sidebar(self, item: WorkItem) -> ToolResult:
+        """A sidebar's blocks drawn as one titled box; its title is not a section heading of the chapter."""
+        finding = item.findings[0]
+        evidence = finding.get("evidence") or {}
+        blocks = self._hint_blocks(finding, "sidebar_block_ids", "block_ids")
+        title_id = str(evidence.get("title_block_id") or blocks[0].id)
+        title = next((block for block in blocks if block.id == title_id), None) or self._block(title_id)
+        sidebar_id = str(evidence.get("sidebar_id") or title.id)
+        outcomes: list[Any] = []
+        if title.block_type == BlockType.HEADING:
+            outcomes.append(
+                self.structure.relabel_block(
+                    self.ctx.document_id, title.id, BlockType.PARAGRAPH.value, actor_id=ACTOR_ID, reason="侧栏的标题，不是本章的小节标题"
+                )
+            )
+        for block in dict.fromkeys([title, *blocks]):
+            updates: dict[str, Any] = {"sidebar_id": sidebar_id}
+            if block.id == title.id:
+                updates["sidebar_title"] = True
+            self.structure.override_metadata(self.ctx.document_id, block.id, updates, actor_id=ACTOR_ID, reason="侧栏排成一个带标题的框")
+        done = self.retranslate(self._fork_packets(outcomes), [])
+        return ToolResult(
+            params={"sidebar_id": sidebar_id, "title_block_id": title.id, "block_ids": [block.id for block in blocks]},
+            block_ids=list(dict.fromkeys([title.id, *[block.id for block in blocks]])),
+            packet_ids=done,
+        )
+
+    def _structure_edit__join_continuation(self, item: WorkItem) -> ToolResult:
+        """A paragraph the page cut (at a figure or a page break): its two parts become one block again."""
+        finding = item.findings[0]
+        evidence = finding.get("evidence") or {}
+        first = self._finding_block(finding)
+        second_id = evidence.get("continuation_block_id") or evidence.get("next_block_id")
+        if second_id:
+            second = self._block(str(second_id))
+        else:
+            following = [block for block in self._chapter_blocks(first.chapter_id) if block.ordinal > first.ordinal]
+            second = next(
+                (
+                    block
+                    for block in following
+                    if block.block_type == first.block_type
+                    and not (block.source_span_json or {}).get("repair_hidden_from_export")
+                    and (block.source_span_json or {}).get("pdf_block_role") not in {"header", "footer"}
+                ),
+                None,
+            )
+            if second is None:
+                raise NotApplicable("no continuation after the block")
+        outcome = self.structure.merge_blocks(
+            self.ctx.document_id, first.id, second.id, actor_id=ACTOR_ID, reason="被图或换页截断的段落接回一段", across_artifacts=True
+        )
+        done = self.retranslate(self._fork_packets([outcome]), ["这是一个完整的段落（原来被图或换页截断），译成连贯的一段。"])
+        return ToolResult(params={"first_block_id": first.id, "second_block_id": second.id}, block_ids=list(outcome.block_ids), packet_ids=done)
+
+    def _structure_edit__link_listing_caption(self, item: WorkItem) -> ToolResult:
+        """A "Listing N.N ..." caption kept as a paragraph: made the caption of the code block it names."""
+        finding = item.findings[0]
+        evidence = finding.get("evidence") or {}
+        caption = self._block(str(evidence.get("caption_block_id") or "")) if evidence.get("caption_block_id") else self._finding_block(finding)
+        code_id = evidence.get("listing_block_id") or evidence.get("code_block_id")
+        if code_id:
+            code = self._block(str(code_id))
+        else:
+            previous, following = self._neighbours(caption)
+            code = next((block for block in (following, previous) if block is not None and block.block_type == BlockType.CODE), None)
+            if code is None:
+                raise NotApplicable("no code block right next to the listing caption")
+        if code.block_type != BlockType.CODE:
+            raise NotApplicable(f"a {code.block_type.value} block is not a listing")
+        if (code.source_span_json or {}).get("linked_caption_block_id") == caption.id:
+            raise NotApplicable("the caption is already linked to its listing")
+        outcomes: list[Any] = []
+        if caption.block_type != BlockType.CAPTION:
+            outcomes.append(
+                self.structure.relabel_block(self.ctx.document_id, caption.id, BlockType.CAPTION.value, actor_id=ACTOR_ID, reason="代码清单的标题")
+            )
+        self.structure.link_caption(self.ctx.document_id, caption.id, code.id, actor_id=ACTOR_ID, reason="代码清单标题配给它的代码")
+        done = self.retranslate(self._fork_packets(outcomes), [])
+        return ToolResult(params={"caption_block_id": caption.id, "listing_block_id": code.id}, block_ids=[caption.id, code.id], packet_ids=done)
+
     def _heading_titles(self, chapter_id: str) -> list[str]:
         titles = [block.source_text for block in self._chapter_blocks(chapter_id) if block.block_type == BlockType.HEADING]
         chapters = self.session.scalars(select(Chapter.title_src).where(Chapter.document_id == self.ctx.document_id)).all()

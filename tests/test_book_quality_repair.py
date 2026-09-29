@@ -254,6 +254,93 @@ class FlakyRetranslationTests(ToolboxCase):
         self.assertTrue(attempt["params"]["retried_packet_ids"])
 
 
+class HintedStructureEditTests(ToolboxCase):
+    """The four structure edits the parser side's QA rules name in their repair hints."""
+
+    def _item(self, check_id: str, hint: str, block_id: str, **evidence) -> WorkItem:
+        from book_agent.domain.quality.pilot_repair import paths_for
+
+        finding = {
+            "key": f"{check_id}:block:{block_id}",
+            "check_id": check_id,
+            "severity": "major",
+            "repair": f"structure_edit.{hint}",
+            "location": {"block_id": block_id},
+            "target": {"kind": "block", "id": block_id},
+            "evidence": evidence,
+        }
+        path = paths_for(check_id, finding)[0]
+        self.assertEqual(path.name, f"structure_edit.{hint}")
+        return WorkItem(check_id, path, [finding])
+
+    def test_a_hint_from_an_unknown_check_is_routed_to_its_tool(self) -> None:
+        from book_agent.domain.quality.pilot_repair import paths_for, plan_work
+
+        finding = {"key": "k", "check_id": "L1.some_new_rule", "severity": "major", "repair": "structure_edit.join_continuation", "location": {}}
+        self.assertEqual([path.name for path in paths_for("L1.some_new_rule", finding)], ["structure_edit.join_continuation"])
+        self.assertEqual(paths_for("L1.some_new_rule", {**finding, "repair": "structure_edit.rm_rf"}), ())
+        (work,) = plan_work([finding], set())
+        self.assertEqual(work.path.name, "structure_edit.join_continuation")
+
+    def test_nest_list_items(self) -> None:
+        chapter_ids = self.translate()
+        dash = self.restyle("Retrieval gives the LLM facts", text="– Retrieval gives the LLM facts from outside sources.", block_type="list_item")
+        with self.bench.session_factory() as session:
+            result = self.toolbox(session, chapter_ids).apply(self._item("L1.list_not_nested", "nest_list_items", dash))
+            session.commit()
+            span = session.get(Block, dash).source_span_json
+            self.assertEqual((span["list_level"], span["list_kind"]), (2, "dash"))
+            self.assertEqual(result.params["items"][0]["block_id"], dash)
+
+    def test_relabel_as_sidebar(self) -> None:
+        chapter_ids = self.translate()
+        title = self.restyle("An LLM answers from", text="Why tokens matter", block_type="heading")
+        with self.bench.session_factory() as session:
+            body = block_with_text(session, self.bench.document_id, "Retrieval gives the LLM facts").id
+            item = self._item("L1.sidebar_as_section", "relabel_as_sidebar", title, sidebar_block_ids=[title, body])
+            self.toolbox(session, chapter_ids).apply(item)
+            session.commit()
+            title_block, body_block = session.get(Block, title), session.get(Block, body)
+            self.assertEqual(title_block.block_type, BlockType.PARAGRAPH)
+            self.assertTrue(title_block.source_span_json["sidebar_title"])
+            self.assertEqual(title_block.source_span_json["sidebar_id"], body_block.source_span_json["sidebar_id"])
+            self.assertNotIn("sidebar_title", body_block.source_span_json)
+
+    def test_join_continuation_across_a_figure(self) -> None:
+        chapter_ids = self.translate()
+        with self.bench.session_factory() as session:
+            figure = next(
+                block
+                for block in session.scalars(select(Block).where(Block.source_text.in_(["[Figure]", "[Image]"]))).all()
+                if (block.source_span_json or {}).get("source_page_start") == 2
+            )
+            blocks = self.toolbox(session, chapter_ids)._chapter_blocks(figure.chapter_id)
+            index = next(i for i, block in enumerate(blocks) if block.id == figure.id)
+            before = next(block for block in reversed(blocks[:index]) if block.block_type == BlockType.PARAGRAPH)
+            after = next(block for block in blocks[index + 1 :] if block.block_type == BlockType.PARAGRAPH)
+            between = [block for block in blocks if before.ordinal < block.ordinal < after.ordinal]
+            if any(block.block_type not in {BlockType.FIGURE, BlockType.IMAGE, BlockType.CAPTION} and (block.source_span_json or {}).get("pdf_block_role") not in {"header", "footer"} for block in between):
+                self.skipTest("the bench puts text between the paragraphs around its figure")
+            first_text, second_text = before.source_text, after.source_text
+            item = self._item("L1.paragraph_split", "join_continuation", before.id, continuation_block_id=after.id)
+            self.toolbox(session, chapter_ids).apply(item)
+            session.commit()
+            joined = session.get(Block, before.id)
+            self.assertIn(first_text.strip()[:30], joined.source_text)
+            self.assertIn(second_text.strip()[:30], joined.source_text)
+            self.assertEqual(session.get(Block, after.id).status.value, "invalidated")
+
+    def test_link_listing_caption(self) -> None:
+        chapter_ids = self.translate()
+        caption = self.restyle("The first technique reads", text="Listing 1.1 The retrieval loop", block_type="paragraph")
+        code = self.restyle("The second technique masks", text="def retrieve(query):\n    return store.search(query)", block_type="code")
+        with self.bench.session_factory() as session:
+            self.toolbox(session, chapter_ids).apply(self._item("L4.listing_caption_orphan", "link_listing_caption", caption, listing_block_id=code))
+            session.commit()
+            self.assertEqual(session.get(Block, caption).block_type, BlockType.CAPTION)
+            self.assertEqual(session.get(Block, code).source_span_json["linked_caption_block_id"], caption)
+
+
 class DefectTicketTests(ToolboxCase):
     def test_a_defect_seen_again_updates_its_ticket(self) -> None:
         from book_agent.domain.models.review import PilotDefectTicket

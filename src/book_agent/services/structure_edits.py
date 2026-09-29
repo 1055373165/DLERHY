@@ -71,8 +71,17 @@ OVERRIDABLE_METADATA_KEYS = frozenset(
         "artifact_group_context_excluded",
         # A figure its page gives no caption: accepted without one (the QA stops asking for it).
         "figure_caption_absent",
+        # Lists and sidebars as the reading copy draws them (export/markup.py): a sub-item's level and
+        # marker, text set inside a list, the blocks of one sidebar box and its title.
+        "list_level",
+        "list_kind",
+        "list_continuation",
+        "sidebar_id",
+        "sidebar_title",
     }
 )
+# Between the two halves of a paragraph a figure or a page break may sit: these do not stop a join.
+JOINABLE_BETWEEN_TYPES = frozenset({BlockType.FIGURE, BlockType.IMAGE, BlockType.CAPTION, BlockType.TABLE, BlockType.EQUATION})
 
 # Types an edit may give or take away. Tables, figures and images carry extracted artifacts
 # (cells, image files) that a relabel cannot create or remove.
@@ -255,10 +264,13 @@ class StructureEditService:
         actor_id: str,
         reason: str,
         turn_id: str | None = None,
+        across_artifacts: bool = False,
     ) -> EditOutcome:
+        """``across_artifacts``: the second block may follow a figure, a caption, a table or page furniture
+        (a sentence the page cut at a figure or a page break), not only the first block itself."""
         first = self._active_block(document_id, first_block_id)
         second = self._active_block(document_id, second_block_id)
-        self._check_mergeable(first, second)
+        self._check_mergeable(first, second, across_artifacts=across_artifacts)
         snapshot = [_snapshot(first), _snapshot(second)]
         self._apply_merge(first, second)
         fork = self._fork(
@@ -267,7 +279,7 @@ class StructureEditService:
         edit = self._log(
             document_id,
             MERGE,
-            {"first_block_id": first.id, "second_block_id": second.id},
+            {"first_block_id": first.id, "second_block_id": second.id, **({"across_artifacts": True} if across_artifacts else {})},
             snapshot,
             fork=fork,
             actor_id=actor_id,
@@ -493,7 +505,7 @@ class StructureEditService:
             ):
                 return "stale", []
             try:
-                self._check_mergeable(first, second)
+                self._check_mergeable(first, second, across_artifacts=bool(args.get("across_artifacts")))
             except StructureEditRejected:
                 return "stale", []
             self._apply_merge(first, second)
@@ -725,7 +737,7 @@ class StructureEditService:
             raise StructureEditRejected(f"block {block_id} is not active")
         return block
 
-    def _check_mergeable(self, first: Block, second: Block) -> None:
+    def _check_mergeable(self, first: Block, second: Block, *, across_artifacts: bool = False) -> None:
         if first.id == second.id:
             raise StructureEditRejected("cannot merge a block with itself")
         if first.chapter_id != second.chapter_id:
@@ -736,6 +748,27 @@ class StructureEditService:
                 + ", ".join(sorted(t.value for t in MERGEABLE_TYPES))
                 + f"); got {first.block_type.value} and {second.block_type.value}"
             )
+        if across_artifacts:
+            if second.ordinal <= first.ordinal:
+                raise StructureEditRejected("the second block must come after the first")
+            between = self.session.scalars(
+                select(Block).where(
+                    Block.chapter_id == first.chapter_id,
+                    Block.ordinal > first.ordinal,
+                    Block.ordinal < second.ordinal,
+                    Block.status == ArtifactStatus.ACTIVE,
+                )
+            ).all()
+            blocking = [
+                block
+                for block in between
+                if block.block_type not in JOINABLE_BETWEEN_TYPES
+                and (block.source_span_json or {}).get("pdf_block_role") not in {"header", "footer"}
+                and not (block.source_span_json or {}).get("repair_hidden_from_export")
+            ]
+            if blocking:
+                raise StructureEditRejected("only figures, captions, tables and page furniture may stand between the two parts")
+            return
         next_active = self.session.scalars(
             select(Block)
             .where(
