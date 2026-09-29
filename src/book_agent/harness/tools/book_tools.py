@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 
 from book_agent.domain.enums import DecisionScope, LockLevel, TermType
 from book_agent.domain.models import Block, Chapter, Sentence
+from book_agent.domain.terminology.candidates import mostly_in_code, not_a_term
 from book_agent.domain.terminology.matching import SourceTermIndex
 from book_agent.harness.tools.permissions import AutoApproveRule, PermissionPolicy
 from book_agent.harness.tools.registry import ToolContext, ToolError, ToolPermission, ToolRegistry, ToolSpec
@@ -82,6 +83,24 @@ def count_term_occurrences(ctx: ToolContext, term: str) -> int:
         )
     )
     return sum(1 for (text,) in rows if index.find(text or ""))
+
+
+def term_used_as_code(ctx: ToolContext, term: str) -> bool:
+    """The book writes this word mostly as code (a class or function name), not as a word of its prose."""
+    from book_agent.domain.enums import ArtifactStatus, BlockType
+
+    rows = ctx.session.execute(
+        select(Block.block_type, Block.source_text)
+        .join(Chapter, Chapter.id == Block.chapter_id)
+        .where(
+            Chapter.document_id == ctx.document_id,
+            Block.status == ArtifactStatus.ACTIVE,
+            func.lower(Block.source_text).like(f"%{term.strip().lower()}%"),
+        )
+    ).all()
+    code = [text or "" for block_type, text in rows if block_type == BlockType.CODE]
+    prose = [text or "" for block_type, text in rows if block_type != BlockType.CODE]
+    return mostly_in_code(term, prose, code)
 
 
 def search_book(ctx: ToolContext, args: SearchBookArgs) -> dict[str, Any]:
@@ -171,6 +190,14 @@ def get_glossary(ctx: ToolContext, args: GetGlossaryArgs) -> dict[str, Any]:
 def _write_term(ctx: ToolContext, args: TermArgs, *, lock_level: LockLevel) -> dict[str, Any]:
     if not args.source_term.strip() or not args.target_term.strip():
         raise ToolError("source_term and target_term are required")
+    reason = not_a_term(args.source_term)
+    if reason is None and term_used_as_code(ctx, args.source_term):
+        reason = "code identifier (the book uses it mostly in code)"
+    if reason is not None:
+        raise ToolError(
+            f"'{args.source_term}' is a {reason}, not a glossary term: identifiers and code tokens stay as the code "
+            "spells them, and generic verbs are translated by their sentence. Do not propose it."
+        )
     occurrences = count_term_occurrences(ctx, args.source_term)
     if occurrences == 0:
         raise ToolError(f"'{args.source_term}' does not occur in the book as a whole term; check the spelling with search_book")

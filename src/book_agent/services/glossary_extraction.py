@@ -37,6 +37,7 @@ from book_agent.workers.llm_calls import CALL_KIND_GLOSSARY_EXTRACT, observed_ll
 from book_agent.domain.enums import BlockType, TargetSegmentStatus, TermType
 from book_agent.domain.models import Block, Chapter, Sentence
 from book_agent.domain.models.translation import AlignmentEdge, TargetSegment
+from book_agent.domain.terminology.candidates import not_a_term
 from book_agent.domain.terminology.matching import (
     SourceTermIndex,
     source_term_key,
@@ -61,6 +62,9 @@ GLOSSARY_EXTRACTION_SYSTEM_PROMPT = (
     "abbreviations, and the names of people, organisations, websites and books. "
     "Skip ordinary vocabulary, and skip everyday words whose correct Chinese depends on the sentence "
     "(a word that is sometimes a technical term and sometimes plain English is not a glossary entry). "
+    "Skip code: identifiers and code tokens (function, method, class, variable, decorator, file and command "
+    "names such as @tool, step(), final_result, ExecutionContext) and generic verbs (execute, run, call) "
+    "are never glossary terms. "
     "For each term give the rendering a Chinese professional publication in this field would use. "
     "Keep widely used abbreviations (for example RSI, MACD, SMA) unchanged, keep person, company and "
     "website names in their original form unless a standard Chinese name exists, and translate book titles. "
@@ -189,6 +193,9 @@ def merge_proposals(
         target = _normalize_space(proposal.target_term)
         key = source_term_key(source)
         if not key or not target:
+            continue
+        if not_a_term(source) is not None:
+            # A code identifier or a generic verb: kept as the code spells it, or translated in context.
             continue
         grouped[key].append(proposal)
         spelling.setdefault(key, source)

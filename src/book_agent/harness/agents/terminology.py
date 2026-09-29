@@ -23,6 +23,7 @@ from book_agent.harness.tools.book_tools import book_tool_registry, terminology_
 from book_agent.harness.tools.permissions import PermissionPolicy
 from book_agent.harness.tools.registry import ToolRegistry
 from book_agent.infra.repositories.agent import AgentLedgerRepository
+from book_agent.domain.terminology.candidates import not_a_term
 from book_agent.services.glossary_extraction import GlossaryExtractionService, GlossarySuggestion, chunk_texts
 
 AGENT_KIND = "terminology"
@@ -41,7 +42,11 @@ Your job runs once, before translation starts, and decides what every translator
    book.style_notes, and any resolved ambiguity worth remembering (dotted key of your choice).
 Work from the candidate list and excerpts you are given; verify doubtful terms with search_book / read_block
 before deciding. Prefer the rendering a Chinese professional publication in this field would use. Do not
-propose everyday vocabulary. When you are done, reply with a short Chinese summary and no further tool calls."""
+propose everyday vocabulary. Code is not terminology: never propose or lock identifiers and code tokens
+(function, method, class, variable, decorator, parameter, file or command names such as @tool, step(),
+final_result, ExecutionContext, or a class name like Event the book writes in code), and never generic verbs
+(execute, run, call, return, ...); they stay as the code spells them or are translated by their sentence, and
+the tools refuse them. When you are done, reply with a short Chinese summary and no further tool calls."""
 
 
 @dataclass(slots=True)
@@ -144,7 +149,9 @@ class TerminologyAgent:
         service = GlossaryExtractionService(self.session, client, model_name=model_name)
         try:
             # Provider errors leave the session usable, and the failed call's event stays in it.
-            return service.extract_from_texts(document_id, texts)
+            found = service.extract_from_texts(document_id, texts)
+            # Code identifiers and generic verbs are not terms: the agent does not see them as candidates.
+            return [item for item in found if not_a_term(item.source_term) is None]
         except Exception as exc:
             from book_agent.workers.failures import FailureDisposition, classify_failure
 
