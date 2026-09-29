@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any, Literal
 from uuid import uuid4
 
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -635,6 +636,66 @@ def refresh_document_structure(
         carried_ratio=round(fork.carried_ratio, 3) if fork is not None and fork.forked else None,
         retranslate_packet_count=len(fork.retranslate_packet_ids) if fork is not None else 0,
     )
+
+
+class ChapterReparseRequest(BaseModel):
+    # Only report what would change; nothing is written.
+    dry_run: bool = False
+
+
+@router.get("/{document_id}/chapter-reparse")
+def get_chapter_reparse(document_id: str, session: Session = Depends(get_db_session)) -> dict[str, Any]:
+    """Whether the untranslated chapters were read by older parser code, and the last re-parses."""
+    from book_agent.services.chapter_reparse import (
+        PARSER_FINGERPRINT_KEY,
+        REPARSE_HISTORY_KEY,
+        ChapterReparseService,
+        parser_fingerprint,
+    )
+
+    document = _load_document_or_404(session, document_id)
+    service = ChapterReparseService(session)
+    metadata = document.metadata_json or {}
+    return {
+        "document_id": document_id,
+        "needs_reparse": service.needs_reparse(document_id),
+        "parser_fingerprint": parser_fingerprint(),
+        "document_parser_fingerprint": metadata.get(PARSER_FINGERPRINT_KEY),
+        "untranslated_chapter_ids": service.untranslated_chapter_ids(document_id),
+        "history": list(metadata.get(REPARSE_HISTORY_KEY) or []),
+    }
+
+
+@router.post("/{document_id}/chapter-reparse")
+def reparse_untranslated_chapters(
+    document_id: str,
+    payload: ChapterReparseRequest | None = None,
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Read the chapters nothing has translated yet again with the current parser (services/chapter_reparse.py).
+
+    Translated chapters stay as they are; the chapter boundaries must come out the same.
+    """
+    from book_agent.services.chapter_reparse import ChapterReparseService, ReparseRefused
+
+    _load_document_or_404(session, document_id)
+    try:
+        result = ChapterReparseService(session).reparse_untranslated(document_id, dry_run=bool(payload and payload.dry_run))
+    except ReparseRefused as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return result.to_json()
+
+
+@router.post("/{document_id}/chapter-reparse/{parse_revision_id}/revert")
+def revert_chapter_reparse(document_id: str, parse_revision_id: str, session: Session = Depends(get_db_session)) -> dict[str, Any]:
+    """Put back the structure a re-parse replaced (only while its chapters are untranslated)."""
+    from book_agent.services.chapter_reparse import ChapterReparseService, ReparseRefused
+
+    _load_document_or_404(session, document_id)
+    try:
+        return ChapterReparseService(session).revert(document_id, parse_revision_id)
+    except ReparseRefused as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 @router.get("/{document_id}/parse-health")
