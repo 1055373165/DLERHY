@@ -311,7 +311,8 @@ class StageStatusCalculator:
             stmt = (
                 select(func.count(TranslationPacket.id))
                 .join(Chapter, Chapter.id == TranslationPacket.chapter_id)
-                .where(Chapter.document_id == document_id, *conditions)
+                # A packet a fork invalidated (its blocks gone, or merged into another) has nothing left to translate.
+                .where(Chapter.document_id == document_id, TranslationPacket.status != PacketStatus.INVALIDATED, *conditions)
             )
             if packet_ids is not None:
                 stmt = stmt.where(TranslationPacket.id.in_(packet_ids))

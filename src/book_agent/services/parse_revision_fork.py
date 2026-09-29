@@ -27,7 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from book_agent.core.ids import stable_id
@@ -213,6 +213,12 @@ class ParseRevisionForkService:
         status_by_old = {sentence.id: sentence.sentence_status for items in retired_by_block.values() for sentence in items}
 
         packets_by_chapter = self._affected_packets(retired_ids, list(new_by_block))
+        # A merge moves several packets' bounds onto one block: they would all translate it.
+        for chapter_id, packet_ids in list(packets_by_chapter.items()):
+            duplicates = self.collapse_duplicate_packets(packet_ids, now=now)
+            if duplicates:
+                result.invalidated_packet_ids.extend(duplicates)
+                packets_by_chapter[chapter_id] = [packet_id for packet_id in packet_ids if packet_id not in duplicates]
 
         for chapter_id, packet_ids in packets_by_chapter.items():
             previous_runs = {packet_id: self._latest_run(packet_id) for packet_id in packet_ids}
@@ -373,6 +379,59 @@ class ParseRevisionForkService:
         for packet in self.session.scalars(select(TranslationPacket).where(TranslationPacket.id.in_(packet_ids))).all():
             grouped.setdefault(packet.chapter_id, []).append(packet.id)
         return {chapter_id: sorted(ids) for chapter_id, ids in grouped.items()}
+
+    def collapse_duplicate_packets(self, packet_ids: list[str], *, now: datetime | None = None) -> list[str]:
+        """Packets with the same block range: one stays, the others are invalidated; returns those.
+
+        The one that stays is the one translated last (its translation is the one the reader saw
+        last); the others' segments are superseded and their sentence maps dropped, so no sentence is
+        the current sentence of two packets and no older attempt stays active beside the kept one.
+        """
+        now = now or _utcnow()
+        packets = list(self.session.scalars(select(TranslationPacket).where(TranslationPacket.id.in_(list(packet_ids) or ["-"]))).all())
+        groups: dict[tuple[str, str | None, str | None], list[TranslationPacket]] = {}
+        for packet in packets:
+            if packet.block_start_id is None or packet.status == PacketStatus.INVALIDATED:
+                continue
+            groups.setdefault((packet.chapter_id, packet.block_start_id, packet.block_end_id or packet.block_start_id), []).append(packet)
+        invalidated: list[str] = []
+        for group in groups.values():
+            if len(group) < 2:
+                continue
+
+            def last_translated(packet: TranslationPacket) -> tuple[int, str, str]:
+                run = self._latest_run(packet.id)
+                return (1 if run is not None else 0, run.created_at.isoformat() if run is not None and run.created_at else "", packet.id)
+
+            keep = max(group, key=last_translated)
+            for packet in group:
+                if packet.id == keep.id:
+                    continue
+                for segment in self.session.scalars(
+                    select(TargetSegment)
+                    .join(TranslationRun, TranslationRun.id == TargetSegment.translation_run_id)
+                    .where(TranslationRun.packet_id == packet.id, TargetSegment.final_status != TargetSegmentStatus.SUPERSEDED)
+                ).all():
+                    segment.final_status = TargetSegmentStatus.SUPERSEDED
+                    segment.updated_at = now
+                self.session.execute(delete(PacketSentenceMap).where(PacketSentenceMap.packet_id == packet.id))
+                packet.packet_json = {**(packet.packet_json or {}), "collapsed_into_packet_id": keep.id}
+                packet.block_start_id = None
+                packet.block_end_id = None
+                packet.status = PacketStatus.INVALIDATED
+                packet.updated_at = now
+                invalidated.append(packet.id)
+        self.session.flush()
+        return invalidated
+
+    def collapse_document_duplicates(self, document_id: str) -> list[str]:
+        """Heal a book whose earlier merges left duplicate packets (see ``collapse_duplicate_packets``)."""
+        packet_ids = list(
+            self.session.scalars(
+                select(TranslationPacket.id).join(Chapter, Chapter.id == TranslationPacket.chapter_id).where(Chapter.document_id == document_id)
+            ).all()
+        )
+        return self.collapse_duplicate_packets(packet_ids)
 
     def _latest_run(self, packet_id: str) -> TranslationRun | None:
         return self.session.scalars(

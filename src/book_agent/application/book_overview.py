@@ -203,6 +203,7 @@ def _packet_progress(session: Session, document_id: str, packet_ids: frozenset[s
         statement = statement.where(TranslationPacket.id.in_(sorted(packet_ids)))
     rows = session.execute(statement).all()
     counts = {status.value if hasattr(status, "value") else str(status): int(count) for status, count in rows}
+    counts.pop(PacketStatus.INVALIDATED.value, None)
     return {"done": counts.get(PacketStatus.TRANSLATED.value, 0), "total": sum(counts.values())}
 
 

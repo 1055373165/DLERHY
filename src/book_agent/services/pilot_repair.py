@@ -1117,6 +1117,10 @@ def heal_alignment(session: Session, workflow: Any, document_id: str) -> dict[st
     from book_agent.domain.models.translation import AlignmentEdge, PacketSentenceMap, TargetSegment, TranslationRun
     from book_agent.infra.repositories.translation import TranslationRepository
 
+    from book_agent.services.parse_revision_fork import ParseRevisionForkService
+
+    # Packets an earlier merge left on the same block: one stays, the others stop claiming its sentences.
+    collapsed = ParseRevisionForkService(session).collapse_document_duplicates(document_id)
     issues = session.scalars(
         select(ReviewIssue).where(
             ReviewIssue.document_id == document_id,
@@ -1180,7 +1184,7 @@ def heal_alignment(session: Session, workflow: Any, document_id: str) -> dict[st
             )
         ).all()
     ]
-    return {"healed": healed, "needs_retranslation": skipped, "open_alignment_issues": still_open}
+    return {"healed": healed, "needs_retranslation": skipped, "open_alignment_issues": still_open, "collapsed_duplicate_packets": collapsed}
 
 
 def reaudit_pilot_exports(session: Session, document_id: str) -> dict[str, Any]:
