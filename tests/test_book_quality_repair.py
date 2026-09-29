@@ -210,6 +210,50 @@ class FigurePathTests(ToolboxCase):
                 self.toolbox(session, chapter_ids).apply(item)
 
 
+class FlakyRetranslationTests(ToolboxCase):
+    def test_a_repair_reverted_only_for_its_retranslations_flake_is_retried_once(self) -> None:
+        with self.bench.session_factory() as session:
+            (omitted,) = sentence_ids(session, self.bench.document_id, "Teams track the score")
+            session.commit()
+        self.worker.omit_sentences.add(omitted)
+        self.translate()
+        worker = self.worker
+        original = worker.translate
+        retranslations = {"count": 0}
+
+        def flaky(task):
+            # The first retranslation leaks a program note (the model's flake); the next one is clean.
+            if task.context_packet.packet_id in worker.translated_once:
+                retranslations["count"] += 1
+                worker.retranslation_leaks = retranslations["count"] == 1
+            return original(task)
+
+        worker.translate = flaky
+        payload, final = self.repair()
+
+        (attempt,) = [a for a in payload["attempts"] if a["check_id"] == "L6.untranslated_sentence"]
+        self.assertEqual(attempt["outcome"], "kept", attempt["reason"])
+        self.assertTrue(attempt["params"]["retried_packet_ids"])
+        self.assertIn("L7.leaked_marker", attempt["params"]["retry_reason"])
+        self.assertEqual(retranslations["count"], 2)
+        with self.bench.session_factory() as session:
+            text = active_target_texts(session, [omitted]).get(omitted, "")
+        self.assertTrue(text)
+        self.assertNotIn("图片锚点保留", text)
+
+    def test_a_repair_that_is_really_worse_is_still_reverted_after_one_retry(self) -> None:
+        with self.bench.session_factory() as session:
+            (omitted,) = sentence_ids(session, self.bench.document_id, "Teams track the score")
+            session.commit()
+        self.worker.omit_sentences.add(omitted)
+        self.worker.retranslation_leaks = True
+        self.translate()
+        payload, _final = self.repair()
+        (attempt,) = payload["attempts"]
+        self.assertEqual(attempt["outcome"], "reverted")
+        self.assertTrue(attempt["params"]["retried_packet_ids"])
+
+
 class DefectTicketTests(ToolboxCase):
     def test_a_defect_seen_again_updates_its_ticket(self) -> None:
         from book_agent.domain.models.review import PilotDefectTicket

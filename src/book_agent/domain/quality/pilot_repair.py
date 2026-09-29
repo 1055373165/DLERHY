@@ -488,6 +488,35 @@ def judge(before: QaSnapshot, after: QaSnapshot, target_keys: Sequence[str], tar
     return Verdict(True, "improved", resolved)
 
 
+# Checks a retranslation can fail by itself (a line left in English, a program note leaked in):
+# the model's own flake, not a sign the repair was wrong.
+RETRANSLATION_FLAKE_CHECKS = frozenset({"L6.untranslated_sentence", "L7.untranslated_prose", "L7.leaked_marker"})
+
+
+def self_inflicted_packets(
+    verdict: Verdict, before: QaSnapshot, after_layers: Sequence[Mapping[str, Any]], retranslated: Iterable[str]
+) -> list[str]:
+    """The packets to retranslate once more when a repair was judged worse only for its retranslation's
+    own output: every check that got worse is one a flaky model output explains, and every new finding
+    of those checks is in a packet the attempt just retranslated. Empty otherwise (the repair is reverted).
+    """
+    retranslated = set(retranslated)
+    if verdict.keep or not verdict.worse_checks or not retranslated:
+        return []
+    worse = set(verdict.worse_checks) - {"blocking"}
+    if not worse or not worse <= RETRANSLATION_FLAKE_CHECKS:
+        return []
+    fresh = [
+        finding
+        for finding in findings_of(after_layers, (BLOCKING, MAJOR, MINOR))
+        if finding.get("check_id") in RETRANSLATION_FLAKE_CHECKS and str(finding.get("key")) not in before.keys
+    ]
+    packets = [str((finding.get("location") or {}).get("packet_id") or "") for finding in fresh]
+    if not fresh or not all(packet in retranslated for packet in packets):
+        return []
+    return sorted(set(packets))
+
+
 # ---------------------------------------------------------------------------
 # Escalation: one question per issue class (§7.4)
 

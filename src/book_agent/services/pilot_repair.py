@@ -63,6 +63,7 @@ from book_agent.domain.quality.pilot_repair import (
     judge,
     repairable_findings,
     plan_work,
+    self_inflicted_packets,
 )
 from book_agent.domain.structure.parse_health import BLOCKING, MAJOR
 from book_agent.orchestrator.run_plan import CHAPTER_IDS_REQUEST_KEY, PACKET_IDS_REQUEST_KEY, RUN_REQUEST_KEY
@@ -93,6 +94,7 @@ SCOPE_PILOT = "pilot"
 SCOPE_BOOK = "book"
 BOOK_TRIGGER = "book_repair"
 QUESTION_KIND = "pilot_question"
+RETRY_HINT = "上一次重译有句子没有译成中文，或混进了程序提示。这次每一句都要完整译成中文，只输出译文。"
 TRIGGER = "pilot_repair"
 EVIDENCE_DIR = "pilot-repair"
 MAX_EVIDENCE_SAMPLES = 8
@@ -420,6 +422,16 @@ class PilotRepairService:
             new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope)
             after = QaSnapshot.from_layers(new_layers)
             verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings})
+            # Reverted only for the retranslation's own flake (a line back in English, a leaked note):
+            # retranslate those packets once more before giving up on a good repair.
+            flaky = self_inflicted_packets(verdict, before, new_layers, result.packet_ids)
+            if flaky:
+                toolbox.retranslate(flaky, [RETRY_HINT])
+                self.session.flush()
+                result.params = {**result.params, "retried_packet_ids": flaky, "retry_reason": verdict.reason}
+                new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope)
+                after = QaSnapshot.from_layers(new_layers)
+                verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings})
             outcome = _AttemptOutcome("kept" if verdict.keep else "reverted", None if verdict.keep else verdict.reason, new_layers, verdict.resolved_keys)
             # A repair must not leave translations the export cannot align (ALIGNMENT_FAILURE).
             misaligned_after = alignment_anomalies(self.session, ctx.chapter_ids)
