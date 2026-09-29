@@ -8,17 +8,23 @@ from book_agent.export.markup import render_block_html
 from book_agent.export.models import MergedRenderBlock
 
 
-def _list_item(source_text: str, target_text: str | None) -> MergedRenderBlock:
+def _list_item(
+    source_text: str,
+    target_text: str | None,
+    metadata: dict[str, object] | None = None,
+    *,
+    block_type: str = "list_item",
+) -> MergedRenderBlock:
     return MergedRenderBlock(
         block_id="b1",
         chapter_id="c1",
-        block_type="list_item",
+        block_type=block_type,
         render_mode="translated",
         artifact_kind=None,
         title=None,
         source_text=source_text,
         target_text=target_text,
-        source_metadata={},
+        source_metadata=dict(metadata or {}),
         source_sentence_ids=[],
         target_segment_ids=[],
         is_expected_source_only=False,
@@ -44,6 +50,35 @@ class BulletedListItemHtmlTest(unittest.TestCase):
         html = render_block_html(_list_item("1. Tops and Bottoms", "1. 顶部与底部"))
         self.assertIn("<section class='block list_item'>", html)
         self.assertIn("<div class='zh'>1. 顶部与底部</div>", html)
+
+
+class NestedListItemHtmlTest(unittest.TestCase):
+    """Build an AI Agent 1.6: dash sub-items under a bullet, and a label set inside the list."""
+
+    def test_dash_sub_item_is_nested_under_its_bullet(self) -> None:
+        html = render_block_html(
+            _list_item(
+                "– Basic data structures such as variables",
+                "– 基本数据结构，如变量",
+                {"list_kind": "dash", "list_level": 2},
+            )
+        )
+        self.assertIn("<section class='block list_item dashed sub-item'>", html)
+        self.assertIn("<div class='zh' data-marker='–'>基本数据结构，如变量</div>", html)
+
+    def test_numbered_item_draws_its_number(self) -> None:
+        # A Simple Guide to RAG 2.6: "1 Data layer—..." (the number set apart from the text).
+        html = render_block_html(
+            _list_item("1 Data layer—Tools and platforms", "1 数据层——工具与平台", {"list_kind": "number", "list_level": 1})
+        )
+        self.assertIn("<section class='block list_item numbered'>", html)
+        self.assertIn("<div class='zh' data-marker='1.'>数据层——工具与平台</div>", html)
+
+    def test_text_set_inside_a_list_is_indented_with_it(self) -> None:
+        html = render_block_html(
+            _list_item("Cost considerations:", "成本考量：", {"list_level": 1, "list_continuation": True}, block_type="paragraph")
+        )
+        self.assertIn("<section class='block paragraph list-continuation'>", html)
 
 
 if __name__ == "__main__":

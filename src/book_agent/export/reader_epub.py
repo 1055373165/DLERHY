@@ -55,6 +55,9 @@ h3,h4{font-size:1.1em;margin:1em 0 .5em}
 .block{margin:.8em 0}
 .zh{text-align:justify}
 .list_item .zh{padding-left:1.2em;text-indent:-1.2em}
+.list_item.dashed .zh::before,.list_item.numbered .zh::before{content:attr(data-marker) " "}
+.list_item.sub-item{margin-left:1.2em}
+.paragraph.list-continuation{margin-left:1.2em}
 .quote{border-left:3px solid #999;padding-left:.8em;color:#333}
 .footnote .zh,.caption .zh,figcaption{font-size:.9em;color:#444}
 figure{margin:1em 0;text-align:center}
