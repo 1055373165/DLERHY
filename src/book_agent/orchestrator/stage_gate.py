@@ -54,6 +54,9 @@ STAGE_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "pilot_qa": ("terminology", "translate", "model_review", "review", "repair", "bilingual_html", "merged_html", "export_review"),
     # The pilot's repair loop starts from the QA's report.
     "pilot_repair": ("terminology", "translate", "model_review", "review", "repair", "bilingual_html", "merged_html", "export_review", "pilot_qa"),
+    # A whole-book run's layered QA and repair loop, on every chapter (services/book_quality.py).
+    "book_qa": ("terminology", "translate", "model_review", "review", "repair", "bilingual_html", "merged_html", "web_html", "export_review"),
+    "book_repair": ("terminology", "translate", "model_review", "review", "repair", "bilingual_html", "merged_html", "web_html", "export_review", "book_qa"),
 }
 # Other export types (standalone export runs) follow translation and review.
 _DEFAULT_EXPORT_DEPENDENCIES: tuple[str, ...] = ("translate", "review")

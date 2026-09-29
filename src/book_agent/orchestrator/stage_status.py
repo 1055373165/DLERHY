@@ -58,6 +58,8 @@ PIPELINE_STAGES = (
     "export_review",
     "pilot_qa",
     "pilot_repair",
+    "book_qa",
+    "book_repair",
 )
 # Agent stages map a pipeline key to the agent kind carried in the work item bundle.
 AGENT_STAGE_KINDS: dict[str, str] = {
@@ -201,13 +203,13 @@ class StageStatusCalculator:
             return self._agent_stage_evidence(run_id, AGENT_STAGE_KINDS[stage], stage)
         if stage in {export_type.value for export_type in ExportType}:
             return self._export_stage_evidence(run_id, ExportType(stage), stage)
-        if stage == "pilot_qa":
-            return self._pilot_qa_evidence(run_id)
-        if stage == "pilot_repair":
-            return self._pilot_repair_evidence(run_id)
+        if stage in {"pilot_qa", "book_qa"}:
+            return self._pilot_qa_evidence(run_id, stage)
+        if stage in {"pilot_repair", "book_repair"}:
+            return self._pilot_repair_evidence(run_id, stage)
         raise ValueError(f"unknown pipeline stage: {stage!r}")
 
-    def _pilot_qa_evidence(self, run_id: str) -> StageEvidence:
+    def _pilot_qa_evidence(self, run_id: str, stage: str = "pilot_qa") -> StageEvidence:
         """The pilot's layered QA is done once its report exists (an "error" report included:
         a QA failure is shown to the reader, it does not fail the pilot)."""
         from book_agent.domain.models.review import PilotQualityReport
@@ -216,7 +218,7 @@ class StageStatusCalculator:
             select(func.count(PilotQualityReport.id)).where(PilotQualityReport.run_id == run_id)
         ) or 0
         return StageEvidence(
-            stage="pilot_qa",
+            stage=stage,
             status=StageStatus.SUCCEEDED if reports else StageStatus.NOT_STARTED,
             total_work_items=0,
             succeeded_work_items=0,
@@ -224,7 +226,7 @@ class StageStatusCalculator:
             running_work_items=0,
         )
 
-    def _pilot_repair_evidence(self, run_id: str) -> StageEvidence:
+    def _pilot_repair_evidence(self, run_id: str, stage: str = "pilot_repair") -> StageEvidence:
         """The pilot's repair loop: running while its latest row runs, done once it finished or
         recorded an error (a repair failure is shown to the reader, it does not fail the pilot)."""
         from book_agent.domain.models.review import PilotRepair
@@ -243,7 +245,7 @@ class StageStatusCalculator:
             else StageStatus.SUCCEEDED
         )
         return StageEvidence(
-            stage="pilot_repair",
+            stage=stage,
             status=derived,
             total_work_items=0,
             succeeded_work_items=0,

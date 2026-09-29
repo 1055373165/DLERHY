@@ -303,7 +303,7 @@ class _Loaded:
 
 
 def load_pilot_inputs(
-    session: Session, document_id: str, chapter_ids: Sequence[str], *, use_export_file: bool = True
+    session: Session, document_id: str, chapter_ids: Sequence[str], *, use_export_file: bool = True, scope: str = "pilot"
 ) -> _Loaded:
     """``use_export_file=False`` judges what the export would write now (the repair loop's view,
     before it re-exports), not the reading copy last written to disk."""
@@ -474,6 +474,7 @@ def load_pilot_inputs(
         review_blockers=_review_blockers(session, document_id, chapter_ids),
         exported=exported,
         health=health,
+        scope=scope,
     )
     return _Loaded(inputs, export_source, pages)
 
@@ -489,10 +490,10 @@ class PilotQualityService:
         self.extra_checks = tuple(extra_checks)
 
     def evaluate(
-        self, document_id: str, chapter_ids: Sequence[str], *, use_export_file: bool = True
+        self, document_id: str, chapter_ids: Sequence[str], *, use_export_file: bool = True, scope: str = "pilot"
     ) -> tuple[list[dict[str, Any]], str]:
         """The layers of a QA run on these chapters, not kept: (layers, export source)."""
-        loaded = load_pilot_inputs(self.session, document_id, chapter_ids, use_export_file=use_export_file)
+        loaded = load_pilot_inputs(self.session, document_id, chapter_ids, use_export_file=use_export_file, scope=scope)
         try:
             return pilot_qa.run_layers(loaded.inputs, self.extra_checks), loaded.export_source
         finally:
@@ -505,16 +506,18 @@ class PilotQualityService:
         run: DocumentRun | None = None,
         trigger: str = "manual",
         chapter_ids: Sequence[str] | None = None,
+        scope: str = "pilot",
     ) -> PilotQualityReport:
         started = time.monotonic()
         chapter_ids = list(chapter_ids or pilot_chapter_ids(self.session, document_id, run))
         if not chapter_ids:
             raise NoPilotChapters("这本书没有试译章节，无法做试译质检。")
-        layers, export_source = self.evaluate(document_id, chapter_ids)
+        layers, export_source = self.evaluate(document_id, chapter_ids, scope=scope)
         summary = pilot_qa.summarize(layers)
         report = PilotQualityReport(
             document_id=document_id,
             run_id=run.id if run is not None else None,
+            scope=scope,
             trigger=trigger,
             status=summary["status"],
             blocking_count=summary["counts"]["blocking"],
@@ -531,16 +534,25 @@ class PilotQualityService:
         self.session.flush()
         return report
 
-    def run_for_pilot(self, run: DocumentRun, *, trigger: str = "pilot_run") -> PilotQualityReport:
-        """The pilot run's ``pilot_qa`` stage: a failure is kept as an "error" report, never raised."""
+    def run_for_pilot(
+        self,
+        run: DocumentRun,
+        *,
+        trigger: str = "pilot_run",
+        scope: str = "pilot",
+        chapter_ids: Sequence[str] | None = None,
+    ) -> PilotQualityReport:
+        """The pilot run's ``pilot_qa`` stage (or a whole-book run's ``book_qa``, ``scope="book"``):
+        a failure is kept as an "error" report, never raised."""
         try:
             with self.session.begin_nested():
-                return self.run(run.document_id, run=run, trigger=trigger)
+                return self.run(run.document_id, run=run, trigger=trigger, chapter_ids=chapter_ids, scope=scope)
         except Exception as exc:
             logger.exception("pilot QA failed for run %s", run.id)
             report = PilotQualityReport(
                 document_id=run.document_id,
                 run_id=run.id,
+                scope=scope,
                 trigger=trigger,
                 status="error",
                 blocking_count=0,
@@ -567,10 +579,10 @@ def report_for_run(session: Session, run_id: str) -> PilotQualityReport | None:
     ).first()
 
 
-def latest_report(session: Session, document_id: str) -> PilotQualityReport | None:
+def latest_report(session: Session, document_id: str, *, scope: str = "pilot") -> PilotQualityReport | None:
     return session.scalars(
         select(PilotQualityReport)
-        .where(PilotQualityReport.document_id == document_id)
+        .where(PilotQualityReport.document_id == document_id, PilotQualityReport.scope == scope)
         .order_by(PilotQualityReport.created_at.desc(), PilotQualityReport.id.desc())
         .limit(1)
     ).first()
@@ -595,6 +607,7 @@ def report_payload(session: Session, report: PilotQualityReport) -> dict[str, An
         "report_id": report.id,
         "document_id": report.document_id,
         "run_id": report.run_id,
+        "scope": report.scope,
         "trigger": report.trigger,
         "status": report.status,
         "counts": {"blocking": report.blocking_count, "major": report.major_count, "minor": report.minor_count},

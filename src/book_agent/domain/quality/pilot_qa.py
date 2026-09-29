@@ -317,6 +317,9 @@ class PilotQaInputs:
     # The exported reading copy's chapter sections; None when the pilot has no export to read.
     exported: Sequence[ExportedChapter] | None = None
     health: HealthInputs | None = None
+    # "pilot": the two pilot chapters; "book": every chapter after the whole-book run, where front
+    # matter, a contents page and the index are the book's own chapters, not a wrong pick.
+    scope: str = "pilot"
 
 
 # ---------------------------------------------------------------------------
@@ -714,7 +717,11 @@ def check_pilot_chapters(inputs: PilotQaInputs) -> list[CheckRun]:
         blocks_by_chapter[block.chapter_id].append(block)
     for chapter in inputs.chapters:
         title = chapter.title_src or ""
-        if _FRONT_OR_BACK.match(title):
+        surrounding = bool(_FRONT_OR_BACK.match(title))
+        if surrounding and inputs.scope == "book":
+            # The whole book has its contents page and index: they are chapters of their own there.
+            continue
+        if surrounding:
             not_body.findings.append(
                 Finding(
                     "L1.not_body_chapter",

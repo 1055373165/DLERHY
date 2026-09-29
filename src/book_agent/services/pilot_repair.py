@@ -84,6 +84,13 @@ MAX_ROUNDS = 3
 BUDGET_MULTIPLIER = 2.0
 MAX_SECONDS = 30 * 60
 MAX_ATTEMPTS = 150
+# The whole book's repair has more chapters to cover: more time and attempts, a budget of its own
+# (services/book_quality.py: book_repair_budget).
+BOOK_MAX_SECONDS = 120 * 60
+BOOK_MAX_ATTEMPTS = 600
+SCOPE_PILOT = "pilot"
+SCOPE_BOOK = "book"
+BOOK_TRIGGER = "book_repair"
 QUESTION_KIND = "pilot_question"
 TRIGGER = "pilot_repair"
 EVIDENCE_DIR = "pilot-repair"
@@ -128,10 +135,13 @@ class PilotRepairService:
         max_rounds: int = MAX_ROUNDS,
         budget_multiplier: float = BUDGET_MULTIPLIER,
         budget_usd: float | None = None,
-        max_seconds: float = MAX_SECONDS,
-        max_attempts: int = MAX_ATTEMPTS,
+        max_seconds: float | None = None,
+        max_attempts: int | None = None,
+        scope: str = SCOPE_PILOT,
     ) -> None:
         self.session = session
+        # "pilot": the pilot's chapters; "book": every translated chapter, after the whole-book run.
+        self.scope = scope
         self.workflow_factory = workflow_factory
         self.judge = judge
         self.ledger = ledger or NoLedger()
@@ -139,8 +149,9 @@ class PilotRepairService:
         self.budget_multiplier = budget_multiplier
         # An explicit cap (tests, a person); otherwise twice the pilot's cost.
         self.budget_override = budget_usd
-        self.max_seconds = max_seconds
-        self.max_attempts = max_attempts
+        book = scope == SCOPE_BOOK
+        self.max_seconds = max_seconds if max_seconds is not None else (BOOK_MAX_SECONDS if book else MAX_SECONDS)
+        self.max_attempts = max_attempts if max_attempts is not None else (BOOK_MAX_ATTEMPTS if book else MAX_ATTEMPTS)
 
     # --- entry points ---------------------------------------------------------------------------
 
@@ -150,6 +161,7 @@ class PilotRepairService:
         repair = PilotRepair(
             document_id=document_id,
             run_id=run.id if run is not None else None,
+            scope=self.scope,
             status="running",
             rounds=0,
             before_report_id=before_report.id if before_report is not None else None,
@@ -179,6 +191,7 @@ class PilotRepairService:
                 repair = PilotRepair(
                     document_id=run.document_id,
                     run_id=run.id,
+                    scope=self.scope,
                     status="error",
                     rounds=0,
                     repaired_count=0,
@@ -198,7 +211,12 @@ class PilotRepairService:
 
     def run(self, document_id: str, *, run: DocumentRun | None = None, repair_id: str | None = None) -> PilotRepair:
         started = time.monotonic()
-        chapter_ids = pilot_chapter_ids(self.session, document_id, run)
+        if self.scope == SCOPE_BOOK:
+            from book_agent.services.book_quality import book_chapter_ids
+
+            chapter_ids = book_chapter_ids(self.session, document_id)
+        else:
+            chapter_ids = pilot_chapter_ids(self.session, document_id, run)
         repair = self.session.get(PilotRepair, repair_id) if repair_id else None
         if repair is None:
             repair = self.start(document_id, run=run)
@@ -222,7 +240,7 @@ class PilotRepairService:
         toolbox = PilotRepairToolbox(ctx)
         qa = PilotQualityService(self.session)
         try:
-            layers, _source = qa.evaluate(document_id, ctx.chapter_ids, use_export_file=False)
+            layers, _source = qa.evaluate(document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope)
             initial = findings_of(layers)
             classes = self._classes(initial)
             self.session.commit()
@@ -290,11 +308,11 @@ class PilotRepairService:
                 self.session.commit()
                 self._reexport(ctx)
                 self._begin_write()
-                final_report = qa.run(document_id, run=run, trigger=TRIGGER, chapter_ids=ctx.chapter_ids)
+                final_report = qa.run(document_id, run=run, trigger=self._trigger, chapter_ids=ctx.chapter_ids, scope=self.scope)
                 self.session.commit()
             elif final_report is None:
                 self._begin_write()
-                final_report = qa.run(document_id, run=run, trigger=TRIGGER, chapter_ids=ctx.chapter_ids)
+                final_report = qa.run(document_id, run=run, trigger=self._trigger, chapter_ids=ctx.chapter_ids, scope=self.scope)
                 self.session.commit()
             self._begin_write()
             final_layers = list(final_report.layers_json or [])
@@ -307,9 +325,17 @@ class PilotRepairService:
             if pages is not None:
                 pages.close()
 
+    @property
+    def _trigger(self) -> str:
+        return BOOK_TRIGGER if self.scope == SCOPE_BOOK else TRIGGER
+
     # --- budget ----------------------------------------------------------------------------------
 
     def _budget(self, run: DocumentRun | None, chapter_ids: Sequence[str]) -> RepairBudget:
+        if self.scope == SCOPE_BOOK:
+            from book_agent.services.book_quality import book_repair_budget
+
+            return book_repair_budget(self.session, chapter_ids, override_usd=self.budget_override)
         packets = int(
             self.session.scalar(select(func.count(TranslationPacket.id)).where(TranslationPacket.chapter_id.in_(list(chapter_ids) or ["-"])))
             or 0
@@ -390,7 +416,7 @@ class PilotRepairService:
         try:
             result = toolbox.apply(item)
             self.session.flush()
-            new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False)
+            new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope)
             after = QaSnapshot.from_layers(new_layers)
             verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings})
             outcome = _AttemptOutcome("kept" if verdict.keep else "reverted", None if verdict.keep else verdict.reason, new_layers, verdict.resolved_keys)
@@ -620,7 +646,7 @@ class PilotRepairService:
 
     def _persist_chapter_scope(self, run: DocumentRun | None, chapter_ids: Sequence[str], original: Sequence[str]) -> None:
         """A chapter split out of a pilot chapter joins the pilot: its request names it (the overview, the QA)."""
-        if run is None or list(chapter_ids) == list(original):
+        if run is None or self.scope != SCOPE_PILOT or list(chapter_ids) == list(original):
             return
         # The run loop writes this row too (its stage cache): read it fresh, locked.
         self._begin_write()
@@ -648,7 +674,8 @@ class PilotRepairService:
                     ctx.document_id,
                     export_type,
                     auto_execute_followup_on_gate=False,
-                    chapter_ids=list(ctx.chapter_ids),
+                    # The whole book's reading copy is the book's, not a list of its chapters.
+                    chapter_ids=None if self.scope == SCOPE_BOOK else list(ctx.chapter_ids),
                     despite_gate=True,
                 )
                 self.session.commit()
@@ -899,9 +926,9 @@ def spacing_convention(session: Session, chapter_ids: Sequence[str]) -> str | No
 # --- reading ------------------------------------------------------------------------------------------
 
 
-def latest_repair(session: Session, document_id: str) -> PilotRepair | None:
+def latest_repair(session: Session, document_id: str, *, scope: str = SCOPE_PILOT) -> PilotRepair | None:
     return session.scalars(
-        select(PilotRepair).where(PilotRepair.document_id == document_id).order_by(PilotRepair.created_at.desc(), PilotRepair.id.desc()).limit(1)
+        select(PilotRepair).where(PilotRepair.document_id == document_id, PilotRepair.scope == scope).order_by(PilotRepair.created_at.desc(), PilotRepair.id.desc()).limit(1)
     ).first()
 
 
@@ -933,7 +960,11 @@ def overview_summary(session: Session, repair: PilotRepair | None) -> dict[str, 
     finished = list(
         session.scalars(
             select(PilotRepair)
-            .where(PilotRepair.document_id == repair.document_id, PilotRepair.status == "finished")
+            .where(
+                PilotRepair.document_id == repair.document_id,
+                PilotRepair.status == "finished",
+                PilotRepair.scope == repair.scope,
+            )
             .order_by(PilotRepair.created_at)
         ).all()
     )
@@ -946,9 +977,9 @@ def overview_summary(session: Session, repair: PilotRepair | None) -> dict[str, 
     questions = open_questions(session, repair.document_id)
     left = int(repair.remaining_blocking or 0) + int(repair.remaining_major or 0)
     if repair.status == "running":
-        text = "正在自动修复试译里的问题…"
+        text = "正在自动修复全书里的问题…" if repair.scope == SCOPE_BOOK else "正在自动修复试译里的问题…"
     elif repair.status == "error":
-        text = "自动修复没能完成，试译照常给你看，问题都列在下面。"
+        text = f"自动修复没能完成，{'全书' if repair.scope == SCOPE_BOOK else '试译'}照常给你看，问题都列在下面。"
     elif repair.outcome == "nothing_to_do" and not repaired:
         text = "质检没有发现需要修复的严重或一般问题。"
     else:
@@ -964,6 +995,7 @@ def overview_summary(session: Session, repair: PilotRepair | None) -> dict[str, 
         text = "，".join(parts) + "。"
     return {
         "repair_id": repair.id,
+        "scope": repair.scope,
         "status": repair.status,
         "outcome": repair.outcome,
         # What kinds of problem were repaired, most first ("同一术语用了几种译法", ...).
