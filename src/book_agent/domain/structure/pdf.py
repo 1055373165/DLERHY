@@ -151,6 +151,7 @@ from book_agent.domain.structure.callouts import (
     block_key,
     callout_metadata,
     detect_icon_callouts,
+    is_callout_metadata,
 )
 from book_agent.domain.structure.geometry import bleeds_off_page, horizontal_overlap_ratio, union_bbox
 
@@ -2419,6 +2420,55 @@ class PdfStructureRecoveryService:
         if self._should_merge_cross_page_prose_continuation(recovered[index], current, pages, across_figure=across_figure):
             return index
         return None
+
+    def _link_listing_captions(self, recovered_blocks: list[_RecoveredBlock]) -> None:
+        """Make a listing's title ("Listing 2.1 Loading environment variables") the caption of the code below it.
+
+        Books set the title in a bar right over the code; it names the listing
+        the way a figure's caption names the figure, and reads as a stray
+        paragraph when left on its own.
+        """
+        for index, block in enumerate(recovered_blocks):
+            text = (block.text or "").strip()
+            if (
+                block.block_type not in {BlockType.PARAGRAPH, BlockType.CAPTION}
+                or not _LISTING_TITLE_RE.match(text)
+                or len(text) > 200
+                or block.metadata.get("caption_for_source_anchor")
+            ):
+                continue
+            code_index = index + 1
+            while code_index < len(recovered_blocks) and self._is_ignorable_prose_separator(recovered_blocks[code_index]):
+                code_index += 1
+            if code_index >= len(recovered_blocks):
+                continue
+            code_block = recovered_blocks[code_index]
+            if (
+                code_block.block_type != BlockType.CODE
+                or code_block.metadata.get("linked_caption_source_anchor")
+                or is_callout_metadata(code_block.metadata)
+            ):
+                continue
+            caption_anchor = self._source_anchor(block)
+            code_anchor = self._source_anchor(code_block)
+            block.role = "caption"
+            block.block_type = BlockType.CAPTION
+            block.metadata.update(
+                {
+                    "caption_for_source_anchor": code_anchor,
+                    "caption_for_page": code_block.page_start,
+                    "caption_for_role": "code",
+                }
+            )
+            block.flags = list(dict.fromkeys([*block.flags, "code_caption_linked"]))
+            code_block.metadata.update(
+                {
+                    "linked_caption_text": block.text,
+                    "linked_caption_source_anchor": caption_anchor,
+                    "linked_caption_page": block.page_start,
+                }
+            )
+            code_block.flags = list(dict.fromkeys([*code_block.flags, "caption_linked"]))
 
     def _group_sidebars(
         self,
@@ -5181,6 +5231,7 @@ _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
     BlockRecoveryPass("link_artifact_group_contexts", _in_place("_link_artifact_group_contexts", academic_paper="academic_lane")),
     BlockRecoveryPass("nest_list_items", _returning("_nest_list_items")),
     BlockRecoveryPass("group_sidebars", _returning("_group_sidebars", "ordered_pages")),
+    BlockRecoveryPass("link_listing_captions", _in_place("_link_listing_captions")),
     BlockRecoveryPass("rejoin_line_break_hyphens", _rejoin_line_break_hyphens_pass),
     BlockRecoveryPass("rejoin_split_identifiers", _rejoin_split_identifiers_pass),
 )

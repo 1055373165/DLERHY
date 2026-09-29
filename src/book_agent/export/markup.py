@@ -648,6 +648,16 @@ def render_block_html(
             body = render_equation_html_metadata_aware(
                 block.source_metadata, block.source_text
             )
+        elif block.block_type == BlockType.CODE.value:
+            # A listing: its title as the box's caption, the code as it is.
+            caption_text = block.target_text or str(block.source_metadata.get("linked_caption_text") or "")
+            caption = (
+                f"<div class='zh listing-caption'>{format_inline_text(caption_text, code_spans=bool(block.target_text))}</div>"
+                if caption_text
+                else ""
+            )
+            code_html = f"<pre><code>{format_preformatted_text(block.source_text, block=block)}</code></pre>"
+            return f"<section class='block artifact code listing'>{caption}{note}{code_html}</section>"
         else:
             table_html = render_table_html_metadata_aware(
                 block.source_metadata, block.source_text

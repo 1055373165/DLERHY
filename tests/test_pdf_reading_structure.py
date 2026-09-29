@@ -291,5 +291,31 @@ class ContinuationAcrossFigureTest(unittest.TestCase):
         self.assertLess(blocks.index(joined), order.index("caption"))
 
 
+def _write_listing_page(path: Path) -> None:
+    """Build an AI Agent 2.2.1: a listing's title in a bar over its code."""
+    document = fitz.open()
+    page = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    page.insert_textbox(fitz.Rect(93, 60, 465, 120), _BODY, fontname="tiro", fontsize=10)
+    page.draw_rect(fitz.Rect(93, 130, 465, 145), color=None, fill=(0.404, 0.612, 0.765), width=0)
+    page.insert_text((96, 141), "Listing 2.1 Loading environment variables", fontname="hebo", fontsize=9)
+    for index, line in enumerate(["from dotenv import load_dotenv, find_dotenv", "load_dotenv(find_dotenv())"]):
+        page.insert_text((93, 162 + 11 * index), line, fontname="cour", fontsize=8)
+    page.insert_textbox(fitz.Rect(93, 200, 465, 260), _BODY, fontname="tiro", fontsize=10)
+    document.save(path)
+
+
+class ListingCaptionTest(unittest.TestCase):
+    """A listing's title is the caption of its code, the way a figure's caption is the figure's."""
+
+    def test_listing_title_is_linked_to_its_code(self) -> None:
+        blocks = _blocks(_parse(_write_listing_page, "listing.pdf"))
+        title = next(block for block in blocks if block.text.startswith("Listing 2.1"))
+        code = next(block for block in blocks if block.block_type == "code")
+        self.assertEqual(title.block_type, "caption")
+        self.assertEqual(title.metadata["caption_for_role"], "code")
+        self.assertEqual(code.metadata["linked_caption_text"], title.text)
+        self.assertEqual(title.metadata["caption_for_source_anchor"].split("#")[-1], code.anchor)
+
+
 if __name__ == "__main__":
     unittest.main()

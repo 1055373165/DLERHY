@@ -1,4 +1,4 @@
-"""PDF list items and sidebars as HTML: bullets and numbers as hanging markers, sidebars as one box."""
+"""Reading structure as HTML: list markers, nested and numbered items, sidebars, listing captions."""
 
 from __future__ import annotations
 
@@ -107,6 +107,30 @@ class SidebarHtmlTest(unittest.TestCase):
         self.assertIn("离线索引流水线很常见。", inside)
         self.assertNotIn("（续）", html)
         self.assertNotIn("侧栏之后", inside)
+
+
+class ListingCaptionHtmlTest(unittest.TestCase):
+    """Build an AI Agent 2.2.1: the listing's title renders as the code box's caption."""
+
+    def test_code_box_carries_its_translated_title(self) -> None:
+        block = MergedRenderBlock(
+            block_id="code-1",
+            chapter_id="c1",
+            block_type="code",
+            render_mode="translated_wrapper_with_preserved_artifact",
+            artifact_kind="code",
+            title=None,
+            source_text="from dotenv import load_dotenv\nload_dotenv()",
+            target_text="代码清单 2.1 加载环境变量",
+            source_metadata={"linked_caption_text": "Listing 2.1 Loading environment variables"},
+            source_sentence_ids=[],
+            target_segment_ids=[],
+            is_expected_source_only=True,
+            notice=None,
+        )
+        html = render_block_html(block, include_source_toggle=False)
+        self.assertTrue(html.startswith("<section class='block artifact code listing'><div class='zh listing-caption'>代码清单 2.1 加载环境变量</div>"))
+        self.assertIn("<pre><code>from dotenv import load_dotenv\nload_dotenv()</code></pre>", html)
 
 
 if __name__ == "__main__":

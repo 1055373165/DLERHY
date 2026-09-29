@@ -17,6 +17,7 @@
 .list_item.dashed .zh::before,.list_item.numbered .zh::before{content:attr(data-marker);position:absolute;left:0;min-width:1em;}
 .list_item.sub-item{margin:8px 0 8px 1.4em;}
 .paragraph.list-continuation{margin-left:1.4em;}
+.artifact.listing .listing-caption{font-weight:600;margin:0 0 10px;}
 .sidebar{margin:26px 0;padding:18px 22px;background:#f7f4ea;border:1px solid rgba(190,172,132,.55);border-radius:14px;}
 .sidebar .block{margin:12px 0;}.sidebar .block:first-child{margin-top:0;}.sidebar .block:last-child{margin-bottom:0;}
 .sidebar .sidebar-title .zh{font-weight:600;}
