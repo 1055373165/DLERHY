@@ -1702,15 +1702,15 @@ class ExportService:
         body_blocks = self._merged_body_blocks(
             list(render_blocks), str(title_text or "").strip()
         )
-        blocks_html = "".join(
-            markup.render_block_html(
+        blocks_html = markup.render_blocks_html(
+            body_blocks,
+            lambda block: markup.render_block_html(
                 block,
                 asset_path_by_block_id,
                 include_source_toggle=False,
                 include_notice=False,
                 include_source_caption=False,
-            )
-            for block in body_blocks
+            ),
         )
         if not title_text and not blocks_html:
             return ""
@@ -2482,9 +2482,8 @@ class ExportService:
         body_blocks = self._merged_body_blocks(
             list(render_blocks), str(chapter_title_target or "").strip()
         )
-        blocks_html = "".join(
-            markup.render_block_html(block, asset_path_by_block_id)
-            for block in body_blocks
+        blocks_html = markup.render_blocks_html(
+            body_blocks, lambda block: markup.render_block_html(block, asset_path_by_block_id)
         )
         # A reader opens this file: the run's token and cost figures belong on the run page, not here.
         if not blocks_html:

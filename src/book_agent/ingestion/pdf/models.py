@@ -129,6 +129,8 @@ class PdfTextBlock:
     # ("Cost considerations:" between two runs of dash items), "body" for the
     # text of such a block outside the list. Empty for a block that was not split.
     list_marker: str = ""
+    # The shaded panel of a sidebar the block sits in (``extract._sidebar_panels``), or None.
+    sidebar_panel: tuple[float, float, float, float] | None = None
 
 
 @dataclass(slots=True, frozen=True)

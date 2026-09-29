@@ -191,5 +191,56 @@ class NestedListTest(unittest.TestCase):
         self.assertEqual(closing.block_type, "paragraph")
 
 
+def _write_sidebar_pages(path: Path) -> None:
+    """A Simple Guide to RAG 2.3: a shaded sidebar with a title, running onto the next page."""
+    document = fitz.open()
+    first = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    first.insert_text((93, 80), "The indexing pipeline stores the knowledge base for the generation pipeline to use.", fontname="tiro", fontsize=10)
+    # The panel runs to the foot of the page and on at the head of the next, as stacked fills.
+    for top, bottom in [(452, 481), (468, 530), (521, 606)]:
+        first.draw_rect(fitz.Rect(93, top, 465, bottom), color=None, fill=(0.97, 0.958, 0.913), width=0)
+    first.insert_text((105, 468), "Do you always need an indexing pipeline?", fontname="hebo", fontsize=10.5)
+    for index, line in enumerate(
+        [
+            "Offline indexing pipelines are typically used when a knowledge base with a large",
+            "amount of data is built for repeated usage, such as many enterprise documents.",
+            "However, some cases connect the generation pipeline to a third-party API instead.",
+        ]
+    ):
+        first.insert_text((105, 492 + 11.5 * index), line, fontname="helv", fontsize=9.5)
+    second = document.new_page(width=_PAGE[0], height=_PAGE[1])
+    second.draw_rect(fitz.Rect(102, 54, 474, 140), color=None, fill=(0.97, 0.958, 0.913), width=0)
+    for index, line in enumerate(
+        [
+            "This application can also be thought of as a RAG system. But there is a difference.",
+            "The system has outsourced the search and retrieval operation to the third party.",
+        ]
+    ):
+        second.insert_text((114, 70 + 11.5 * index), line, fontname="helv", fontsize=9.5)
+    second.insert_text((102, 180), "Generation pipeline", fontname="hebo", fontsize=12.5)
+    second.insert_text((102, 200), "Building on the foundation of the indexing pipeline, the generation pipeline answers.", fontname="tiro", fontsize=10)
+    document.save(path)
+
+
+class SidebarTest(unittest.TestCase):
+    """A shaded sidebar is one sidebar with a title, not a section of the chapter."""
+
+    def test_sidebar_blocks_share_one_id_and_the_title_is_not_a_heading(self) -> None:
+        blocks = _blocks(_parse(_write_sidebar_pages, "sidebar.pdf"))
+        title = next(block for block in blocks if block.text.startswith("Do you always"))
+        self.assertEqual(title.block_type, "paragraph")
+        self.assertTrue(title.metadata["sidebar_title"])
+        sidebar_id = title.metadata["sidebar_id"]
+        members = [block for block in blocks if block.metadata.get("sidebar_id") == sidebar_id]
+        self.assertEqual(
+            [" ".join(block.text.split())[:24] for block in members],
+            ["Do you always need an in", "Offline indexing pipelin", "This application can als"],
+        )
+        after = next(block for block in blocks if block.text.startswith("Building on"))
+        self.assertIsNone(after.metadata.get("sidebar_id"))
+        heading = next(block for block in blocks if block.text.startswith("Generation pipeline"))
+        self.assertIsNone(heading.metadata.get("sidebar_id"))
+
+
 if __name__ == "__main__":
     unittest.main()

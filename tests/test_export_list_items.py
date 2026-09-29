@@ -1,4 +1,4 @@
-"""PDF list items keep their bullet glyph in the text; HTML exports draw it as a hanging marker."""
+"""PDF list items and sidebars as HTML: bullets and numbers as hanging markers, sidebars as one box."""
 
 from __future__ import annotations
 
@@ -79,6 +79,34 @@ class NestedListItemHtmlTest(unittest.TestCase):
             _list_item("Cost considerations:", "成本考量：", {"list_level": 1, "list_continuation": True}, block_type="paragraph")
         )
         self.assertIn("<section class='block paragraph list-continuation'>", html)
+
+
+class SidebarHtmlTest(unittest.TestCase):
+    """A Simple Guide to RAG 2.3: a sidebar's blocks share one box, its title set as the box's title."""
+
+    def test_sidebar_blocks_render_in_one_aside_with_a_title(self) -> None:
+        from book_agent.export.markup import render_blocks_html
+
+        blocks = [
+            _list_item("Before the sidebar.", "侧栏之前。", block_type="paragraph"),
+            _list_item(
+                "Do you always need an indexing pipeline?",
+                "你总是需要索引流水线吗？",
+                {"sidebar_id": "s1", "sidebar_title": True},
+                block_type="paragraph",
+            ),
+            _list_item("Offline indexing pipelines are typical.", "离线索引流水线很常见。", {"sidebar_id": "s1"}, block_type="paragraph"),
+            _list_item("(continued)", "（续）", {"sidebar_id": "s1", "sidebar_continued_label": True}, block_type="paragraph"),
+            _list_item("After the sidebar.", "侧栏之后。", block_type="paragraph"),
+        ]
+        html = render_blocks_html(blocks, render_block_html)
+        self.assertEqual(html.count("<aside class='sidebar'>"), 1)
+        self.assertEqual(html.count("</aside>"), 1)
+        inside = html.split("<aside class='sidebar'>", 1)[1].split("</aside>", 1)[0]
+        self.assertIn("<section class='block paragraph sidebar-title'><div class='zh'>你总是需要索引流水线吗？</div>", inside)
+        self.assertIn("离线索引流水线很常见。", inside)
+        self.assertNotIn("（续）", html)
+        self.assertNotIn("侧栏之后", inside)
 
 
 if __name__ == "__main__":

@@ -166,6 +166,80 @@ def _is_background_panel(
     return max(left_edges) - min(left_edges) <= 2.0 and max(right_edges) - min(right_edges) <= 2.0
 
 
+# A sidebar's panel spans the text column; the narrower "This chapter covers" box does not.
+_SIDEBAR_MIN_WIDTH_RATIO = 0.6
+_SIDEBAR_MIN_HEIGHT = 30.0
+# Prose size: the panel's text is read, not a diagram's labels.
+_SIDEBAR_MIN_TEXT_SIZE = 8.5
+
+
+def _sidebar_panels(
+    drawings: list[dict[str, Any]],
+    blocks: list[PdfTextBlock],
+    page_width: float,
+) -> list[tuple[float, float, float, float]]:
+    """The shaded panels of the page's sidebars.
+
+    A sidebar is painted as borderless filled rectangles of one colour and one
+    width stacked behind its text, as wide as the text column, and holds prose
+    (its title and paragraphs), not the labels of a figure.
+    """
+    stacks: list[list] = []
+    for drawing in sorted(drawings, key=lambda item: float(item["rect"][1]) if item.get("rect") is not None else 0.0):
+        rect = drawing.get("rect")
+        items = drawing.get("items") or ()
+        if rect is None or drawing.get("fill") is None or drawing.get("color") is not None:
+            continue
+        if not items or any(item[0] != "re" for item in items):
+            continue
+        x0, y0, x1, y1 = (float(value) for value in rect)
+        if x1 - x0 < page_width * _SIDEBAR_MIN_WIDTH_RATIO:
+            continue
+        fill = tuple(round(float(channel), 3) for channel in drawing["fill"])
+        for stack in stacks:
+            if stack[0] == fill and abs(stack[1][0] - x0) <= 2.0 and abs(stack[1][2] - x1) <= 2.0 and y0 <= stack[1][3] + 2.0:
+                stack[1] = (min(stack[1][0], x0), stack[1][1], max(stack[1][2], x1), max(stack[1][3], y1))
+                break
+        else:
+            stacks.append([fill, (x0, y0, x1, y1)])
+    panels = []
+    for _fill, box in stacks:
+        if box[3] - box[1] < _SIDEBAR_MIN_HEIGHT:
+            continue
+        if box[0] <= 1.0 or box[1] <= 1.0 or box[2] >= page_width - 1.0:
+            # Painted to the page's edge: a cover or a page background, not a panel in the text.
+            continue
+        inside = [block for block in blocks if _center_inside(block.bbox, box)]
+        prose_lines = sum(
+            block.line_count
+            for block in inside
+            if not block.figure_label and not block.ruled_table and block.font_size_avg >= _SIDEBAR_MIN_TEXT_SIZE
+        )
+        if prose_lines >= 2:
+            panels.append(box)
+    return panels
+
+
+def _center_inside(bbox: tuple[float, float, float, float], box: tuple[float, float, float, float]) -> bool:
+    center_x, center_y = (bbox[0] + bbox[2]) / 2.0, (bbox[1] + bbox[3]) / 2.0
+    return box[0] <= center_x <= box[2] and box[1] <= center_y <= box[3]
+
+
+def _mark_sidebar_blocks(
+    blocks: list[PdfTextBlock],
+    drawings: list[dict[str, Any]],
+    page_width: float,
+) -> list[PdfTextBlock]:
+    panels = _sidebar_panels(drawings, blocks, page_width)
+    if not panels:
+        return blocks
+    marked = []
+    for block in blocks:
+        panel = next((box for box in panels if _center_inside(block.bbox, box)), None)
+        marked.append(replace(block, sidebar_panel=panel) if panel is not None and not block.figure_label else block)
+    return marked
+
+
 _MIN_RULED_TABLE_CELLS = 4
 _MAX_RULED_TABLE_AVG_CELL_CHARS = 80
 
@@ -815,6 +889,7 @@ class PyMuPDFTextExtractor:
                         replace(block, figure_label=True) if is_label and not block.ruled_table else block
                         for block, is_label in zip(blocks, labels)
                     ]
+                blocks = _mark_sidebar_blocks(blocks, drawings, float(page.rect.width))
 
                 # Text-layer sanity assessment (PDF v2 M1.2). Runs per page
                 # over the concatenated text of all non-image blocks. A failure

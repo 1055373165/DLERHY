@@ -567,6 +567,24 @@ def should_inline_join_target_text(
     }
 
 
+def render_blocks_html(blocks: list[MergedRenderBlock], render_one) -> str:
+    """Blocks as HTML, the blocks of one sidebar inside one ``<aside class='sidebar'>`` box."""
+    parts: list[str] = []
+    open_sidebar: object = None
+    for block in blocks:
+        sidebar_id = (block.source_metadata or {}).get("sidebar_id") or None
+        if sidebar_id != open_sidebar:
+            if open_sidebar:
+                parts.append("</aside>")
+            if sidebar_id:
+                parts.append("<aside class='sidebar'>")
+            open_sidebar = sidebar_id
+        parts.append(render_one(block))
+    if open_sidebar:
+        parts.append("</aside>")
+    return "".join(parts)
+
+
 def render_block_html(
     block: MergedRenderBlock,
     asset_path_by_block_id: dict[str, str] | None = None,
@@ -741,6 +759,11 @@ def render_block_html(
             f"{source_details}"
             "</section>"
         )
+    if list_metadata.get("sidebar_continued_label"):
+        # "(continued)" at the head of a sidebar's second page: the box already runs on.
+        return ""
+    if list_metadata.get("sidebar_title"):
+        block_class = f"{block_class} sidebar-title"
     if block.block_type == BlockType.PARAGRAPH.value and list_metadata.get("list_continuation"):
         # Text the page sets inside a list ("Cost considerations:"): indented with the items' text.
         block_class = f"{block_class} list-continuation"

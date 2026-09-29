@@ -641,6 +641,8 @@ class PdfStructureRecoveryService:
                         metadata["pdf_all_lines_bold"] = True
                     if raw_block.list_marker:
                         metadata["pdf_list_marker"] = raw_block.list_marker
+                    if raw_block.sidebar_panel is not None:
+                        metadata["pdf_sidebar_panel"] = [page.page_number, *(round(value, 2) for value in raw_block.sidebar_panel)]
                     # Font metadata enrichment
                     metadata["pdf_font_names"] = sorted(raw_block.font_names) if raw_block.font_names else []
                     # Bold lines in a block set wholly in a monospace font are
@@ -1498,6 +1500,8 @@ class PdfStructureRecoveryService:
         pages: list[PdfPage],
     ) -> bool:
         if previous.role not in {"body", "list_item"} or current.role != "body":
+            return False
+        if _crosses_sidebar_edge(previous, current):
             return False
         if current.metadata.get("pdf_list_marker"):
             # The page set it apart from the list item above: a label inside the list, or the body after it.
@@ -2414,6 +2418,58 @@ class PdfStructureRecoveryService:
             return index
         return None
 
+    def _group_sidebars(
+        self,
+        recovered_blocks: list[_RecoveredBlock],
+        pages: list[PdfPage],
+    ) -> list[_RecoveredBlock]:
+        """Give the blocks of each sidebar one ``sidebar_id`` and mark its title.
+
+        A sidebar is the text inside one shaded panel, or inside a panel that
+        runs to the foot of a page and the panel continuing it at the head of the
+        next. Its title is the single line at the top of its first panel
+        ("Do you always need an indexing pipeline?"): the sidebar's own title,
+        not a section of the chapter, so it stops being a heading. A
+        "(continued)" line opening the next page's panel is only a label.
+        """
+        page_heights = {page.page_number: page.height for page in pages}
+        sidebar_id: str | None = None
+        current_panel: tuple[int, tuple[float, float, float, float]] | None = None
+        for block in recovered_blocks:
+            panel = _sidebar_panel(block)
+            if panel is None:
+                if self._is_ignorable_prose_separator(block) or _is_page_number_text((block.text or "").split("\n", 1)[0]):
+                    # The running head between a sidebar and its continuation on the next page.
+                    continue
+                sidebar_id = None
+                current_panel = None
+                continue
+            opens_panel = panel != current_panel
+            continued = (
+                opens_panel
+                and sidebar_id is not None
+                and current_panel is not None
+                and _continues_sidebar_panel(current_panel, panel, page_heights)
+            )
+            if opens_panel and not continued:
+                sidebar_id = self._source_anchor(block)
+            current_panel = panel
+            block.metadata["sidebar_id"] = sidebar_id
+            if not (opens_panel and _opens_sidebar_panel(block)):
+                continue
+            if _SIDEBAR_CONTINUED_LABEL.match((block.text or "").strip()):
+                block.metadata["sidebar_continued_label"] = True
+            elif not continued:
+                block.metadata["sidebar_title"] = True
+            else:
+                continue
+            if block.block_type == BlockType.HEADING:
+                block.block_type = BlockType.PARAGRAPH
+                block.role = "body"
+                block.metadata.pop("heading_level", None)
+            block.flags = list(dict.fromkeys([*block.flags, "sidebar_title_detected"]))
+        return recovered_blocks
+
     def _nest_list_items(self, recovered_blocks: list[_RecoveredBlock]) -> list[_RecoveredBlock]:
         """Give each list item its level, and mark text set inside a list as the list's own.
 
@@ -2501,6 +2557,9 @@ class PdfStructureRecoveryService:
         # Current must NOT itself be a separator (page number, running
         # header) — otherwise we would graft the page header onto the
         # previous body block.
+        if bool(previous.metadata.get("pdf_sidebar_panel")) != bool(current.metadata.get("pdf_sidebar_panel")):
+            # The body before a sidebar does not go on inside it (nor the reverse).
+            return False
         if self._is_ignorable_prose_separator(current):
             return False
 
@@ -4735,6 +4794,54 @@ def _page_body_left_edges(blocks: list[_RecoveredBlock]) -> dict[int, float]:
     return {parity: counts.most_common(1)[0][0] for parity, counts in edges.items() if counts}
 
 
+# How close (pt) to its panel's top a sidebar's first line sits when it is the title.
+_SIDEBAR_TITLE_TOP_GAP = 14.0
+_SIDEBAR_CONTINUED_LABEL = re.compile(r"^\(\s*continued\s*\)$", re.IGNORECASE)
+
+
+def _sidebar_panel(block: _RecoveredBlock) -> tuple[int, tuple[float, float, float, float]] | None:
+    panel = block.metadata.get("pdf_sidebar_panel")
+    if not isinstance(panel, (list, tuple)) or len(panel) != 5:
+        return None
+    return int(panel[0]), (float(panel[1]), float(panel[2]), float(panel[3]), float(panel[4]))
+
+
+def _opens_sidebar_panel(block: _RecoveredBlock) -> bool:
+    """A single line at the top of its sidebar panel: the sidebar's title (or its "(continued)" label)."""
+    panel = _sidebar_panel(block)
+    if panel is None or not block.bbox_regions or "\n" in (block.text or "").strip():
+        return False
+    top = float(block.bbox_regions[0]["bbox"][1])
+    return top - panel[1][1] <= _SIDEBAR_TITLE_TOP_GAP and len(block.text or "") <= 120
+
+
+def _crosses_sidebar_edge(previous: _RecoveredBlock, current: _RecoveredBlock) -> bool:
+    """Whether two blocks sit on different sides of a sidebar's edge, or are its title and its text."""
+    previous_panel, current_panel = _sidebar_panel(previous), _sidebar_panel(current)
+    if (previous_panel is None) != (current_panel is None):
+        return True
+    if previous_panel is None:
+        return False
+    if previous_panel[0] == current_panel[0] and previous_panel != current_panel:
+        return True
+    return _opens_sidebar_panel(previous) or _opens_sidebar_panel(current)
+
+
+def _continues_sidebar_panel(
+    previous: tuple[int, tuple[float, float, float, float]],
+    current: tuple[int, tuple[float, float, float, float]],
+    page_heights: dict[int, float],
+) -> bool:
+    """A panel that runs to the foot of one page and a panel at the head of the next are one sidebar."""
+    if current[0] != previous[0] + 1:
+        return False
+    previous_height = page_heights.get(previous[0])
+    current_height = page_heights.get(current[0])
+    if not previous_height or not current_height:
+        return False
+    return previous[1][3] >= previous_height * 0.8 and current[1][1] <= current_height * 0.25
+
+
 def _is_body_sentence(raw_block: PdfTextBlock, text: str, page_font_median: float) -> bool:
     """A sentence set in the body size ("Chapter 7 explores the various layers ... systems."), not a title."""
     return bool(
@@ -5044,6 +5151,7 @@ _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
     BlockRecoveryPass("link_artifact_captions", _in_place("_link_artifact_captions")),
     BlockRecoveryPass("link_artifact_group_contexts", _in_place("_link_artifact_group_contexts", academic_paper="academic_lane")),
     BlockRecoveryPass("nest_list_items", _returning("_nest_list_items")),
+    BlockRecoveryPass("group_sidebars", _returning("_group_sidebars", "ordered_pages")),
     BlockRecoveryPass("rejoin_line_break_hyphens", _rejoin_line_break_hyphens_pass),
     BlockRecoveryPass("rejoin_split_identifiers", _rejoin_split_identifiers_pass),
 )
