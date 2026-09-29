@@ -55,6 +55,7 @@ from book_agent.domain.enums import (
     PacketStatus,
     RunStatus,
     SnapshotType,
+    TargetSegmentStatus,
 )
 from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
 from book_agent.domain.models import Block, Chapter, Document, Event, MemorySnapshot, Sentence
@@ -62,6 +63,7 @@ from book_agent.domain.models.document import DocumentImage
 from book_agent.domain.models.ops import DocumentRun
 from book_agent.domain.models.review import ReviewIssue
 from book_agent.domain.models.translation import (
+    AlignmentEdge,
     PacketSentenceMap,
     TargetSegment,
     TranslationPacket,
@@ -184,6 +186,9 @@ class PilotRepairToolbox:
         self.structure = StructureEditService(ctx.session)
         self._proposal: tuple[dict[str, Any] | None, list[str]] | None = None
         self._consulted = False
+        # Packets an attempt completed from the translation memory instead of retranslating them.
+        self.memory_filled: list[dict[str, Any]] = []
+        self._settled_cache: dict[str, str] | None = None
 
     # --- dispatch ----------------------------------------------------------------------
 
@@ -217,7 +222,15 @@ class PilotRepairToolbox:
         handler = getattr(self, "_" + item.path.name.replace(".", "__"), None)
         if handler is None:
             raise NotApplicable(f"no handler for {item.path.name}")
-        return handler(item)
+        self.memory_filled = []
+        self._settled_cache = None
+        result = handler(item)
+        if self.memory_filled:
+            filled = [entry["packet_id"] for entry in self.memory_filled]
+            result.edited_packet_ids = list(dict.fromkeys([*result.edited_packet_ids, *filled]))
+            result.packet_ids = [packet_id for packet_id in result.packet_ids if packet_id not in filled]
+            result.params = {**result.params, "translation_memory": list(self.memory_filled)}
+        return result
 
     # --- shared helpers --------------------------------------------------------------------
 
@@ -288,10 +301,18 @@ class PilotRepairToolbox:
         return []
 
     def retranslate(self, packet_ids: Sequence[str], hints: Sequence[str]) -> list[str]:
-        """Retranslate these packets (only these) with the problems as hints; returns the ones translated."""
-        packet_ids = list(dict.fromkeys(packet_ids))
+        """Retranslate these packets (only these) with the problems as hints; returns the ones translated.
+
+        A packet a structure edit left with a few untranslated sentences whose exact source the book
+        already translates (a restored "Summary" heading) is completed from that translation instead
+        (``fill_from_memory``): nothing else in it changes. The hints carry the book's settled renderings
+        of the glossary terms in the packets, so a retranslation does not bring a new variant.
+        """
+        packet_ids = [packet_id for packet_id in dict.fromkeys(packet_ids) if not self.fill_from_memory(packet_id)]
         if not packet_ids:
             return []
+        settled = self.settled_term_hint(packet_ids)
+        hints = [*[hint for hint in hints if hint][:7], *([settled] if settled else [])]
         workflow = self.ctx.workflow()
         translation = workflow.translation_service
         ops = OpsRepository(self.session)
@@ -334,6 +355,147 @@ class PilotRepairToolbox:
         self.session.flush()
         self._normalize(done)
         return done
+
+    # --- translation memory and settled terms ---------------------------------------------------
+
+    def _uncovered_sentences(self, packet_id: str) -> tuple[TranslationRun | None, list[Sentence]]:
+        """The packet's latest attempt, and its translatable current sentences that attempt does not translate."""
+        run = self.session.scalars(
+            select(TranslationRun)
+            .where(TranslationRun.packet_id == packet_id, TranslationRun.status == RunStatus.SUCCEEDED)
+            .order_by(TranslationRun.attempt.desc())
+            .limit(1)
+        ).first()
+        current = list(
+            self.session.scalars(
+                select(Sentence)
+                .join(PacketSentenceMap, PacketSentenceMap.sentence_id == Sentence.id)
+                .where(
+                    PacketSentenceMap.packet_id == packet_id,
+                    PacketSentenceMap.role == PacketSentenceRole.CURRENT,
+                    Sentence.translatable.is_(True),
+                    Sentence.retired_by_revision_id.is_(None),
+                )
+            ).all()
+        )
+        if run is None:
+            return None, current
+        covered = set(
+            self.session.scalars(
+                select(AlignmentEdge.sentence_id)
+                .join(TargetSegment, TargetSegment.id == AlignmentEdge.target_segment_id)
+                .where(TargetSegment.translation_run_id == run.id, TargetSegment.final_status != TargetSegmentStatus.SUPERSEDED)
+            ).all()
+        )
+        return run, [sentence for sentence in current if sentence.id not in covered]
+
+    def remembered_translation(self, sentence: Sentence) -> str | None:
+        """The book's translation of this exact source sentence elsewhere (the most used one), if any."""
+        key = " ".join((sentence.source_text or "").split())
+        if not key:
+            return None
+        twins = [
+            twin_id
+            for twin_id, text in self.session.execute(
+                select(Sentence.id, Sentence.source_text).where(
+                    Sentence.document_id == sentence.document_id,
+                    Sentence.id != sentence.id,
+                    Sentence.translatable.is_(True),
+                    Sentence.retired_by_revision_id.is_(None),
+                    Sentence.source_text.like(key.split()[0].replace("%", "").replace("_", "") + "%"),
+                )
+            ).all()
+            if " ".join((text or "").split()) == key
+        ]
+        if not twins:
+            return None
+        texts = Counter(text.strip() for text in active_target_texts(self.session, twins).values() if text and text.strip())
+        if not texts:
+            return None
+        return texts.most_common(1)[0][0]
+
+    def fill_from_memory(self, packet_id: str) -> bool:
+        """Complete a packet whose only missing translations are sentences the book already translates."""
+        packet = self.session.get(TranslationPacket, packet_id)
+        if packet is None or packet.status != PacketStatus.BUILT:
+            return False
+        run, missing = self._uncovered_sentences(packet_id)
+        if run is None or not missing:
+            return False
+        texts: dict[str, str] = {}
+        for sentence in missing:
+            remembered = self.remembered_translation(sentence)
+            if remembered is None:
+                return False
+            texts[sentence.id] = remembered
+        try:
+            with self.session.begin_nested():
+                SegmentEditService(self.session).fill_sentences(
+                    packet_id, texts, reason="沿用全书对同一句原文的译法", actor_id=ACTOR_ID, run_id=self.ctx.run_id
+                )
+        except Exception:  # a guard refused it: the packet is retranslated as before
+            logger.debug("translation memory refused for packet %s", packet_id, exc_info=True)
+            return False
+        packet.status = PacketStatus.TRANSLATED
+        self.session.flush()
+        self.memory_filled.append({"packet_id": packet_id, "sentences": {sid: text for sid, text in texts.items()}})
+        return True
+
+    def _settled_renderings(self) -> dict[str, str]:
+        """Glossary term -> the rendering the book's translation uses most (its target when unused)."""
+        if self._settled_cache is not None:
+            return self._settled_cache
+        entries = [
+            entry
+            for entry in GlossaryService(self.session).list_document_entries(self.ctx.document_id)
+            if entry.source_term and entry.target_term
+        ]
+        settled: dict[str, str] = {}
+        if entries:
+            index = SourceTermIndex([entry.source_term for entry in entries])
+            by_key = {source_term_key(entry.source_term): entry for entry in entries}
+            rows = self.session.execute(
+                select(Sentence.id, Sentence.source_text).where(
+                    Sentence.chapter_id.in_(list(self.ctx.chapter_ids) or ["-"]),
+                    Sentence.translatable.is_(True),
+                    Sentence.retired_by_revision_id.is_(None),
+                )
+            ).all()
+            keys_by_sentence = {str(sentence_id): index.keys_in(text or "") for sentence_id, text in rows}
+            with_terms = [sentence_id for sentence_id, keys in keys_by_sentence.items() if keys]
+            targets = active_target_texts(self.session, with_terms) if with_terms else {}
+            uses: dict[str, Counter[str]] = {}
+            for sentence_id in with_terms:
+                for key in keys_by_sentence[sentence_id]:
+                    entry = by_key.get(key)
+                    if entry is None:
+                        continue
+                    renderings = [r for r in dict.fromkeys([entry.target_term, *(entry.target_variants_json or [])]) if r]
+                    for rendering in pilot_qa._renderings_used(targets.get(sentence_id, ""), renderings)[:1]:
+                        uses.setdefault(key, Counter())[rendering] += 1
+            for key, entry in by_key.items():
+                counts = uses.get(key)
+                settled[key] = counts.most_common(1)[0][0] if counts else entry.target_term
+        self._settled_cache = settled
+        return settled
+
+    def settled_term_hint(self, packet_ids: Sequence[str]) -> str | None:
+        """One hint naming the book's settled rendering of every glossary term in these packets."""
+        settled = self._settled_renderings()
+        if not settled:
+            return None
+        entries = {source_term_key(entry.source_term): entry for entry in GlossaryService(self.session).list_document_entries(self.ctx.document_id)}
+        sources = self.session.scalars(
+            select(Sentence.source_text)
+            .join(PacketSentenceMap, PacketSentenceMap.sentence_id == Sentence.id)
+            .where(PacketSentenceMap.packet_id.in_(list(packet_ids)), PacketSentenceMap.role == PacketSentenceRole.CURRENT)
+        ).all()
+        index = SourceTermIndex([entries[key].source_term for key in settled if key in entries])
+        keys = sorted({key for text in sources for key in index.keys_in(text or "")})
+        pairs = [f"「{entries[key].source_term}」译为「{settled[key]}」" for key in keys if key in entries and settled.get(key)]
+        if not pairs:
+            return None
+        return "本书已定的术语译法，照用，不要换别的说法：" + "；".join(pairs[:12]) + "。"
 
     def _normalize(self, packet_ids: Sequence[str]) -> None:
         """A fresh translation written the book's way: its CJK–Latin spacing, full-width punctuation.
