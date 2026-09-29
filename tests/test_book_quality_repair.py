@@ -210,6 +210,35 @@ class FigurePathTests(ToolboxCase):
                 self.toolbox(session, chapter_ids).apply(item)
 
 
+class DefectTicketTests(ToolboxCase):
+    def test_a_defect_seen_again_updates_its_ticket(self) -> None:
+        from book_agent.domain.models.review import PilotDefectTicket
+        from tests.pilot_repair_fixture import edit_translation
+
+        self.translate()
+        with self.bench.session_factory() as session:
+            (sentence,) = sentence_ids(session, self.bench.document_id, "The first technique reads")
+            edit_translation(session, sentence, lambda current: current.replace("这一句", "这¡句"))
+            session.commit()
+        first, _ = self.repair()
+        with self.bench.session_factory() as session:
+            (second_sentence,) = sentence_ids(session, self.bench.document_id, "The second technique masks")
+            edit_translation(session, second_sentence, lambda current: current.replace("这一句", "这¡句"))
+            session.commit()
+        second, _ = self.repair()
+        with self.bench.session_factory() as session:
+            tickets = session.scalars(select(PilotDefectTicket).where(PilotDefectTicket.check_id == "L7.stray_glyph")).all()
+            self.assertEqual(len(tickets), 1)
+            ticket = tickets[0]
+            self.assertEqual(ticket.impact_json["occurrences"], 2)
+            self.assertEqual(ticket.impact_json["repair_ids"], [first["repair_id"], second["repair_id"]])
+            self.assertEqual(ticket.impact_json["findings_before"], 2)
+            self.assertEqual(len({item["key"] for item in ticket.evidence_json}), 2)
+        # Both repairs list it.
+        self.assertEqual([t["ticket_id"] for t in second["tickets"] if t["check_id"] == "L7.stray_glyph"], [ticket.id])
+        self.assertEqual([t["ticket_id"] for t in first["tickets"] if t["check_id"] == "L7.stray_glyph"], [ticket.id])
+
+
 class StaleDraftTests(ToolboxCase):
     """After a merge, one sentence had the current translation of several packets (the p.53 callout)."""
 

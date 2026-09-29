@@ -578,11 +578,46 @@ class PilotRepairService:
         return tickets
 
     def _ticket(self, repair: PilotRepair, state: _ClassState, findings: Sequence[dict[str, Any]]) -> PilotDefectTicket:
+        """The defect ticket of this issue class: the book's open one updated, else a new one.
+
+        One ticket per issue class, document and suspected cause: a repair run again (by hand, or the
+        whole book's after the pilot's) adds its evidence and counts to the ticket already open.
+        """
         cause = state.classification.cause
         spec = CHECKS.get(state.check_id)
         document = self.session.get(Document, repair.document_id)
         evidence = [self._evidence(finding) for finding in list(findings)[:MAX_EVIDENCE_SAMPLES]]
         pages = sorted({item["page"] for item in evidence if isinstance(item.get("page"), int)})
+        suspected = cause.cause if cause is not None else state.classification.reason
+        existing = self.session.scalars(
+            select(PilotDefectTicket)
+            .where(
+                PilotDefectTicket.document_id == repair.document_id,
+                PilotDefectTicket.issue_class == state.issue_class,
+                PilotDefectTicket.suspected_cause == suspected,
+                PilotDefectTicket.status == "open",
+            )
+            .order_by(PilotDefectTicket.created_at)
+            .limit(1)
+        ).first()
+        if existing is not None:
+            impact = dict(existing.impact_json or {})
+            repair_ids = list(impact.get("repair_ids") or ([existing.repair_id] if existing.repair_id else []))
+            if repair.id not in repair_ids:
+                repair_ids.append(repair.id)
+                impact["occurrences"] = int(impact.get("occurrences") or 1) + 1
+            impact["repair_ids"] = repair_ids
+            impact["findings_before"] = len(findings)
+            impact["findings_seen_total"] = int(impact.get("findings_seen_total") or 0) + len(findings)
+            impact["pages"] = sorted({*(impact.get("pages") or []), *pages})
+            impact["last_seen_at"] = _utcnow().isoformat()
+            seen = {(item.get("key"), item.get("block_id")) for item in existing.evidence_json or []}
+            fresh = [item for item in evidence if (item.get("key"), item.get("block_id")) not in seen]
+            existing.evidence_json = [*fresh, *(existing.evidence_json or [])][: MAX_EVIDENCE_SAMPLES * 2]
+            existing.impact_json = impact
+            existing.updated_at = _utcnow()
+            self.session.flush()
+            return existing
         ticket = PilotDefectTicket(
             document_id=repair.document_id,
             repair_id=repair.id,
@@ -592,14 +627,22 @@ class PilotRepairService:
             classification_rule=state.classification.rule,
             component=cause.component if cause is not None else "pipeline",
             title=f"{spec.title if spec else state.check_id}（{document.title_src or document.title or repair.document_id if document else repair.document_id}）",
-            suspected_cause=cause.cause if cause is not None else state.classification.reason,
+            suspected_cause=suspected,
             reproduction=(
                 f"导入《{(document.title_src or document.title) if document else ''}》（{document.source_type.value if document else ''}），"
                 f"试译后运行分层质检，{state.check_id} 在第 {', '.join(str(page) for page in pages[:8]) or '?'} 页报告 "
                 f"{len(findings)} 处；样例见 evidence（块 id、原文、译文）。"
             ),
             evidence_json=evidence,
-            impact_json={"findings_before": len(findings), "pages": pages, "severity": spec.severity if spec else None},
+            impact_json={
+                "findings_before": len(findings),
+                "findings_seen_total": len(findings),
+                "pages": pages,
+                "severity": spec.severity if spec else None,
+                "occurrences": 1,
+                "repair_ids": [repair.id],
+                "last_seen_at": _utcnow().isoformat(),
+            },
             workaround_json={},
             status="open",
         )
@@ -1019,7 +1062,14 @@ def repair_payload(session: Session, repair: PilotRepair) -> dict[str, Any]:
     attempts = session.scalars(
         select(PilotRepairAttempt).where(PilotRepairAttempt.repair_id == repair.id).order_by(PilotRepairAttempt.ordinal)
     ).all()
-    tickets = session.scalars(select(PilotDefectTicket).where(PilotDefectTicket.repair_id == repair.id).order_by(PilotDefectTicket.created_at)).all()
+    # A ticket stays with the repair that filed it; later repairs that saw the defect again are in its impact.
+    tickets = [
+        ticket
+        for ticket in session.scalars(
+            select(PilotDefectTicket).where(PilotDefectTicket.document_id == repair.document_id).order_by(PilotDefectTicket.created_at)
+        ).all()
+        if ticket.repair_id == repair.id or repair.id in ((ticket.impact_json or {}).get("repair_ids") or [])
+    ]
     return {
         **(overview_summary(session, repair) or {}),
         "document_id": repair.document_id,
