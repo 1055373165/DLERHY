@@ -524,6 +524,10 @@ def _split_hanging_list_blocks(
                 continue
             if x0 > current_x + _INDENT_TOLERANCE:
                 continue  # the item's hanging text
+            if current_kind in {"bullet", "number"} and x0 >= current_x - _INDENT_TOLERANCE:
+                # Wrapped flush with its marker (a reference list): still the item. Only under a
+                # sub-item is text at the marker's indent the parent item's own ("Cost considerations:").
+                continue
             inside = list_indent is not None and x0 >= list_indent - _INDENT_TOLERANCE
             segments.append([index, "list_text" if inside else "body", x0])
         if len(segments) < 2:
@@ -557,10 +561,17 @@ def _mark_numbered_list_blocks(blocks: list[PdfTextBlock]) -> list[PdfTextBlock]
     wrapped text) joins the item before it.
     """
     result: list[PdfTextBlock] = []
+    sizes = sorted(block.font_size_avg for block in blocks if block.font_size_avg > 0)
+    # Footnotes ("1 First footnote ...") are numbered too, but set below the body size.
+    min_item_size = sizes[len(sizes) // 2] * 0.9 if sizes else 0.0
     index = 0
     while index < len(blocks):
         block = blocks[index]
-        start = _NUMBER_ITEM_LINE.match(block.line_texts[0]) if block.line_texts and not block.list_marker else None
+        start = (
+            _NUMBER_ITEM_LINE.match(block.line_texts[0])
+            if block.line_texts and not block.list_marker and block.font_size_max >= min_item_size
+            else None
+        )
         if start is None:
             result.append(block)
             index += 1

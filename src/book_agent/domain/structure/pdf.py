@@ -4835,6 +4835,8 @@ def _is_running_prose(text: str) -> bool:
 
 # How far (pt) past a page's body edge text must start to be set inside a list.
 _LIST_TEXT_MIN_INDENT = 20.0
+# Further in than this it is another column, not a list's text indent.
+_LIST_TEXT_MAX_INDENT = 60.0
 
 
 def _list_kind_of_text(text: str) -> str:
@@ -4921,10 +4923,18 @@ def _continues_sidebar_panel(
     return previous[1][3] >= previous_height * 0.8 and current[1][1] <= current_height * 0.25
 
 
+_CROSS_REFERENCE_SENTENCE = re.compile(r"^(?i:chapter|part|appendix)\s+[\dA-Z]{1,3}\s+[a-z]")
+
+
 def _is_body_sentence(raw_block: PdfTextBlock, text: str, page_font_median: float) -> bool:
-    """A sentence set in the body size ("Chapter 7 explores the various layers ... systems."), not a title."""
+    """A sentence set in the body size ("Chapter 7 explores the various layers ... systems."), not a title.
+
+    The label and its number go on with a lowercase verb; a title ("Appendix Tool Catalog", even
+    run into its first sentence) goes on capitalised.
+    """
     return bool(
-        page_font_median > 0
+        _CROSS_REFERENCE_SENTENCE.match(text)
+        and page_font_median > 0
         and raw_block.font_size_max <= page_font_median * 1.15
         and not any(bold for _size, bold in raw_block.line_styles)
         and text.rstrip().endswith((".", "!", "?"))
@@ -4948,7 +4958,7 @@ def _is_indented_past_body(block: _RecoveredBlock, body_left: dict[int, float]) 
         return False
     if str(block.metadata.get("pdf_page_family") or "body") != "body":
         return False
-    return float(block.bbox_regions[0]["bbox"][0]) - edge >= _LIST_TEXT_MIN_INDENT
+    return _LIST_TEXT_MIN_INDENT <= float(block.bbox_regions[0]["bbox"][0]) - edge <= _LIST_TEXT_MAX_INDENT
 
 
 def _is_figure_label_block(block: _RecoveredBlock) -> bool:
