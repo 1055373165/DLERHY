@@ -53,6 +53,8 @@
      },
      "metadata": {
       "detected_by": "bullet_pattern",
+      "list_kind": "bullet",
+      "list_level": 1,
       "nontranslatable_reason": null,
       "pdf_block_role": "list_item",
       "pdf_font_names": [
