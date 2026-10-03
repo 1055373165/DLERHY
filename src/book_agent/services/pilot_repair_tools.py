@@ -55,6 +55,7 @@ from book_agent.domain.enums import (
     PacketStatus,
     RunStatus,
     SnapshotType,
+    TargetSegmentStatus,
 )
 from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
 from book_agent.domain.models import Block, Chapter, Document, Event, MemorySnapshot, Sentence
@@ -62,6 +63,7 @@ from book_agent.domain.models.document import DocumentImage
 from book_agent.domain.models.ops import DocumentRun
 from book_agent.domain.models.review import ReviewIssue
 from book_agent.domain.models.translation import (
+    AlignmentEdge,
     PacketSentenceMap,
     TargetSegment,
     TranslationPacket,
@@ -184,6 +186,9 @@ class PilotRepairToolbox:
         self.structure = StructureEditService(ctx.session)
         self._proposal: tuple[dict[str, Any] | None, list[str]] | None = None
         self._consulted = False
+        # Packets an attempt completed from the translation memory instead of retranslating them.
+        self.memory_filled: list[dict[str, Any]] = []
+        self._settled_cache: dict[str, str] | None = None
 
     # --- dispatch ----------------------------------------------------------------------
 
@@ -217,7 +222,15 @@ class PilotRepairToolbox:
         handler = getattr(self, "_" + item.path.name.replace(".", "__"), None)
         if handler is None:
             raise NotApplicable(f"no handler for {item.path.name}")
-        return handler(item)
+        self.memory_filled = []
+        self._settled_cache = None
+        result = handler(item)
+        if self.memory_filled:
+            filled = [entry["packet_id"] for entry in self.memory_filled]
+            result.edited_packet_ids = list(dict.fromkeys([*result.edited_packet_ids, *filled]))
+            result.packet_ids = [packet_id for packet_id in result.packet_ids if packet_id not in filled]
+            result.params = {**result.params, "translation_memory": list(self.memory_filled)}
+        return result
 
     # --- shared helpers --------------------------------------------------------------------
 
@@ -288,10 +301,18 @@ class PilotRepairToolbox:
         return []
 
     def retranslate(self, packet_ids: Sequence[str], hints: Sequence[str]) -> list[str]:
-        """Retranslate these packets (only these) with the problems as hints; returns the ones translated."""
-        packet_ids = list(dict.fromkeys(packet_ids))
+        """Retranslate these packets (only these) with the problems as hints; returns the ones translated.
+
+        A packet a structure edit left with a few untranslated sentences whose exact source the book
+        already translates (a restored "Summary" heading) is completed from that translation instead
+        (``fill_from_memory``): nothing else in it changes. The hints carry the book's settled renderings
+        of the glossary terms in the packets, so a retranslation does not bring a new variant.
+        """
+        packet_ids = [packet_id for packet_id in dict.fromkeys(packet_ids) if not self.fill_from_memory(packet_id)]
         if not packet_ids:
             return []
+        settled = self.settled_term_hint(packet_ids)
+        hints = [*[hint for hint in hints if hint][:7], *([settled] if settled else [])]
         workflow = self.ctx.workflow()
         translation = workflow.translation_service
         ops = OpsRepository(self.session)
@@ -334,6 +355,147 @@ class PilotRepairToolbox:
         self.session.flush()
         self._normalize(done)
         return done
+
+    # --- translation memory and settled terms ---------------------------------------------------
+
+    def _uncovered_sentences(self, packet_id: str) -> tuple[TranslationRun | None, list[Sentence]]:
+        """The packet's latest attempt, and its translatable current sentences that attempt does not translate."""
+        run = self.session.scalars(
+            select(TranslationRun)
+            .where(TranslationRun.packet_id == packet_id, TranslationRun.status == RunStatus.SUCCEEDED)
+            .order_by(TranslationRun.attempt.desc())
+            .limit(1)
+        ).first()
+        current = list(
+            self.session.scalars(
+                select(Sentence)
+                .join(PacketSentenceMap, PacketSentenceMap.sentence_id == Sentence.id)
+                .where(
+                    PacketSentenceMap.packet_id == packet_id,
+                    PacketSentenceMap.role == PacketSentenceRole.CURRENT,
+                    Sentence.translatable.is_(True),
+                    Sentence.retired_by_revision_id.is_(None),
+                )
+            ).all()
+        )
+        if run is None:
+            return None, current
+        covered = set(
+            self.session.scalars(
+                select(AlignmentEdge.sentence_id)
+                .join(TargetSegment, TargetSegment.id == AlignmentEdge.target_segment_id)
+                .where(TargetSegment.translation_run_id == run.id, TargetSegment.final_status != TargetSegmentStatus.SUPERSEDED)
+            ).all()
+        )
+        return run, [sentence for sentence in current if sentence.id not in covered]
+
+    def remembered_translation(self, sentence: Sentence) -> str | None:
+        """The book's translation of this exact source sentence elsewhere (the most used one), if any."""
+        key = " ".join((sentence.source_text or "").split())
+        if not key:
+            return None
+        twins = [
+            twin_id
+            for twin_id, text in self.session.execute(
+                select(Sentence.id, Sentence.source_text).where(
+                    Sentence.document_id == sentence.document_id,
+                    Sentence.id != sentence.id,
+                    Sentence.translatable.is_(True),
+                    Sentence.retired_by_revision_id.is_(None),
+                    Sentence.source_text.like(key.split()[0].replace("%", "").replace("_", "") + "%"),
+                )
+            ).all()
+            if " ".join((text or "").split()) == key
+        ]
+        if not twins:
+            return None
+        texts = Counter(text.strip() for text in active_target_texts(self.session, twins).values() if text and text.strip())
+        if not texts:
+            return None
+        return texts.most_common(1)[0][0]
+
+    def fill_from_memory(self, packet_id: str) -> bool:
+        """Complete a packet whose only missing translations are sentences the book already translates."""
+        packet = self.session.get(TranslationPacket, packet_id)
+        if packet is None or packet.status != PacketStatus.BUILT:
+            return False
+        run, missing = self._uncovered_sentences(packet_id)
+        if run is None or not missing:
+            return False
+        texts: dict[str, str] = {}
+        for sentence in missing:
+            remembered = self.remembered_translation(sentence)
+            if remembered is None:
+                return False
+            texts[sentence.id] = remembered
+        try:
+            with self.session.begin_nested():
+                SegmentEditService(self.session).fill_sentences(
+                    packet_id, texts, reason="沿用全书对同一句原文的译法", actor_id=ACTOR_ID, run_id=self.ctx.run_id
+                )
+        except Exception:  # a guard refused it: the packet is retranslated as before
+            logger.debug("translation memory refused for packet %s", packet_id, exc_info=True)
+            return False
+        packet.status = PacketStatus.TRANSLATED
+        self.session.flush()
+        self.memory_filled.append({"packet_id": packet_id, "sentences": {sid: text for sid, text in texts.items()}})
+        return True
+
+    def _settled_renderings(self) -> dict[str, str]:
+        """Glossary term -> the rendering the book's translation uses most (its target when unused)."""
+        if self._settled_cache is not None:
+            return self._settled_cache
+        entries = [
+            entry
+            for entry in GlossaryService(self.session).list_document_entries(self.ctx.document_id)
+            if entry.source_term and entry.target_term
+        ]
+        settled: dict[str, str] = {}
+        if entries:
+            index = SourceTermIndex([entry.source_term for entry in entries])
+            by_key = {source_term_key(entry.source_term): entry for entry in entries}
+            rows = self.session.execute(
+                select(Sentence.id, Sentence.source_text).where(
+                    Sentence.chapter_id.in_(list(self.ctx.chapter_ids) or ["-"]),
+                    Sentence.translatable.is_(True),
+                    Sentence.retired_by_revision_id.is_(None),
+                )
+            ).all()
+            keys_by_sentence = {str(sentence_id): index.keys_in(text or "") for sentence_id, text in rows}
+            with_terms = [sentence_id for sentence_id, keys in keys_by_sentence.items() if keys]
+            targets = active_target_texts(self.session, with_terms) if with_terms else {}
+            uses: dict[str, Counter[str]] = {}
+            for sentence_id in with_terms:
+                for key in keys_by_sentence[sentence_id]:
+                    entry = by_key.get(key)
+                    if entry is None:
+                        continue
+                    renderings = [r for r in dict.fromkeys([entry.target_term, *(entry.target_variants_json or [])]) if r]
+                    for rendering in pilot_qa._renderings_used(targets.get(sentence_id, ""), renderings)[:1]:
+                        uses.setdefault(key, Counter())[rendering] += 1
+            for key, entry in by_key.items():
+                counts = uses.get(key)
+                settled[key] = counts.most_common(1)[0][0] if counts else entry.target_term
+        self._settled_cache = settled
+        return settled
+
+    def settled_term_hint(self, packet_ids: Sequence[str]) -> str | None:
+        """One hint naming the book's settled rendering of every glossary term in these packets."""
+        settled = self._settled_renderings()
+        if not settled:
+            return None
+        entries = {source_term_key(entry.source_term): entry for entry in GlossaryService(self.session).list_document_entries(self.ctx.document_id)}
+        sources = self.session.scalars(
+            select(Sentence.source_text)
+            .join(PacketSentenceMap, PacketSentenceMap.sentence_id == Sentence.id)
+            .where(PacketSentenceMap.packet_id.in_(list(packet_ids)), PacketSentenceMap.role == PacketSentenceRole.CURRENT)
+        ).all()
+        index = SourceTermIndex([entries[key].source_term for key in settled if key in entries])
+        keys = sorted({key for text in sources for key in index.keys_in(text or "")})
+        pairs = [f"「{entries[key].source_term}」译为「{settled[key]}」" for key in keys if key in entries and settled.get(key)]
+        if not pairs:
+            return None
+        return "本书已定的术语译法，照用，不要换别的说法：" + "；".join(pairs[:12]) + "。"
 
     def _normalize(self, packet_ids: Sequence[str]) -> None:
         """A fresh translation written the book's way: its CJK–Latin spacing, full-width punctuation.
@@ -922,6 +1084,307 @@ class PilotRepairToolbox:
         self._hide(block, "图里的文字，图片里已经有，不作为表格或代码重复出现")
         return ToolResult(params={"block_id": block.id, "block_type": block.block_type.value}, block_ids=[block.id])
 
+    # --- figures without captions, sparse tables ---------------------------------------------------
+
+    @staticmethod
+    def _regions(block: Block) -> list[tuple[int, tuple[float, float, float, float]]]:
+        return parse_health.block_regions(dict(block.source_span_json or {}))
+
+    def _is_caption_like(self, block: Block) -> bool:
+        if (block.source_span_json or {}).get("repair_hidden_from_export"):
+            return False
+        text = " ".join((block.source_text or "").split())
+        label = pilot_qa._FIGURE_CAPTION_RE.match(text)
+        return block.block_type == BlockType.CAPTION or bool(label and not re.match(r"\s*[a-z]", text[label.end() :]))
+
+    def _structure_edit__link_adjacent_caption(self, item: WorkItem) -> ToolResult:
+        """A figure without a caption, with a caption block right before or after it on its page: link them."""
+        figure = self._finding_block(item.findings[0])
+        if figure.block_type not in {BlockType.FIGURE, BlockType.IMAGE}:
+            raise NotApplicable(f"a {figure.block_type.value} block is not a figure")
+        page = (figure.source_span_json or {}).get("source_page_start")
+        linked = {
+            str((b.source_span_json or {}).get("linked_caption_block_id"))
+            for b in self._chapter_blocks(figure.chapter_id)
+            if (b.source_span_json or {}).get("linked_caption_block_id")
+        }
+        previous, following = self._neighbours(figure)
+        caption = next(
+            (
+                b
+                for b in (following, previous)
+                if b is not None
+                and b.id not in linked
+                and (b.source_span_json or {}).get("source_page_start") == page
+                and self._is_caption_like(b)
+            ),
+            None,
+        )
+        if caption is None:
+            raise NotApplicable("no unlinked caption right next to the figure on its page")
+        if caption.block_type != BlockType.CAPTION:
+            self.structure.relabel_block(self.ctx.document_id, caption.id, BlockType.CAPTION.value, actor_id=ACTOR_ID, reason="图注")
+        self.structure.link_caption(self.ctx.document_id, caption.id, figure.id, actor_id=ACTOR_ID, reason="紧挨着图的图注配给这张图")
+        return ToolResult(params={"figure_block_id": figure.id, "caption_block_id": caption.id}, block_ids=[figure.id, caption.id])
+
+    def _structure_edit__accept_uncaptioned_figure(self, item: WorkItem) -> ToolResult:
+        """A figure whose page has no caption for it (an icon, a decorative image, an unlabelled diagram) is fine."""
+        figure = self._finding_block(item.findings[0])
+        if figure.block_type not in {BlockType.FIGURE, BlockType.IMAGE}:
+            raise NotApplicable(f"a {figure.block_type.value} block is not a figure")
+        page = (figure.source_span_json or {}).get("source_page_start")
+        linked = {
+            str((b.source_span_json or {}).get("linked_caption_block_id"))
+            for b in self._chapter_blocks(figure.chapter_id)
+            if (b.source_span_json or {}).get("linked_caption_block_id")
+        }
+        unlinked = [
+            b
+            for b in self._chapter_blocks(figure.chapter_id)
+            if b.id not in linked and (b.source_span_json or {}).get("source_page_start") == page and self._is_caption_like(b)
+        ]
+        if unlinked:
+            raise NotApplicable("the page has a caption no figure took: it may be this figure's")
+        self.structure.override_metadata(
+            self.ctx.document_id, figure.id, {"figure_caption_absent": True}, actor_id=ACTOR_ID, reason="原书这张图没有图注"
+        )
+        return ToolResult(params={"figure_block_id": figure.id, "page": page}, block_ids=[figure.id])
+
+    def _structure_edit__absorb_sparse_table_into_figure(self, item: WorkItem) -> ToolResult:
+        """A mostly empty table inside or right next to a figure is the figure's own text.
+
+        Inside the figure's crop: the table is hidden (the picture shows it). Next to it (touching or
+        within ``ADJACENT_GAP`` points, overlapping horizontally): the figure's crop grows to take it in,
+        then the table is hidden. Without a figure on its page the table is left alone.
+        """
+        table = self._finding_block(item.findings[0])
+        if table.block_type != BlockType.TABLE:
+            raise NotApplicable(f"a {table.block_type.value} block is not a table")
+        regions = self._regions(table)
+        if not regions:
+            raise NotApplicable("the table has no region on its page")
+        page, box = regions[0]
+        figures = [
+            b
+            for b in self._chapter_blocks(table.chapter_id)
+            if b.block_type in {BlockType.FIGURE, BlockType.IMAGE}
+            and any(region_page == page for region_page, _bbox in self._regions(b))
+            and parse_health.image_fragment_kind(next(bbox for region_page, bbox in self._regions(b) if region_page == page)) is None
+        ]
+
+        def gap(a: tuple[float, ...], b: tuple[float, ...]) -> float:
+            dx = max(0.0, max(a[0], b[0]) - min(a[2], b[2]))
+            dy = max(0.0, max(a[1], b[1]) - min(a[3], b[3]))
+            return max(dx, dy)
+
+        candidates = []
+        for figure in figures:
+            figure_box = next(bbox for region_page, bbox in self._regions(figure) if region_page == page)
+            overlap_x = min(box[2], figure_box[2]) - max(box[0], figure_box[0])
+            distance = gap(box, figure_box)
+            if distance <= ADJACENT_GAP and overlap_x > 0:
+                candidates.append((distance, figure, figure_box))
+        if not candidates:
+            raise NotApplicable("no figure on the table's page is next to it")
+        _distance, figure, figure_box = min(candidates, key=lambda entry: entry[0])
+        inside = box[0] >= figure_box[0] - 1 and box[1] >= figure_box[1] - 1 and box[2] <= figure_box[2] + 1 and box[3] <= figure_box[3] + 1
+        grown = None
+        if not inside:
+            grown = [min(box[0], figure_box[0]), min(box[1], figure_box[1]), max(box[2], figure_box[2]), max(box[3], figure_box[3])]
+            span = dict(figure.source_span_json or {})
+            bbox_json = dict(span.get("source_bbox_json") or {})
+            new_regions = []
+            for region in bbox_json.get("regions") or []:
+                region = dict(region)
+                if region.get("page_number") == page:
+                    region["bbox"] = [round(value, 2) for value in grown]
+                new_regions.append(region)
+            self.structure.override_metadata(
+                self.ctx.document_id,
+                figure.id,
+                {
+                    "source_bbox_json": {**bbox_json, "regions": new_regions},
+                    "figure_region": FIGURE_REGION_CONTENT_EXTENT,
+                    "figure_region_override": {"previous_bbox": list(figure_box), "absorbed_block_id": table.id},
+                },
+                actor_id=ACTOR_ID,
+                reason="图旁边的文字（被当成了表格）并进图片区域",
+            )
+            for image in self.session.scalars(select(DocumentImage).where(DocumentImage.block_id == figure.id)).all():
+                image.metadata_json = {**(image.metadata_json or {}), "storage_status": "stale", "stale_reason": "figure_region_override"}
+        self._hide(table, "图里的文字，图片里已经有，不作为表格重复出现")
+        return ToolResult(
+            params={"table_block_id": table.id, "figure_block_id": figure.id, "inside": inside, "grown_to": grown},
+            block_ids=[table.id, figure.id],
+        )
+
+    # --- lists, sidebars, split paragraphs, listing captions (the parser side's QA hints) ------------
+
+    def _hint_blocks(self, finding: dict[str, Any], *keys: str) -> list[Block]:
+        """The blocks a finding names: its evidence's id lists (in the given keys), else its own block."""
+        evidence = finding.get("evidence") or {}
+        ids: list[str] = []
+        for key in keys:
+            value = evidence.get(key)
+            if isinstance(value, str) and value:
+                ids.append(value)
+            elif isinstance(value, (list, tuple)):
+                ids.extend(str(item) for item in value if item)
+        if not ids:
+            return [self._finding_block(finding)]
+        blocks = [self._block(block_id) for block_id in dict.fromkeys(ids)]
+        return sorted(blocks, key=lambda block: block.ordinal)
+
+    def _fork_packets(self, outcomes: Sequence[Any]) -> list[str]:
+        return list(
+            dict.fromkeys(
+                packet for outcome in outcomes for packet in (getattr(getattr(outcome, "fork", None), "retranslate_packet_ids", []) or [])
+            )
+        )
+
+    def _split_inline_items(self, parent: Block, items: Sequence[str]) -> tuple[list[Block], list[Any]]:
+        """Sub-items set inside their bullet's text, one per line: each split off as its own block."""
+        outcomes: list[Any] = []
+        blocks: list[Block] = []
+        current = parent
+        for line in items:
+            text = current.source_text or ""
+            at = text.find(line.strip()[:40])
+            if at <= 0:
+                raise NotApplicable(f"cannot find the sub-item {line[:30]!r} in its bullet")
+            outcome = self.structure.split_block(self.ctx.document_id, current.id, _marker(text, at), actor_id=ACTOR_ID, reason="子项从上一项里拆出来")
+            outcomes.append(outcome)
+            current = self.session.get(Block, outcome.block_ids[-1])
+            blocks.append(current)
+        return blocks, outcomes
+
+    def _structure_edit__nest_list_items(self, item: WorkItem) -> ToolResult:
+        """Sub-items ("– Basic data structures") the parse kept flat: drawn as a nested list.
+
+        Loose sub-item paragraphs after the list (evidence ``item_block_ids``) become level-2 items;
+        sub-items set inside their bullet's text (``inline_items``) are split off first.
+        """
+        finding = item.findings[0]
+        evidence = finding.get("evidence") or {}
+        level = int(evidence.get("list_level") or 2)
+        outcomes: list[Any] = []
+        inline = [str(line) for line in evidence.get("inline_items") or [] if str(line).strip()]
+        if inline and not evidence.get("item_block_ids"):
+            parent = self._block(str(evidence.get("parent_block_id") or (finding.get("target") or {}).get("id") or ""))
+            blocks, outcomes = self._split_inline_items(parent, inline)
+        else:
+            blocks = self._hint_blocks(finding, "item_block_ids", "block_ids")
+        changed: list[dict[str, Any]] = []
+        for block in blocks:
+            if block.block_type not in {BlockType.LIST_ITEM, BlockType.PARAGRAPH}:
+                raise NotApplicable(f"a {block.block_type.value} block is not a list item")
+            text = (block.source_text or "").lstrip()
+            kind = str(evidence.get("list_kind") or "") or (
+                "dash" if re.match(r"[\u2013\u2014-]\s", text) else "number" if re.match(r"\d{1,3}(?:[.)]\s*|\s+)\S", text) else ""
+            )
+            if block.block_type == BlockType.PARAGRAPH:
+                outcomes.append(
+                    self.structure.relabel_block(self.ctx.document_id, block.id, BlockType.LIST_ITEM.value, actor_id=ACTOR_ID, reason="列表的子项")
+                )
+            updates: dict[str, Any] = {"list_level": level}
+            if kind:
+                updates["list_kind"] = kind
+            span = self.session.get(Block, block.id).source_span_json or {}
+            if all(span.get(key) == value for key, value in updates.items()) and block.block_type == BlockType.LIST_ITEM:
+                continue
+            self.structure.override_metadata(self.ctx.document_id, block.id, updates, actor_id=ACTOR_ID, reason="列表子项按层级缩进")
+            changed.append({"block_id": block.id, **updates})
+        if not changed:
+            raise NotApplicable("the items are already nested")
+        done = self.retranslate(self._fork_packets(outcomes), [])
+        return ToolResult(params={"items": changed}, block_ids=[entry["block_id"] for entry in changed], packet_ids=done)
+
+    def _structure_edit__relabel_as_sidebar(self, item: WorkItem) -> ToolResult:
+        """A sidebar's blocks drawn as one titled box; its title is not a section heading of the chapter."""
+        finding = item.findings[0]
+        evidence = finding.get("evidence") or {}
+        blocks = self._hint_blocks(finding, "member_block_ids", "sidebar_block_ids", "block_ids")
+        title_id = str(evidence.get("title_block_id") or (finding.get("target") or {}).get("id") or blocks[0].id)
+        title = next((block for block in blocks if block.id == title_id), None) or self._block(title_id)
+        sidebar_id = str(evidence.get("sidebar_id") or title.id)
+        outcomes: list[Any] = []
+        if title.block_type == BlockType.HEADING:
+            outcomes.append(
+                self.structure.relabel_block(
+                    self.ctx.document_id, title.id, BlockType.PARAGRAPH.value, actor_id=ACTOR_ID, reason="侧栏的标题，不是本章的小节标题"
+                )
+            )
+        for block in dict.fromkeys([title, *blocks]):
+            updates: dict[str, Any] = {"sidebar_id": sidebar_id}
+            if block.id == title.id:
+                updates["sidebar_title"] = True
+            self.structure.override_metadata(self.ctx.document_id, block.id, updates, actor_id=ACTOR_ID, reason="侧栏排成一个带标题的框")
+        done = self.retranslate(self._fork_packets(outcomes), [])
+        return ToolResult(
+            params={"sidebar_id": sidebar_id, "title_block_id": title.id, "block_ids": [block.id for block in blocks]},
+            block_ids=list(dict.fromkeys([title.id, *[block.id for block in blocks]])),
+            packet_ids=done,
+        )
+
+    def _structure_edit__join_continuation(self, item: WorkItem) -> ToolResult:
+        """A paragraph the page cut (at a figure or a page break): its two parts become one block again."""
+        finding = item.findings[0]
+        evidence = finding.get("evidence") or {}
+        if evidence.get("join_into_block_id"):
+            # The finding is on the second half; the first half is where it joins.
+            first = self._block(str(evidence["join_into_block_id"]))
+            second_id = evidence.get("block_id") or (finding.get("target") or {}).get("id")
+        else:
+            first = self._finding_block(finding)
+            second_id = evidence.get("continuation_block_id") or evidence.get("next_block_id")
+        if second_id:
+            second = self._block(str(second_id))
+        else:
+            following = [block for block in self._chapter_blocks(first.chapter_id) if block.ordinal > first.ordinal]
+            second = next(
+                (
+                    block
+                    for block in following
+                    if block.block_type == first.block_type
+                    and not (block.source_span_json or {}).get("repair_hidden_from_export")
+                    and (block.source_span_json or {}).get("pdf_block_role") not in {"header", "footer"}
+                ),
+                None,
+            )
+            if second is None:
+                raise NotApplicable("no continuation after the block")
+        outcome = self.structure.merge_blocks(
+            self.ctx.document_id, first.id, second.id, actor_id=ACTOR_ID, reason="被图或换页截断的段落接回一段", across_artifacts=True
+        )
+        done = self.retranslate(self._fork_packets([outcome]), ["这是一个完整的段落（原来被图或换页截断），译成连贯的一段。"])
+        return ToolResult(params={"first_block_id": first.id, "second_block_id": second.id}, block_ids=list(outcome.block_ids), packet_ids=done)
+
+    def _structure_edit__link_listing_caption(self, item: WorkItem) -> ToolResult:
+        """A "Listing N.N ..." caption kept as a paragraph: made the caption of the code block it names."""
+        finding = item.findings[0]
+        evidence = finding.get("evidence") or {}
+        caption = self._block(str(evidence.get("caption_block_id") or "")) if evidence.get("caption_block_id") else self._finding_block(finding)
+        code_id = evidence.get("listing_block_id") or evidence.get("code_block_id")
+        if code_id:
+            code = self._block(str(code_id))
+        else:
+            previous, following = self._neighbours(caption)
+            code = next((block for block in (following, previous) if block is not None and block.block_type == BlockType.CODE), None)
+            if code is None:
+                raise NotApplicable("no code block right next to the listing caption")
+        if code.block_type != BlockType.CODE:
+            raise NotApplicable(f"a {code.block_type.value} block is not a listing")
+        if (code.source_span_json or {}).get("linked_caption_block_id") == caption.id:
+            raise NotApplicable("the caption is already linked to its listing")
+        outcomes: list[Any] = []
+        if caption.block_type != BlockType.CAPTION:
+            outcomes.append(
+                self.structure.relabel_block(self.ctx.document_id, caption.id, BlockType.CAPTION.value, actor_id=ACTOR_ID, reason="代码清单的标题")
+            )
+        self.structure.link_caption(self.ctx.document_id, caption.id, code.id, actor_id=ACTOR_ID, reason="代码清单标题配给它的代码")
+        done = self.retranslate(self._fork_packets(outcomes), [])
+        return ToolResult(params={"caption_block_id": caption.id, "listing_block_id": code.id}, block_ids=[caption.id, code.id], packet_ids=done)
+
     def _heading_titles(self, chapter_id: str) -> list[str]:
         titles = [block.source_text for block in self._chapter_blocks(chapter_id) if block.block_type == BlockType.HEADING]
         chapters = self.session.scalars(select(Chapter.title_src).where(Chapter.document_id == self.ctx.document_id)).all()
@@ -1469,6 +1932,8 @@ def _marker(text: str, at: int) -> str:
     return text[at:]
 
 
+# A sparse table this close to a figure (points) is the figure's text set beside it.
+ADJACENT_GAP = 24.0
 # Clear of the check's touch gap (2pt): an edge this close to a line counts as cutting it.
 EDGE_MARGIN = 3.0
 

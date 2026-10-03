@@ -3,11 +3,13 @@ import { useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 
 import { queryClient } from "../../app/queryClient";
+import type { PilotRepairSummary } from "../../lib/overview";
 import {
   type PilotQualityFinding,
   type PilotQualityLayer,
   type PilotQualityReport,
   type PilotQualitySummary,
+  type QualityScope,
   SEVERITY_LABEL,
   getPilotQuality,
   layerVerdict,
@@ -95,47 +97,84 @@ function LayerRow({ documentId, layer, report }: { documentId: string; layer: Pi
   );
 }
 
-/** The pilot's layered QA: seven layers of rule checks on what the reader of the two chapters gets. */
-export function PilotQualityPanel({ documentId, summary }: { documentId: string; summary: PilotQualitySummary | null }) {
+const PANEL_TITLE: Record<QualityScope, string> = { pilot: "试译质检", book: "全书质检" };
+const PANEL_ANCHOR: Record<QualityScope, string> = { pilot: "pilot-quality", book: "book-quality" };
+const EMPTY_TEXT: Record<QualityScope, string> = {
+  pilot: "试译完成后会自动质检：按结构、图表、表格、代码与格式、术语、忠实度、排版七层检查试译的两章，只用规则，不花钱。",
+  book: "全书翻译完成后会自动质检：用和试译一样的七层检查查每一章，再自动修复能修的问题。",
+};
+
+/** What the repair after the QA did, in one line (the server words it). */
+function RepairLine({ repair }: { repair: PilotRepairSummary }) {
+  return (
+    <p className={s.meta} data-testid="quality-repair">
+      {repair.text}
+      {repair.status === "finished" && repair.questions > 0 && (
+        <>
+          {" "}
+          <a href="#needs-you">去回答</a>
+        </>
+      )}
+    </p>
+  );
+}
+
+/** The layered QA: seven layers of rule checks on what the reader gets — of the pilot's two chapters,
+ *  or (``scope="book"``, 全书质检) of every chapter after the whole-book run, with its repair. */
+export function PilotQualityPanel({
+  documentId,
+  summary,
+  scope = "pilot",
+  repair = null,
+}: {
+  documentId: string;
+  summary: PilotQualitySummary | null;
+  scope?: QualityScope;
+  repair?: PilotRepairSummary | null;
+}) {
+  const queryKey = scope === "book" ? "book-quality" : "pilot-quality";
   const report = useQuery({
-    queryKey: ["pilot-quality", documentId, summary?.report_id ?? null],
-    queryFn: () => getPilotQuality(documentId),
+    queryKey: [queryKey, documentId, summary?.report_id ?? null],
+    queryFn: () => getPilotQuality(documentId, scope),
     enabled: Boolean(summary),
     retry: false,
   });
   const run = useMutation({
-    mutationFn: () => runPilotQuality(documentId),
+    mutationFn: () => runPilotQuality(documentId, scope),
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: ["overview", documentId] });
-      await queryClient.invalidateQueries({ queryKey: ["pilot-quality", documentId] });
+      await queryClient.invalidateQueries({ queryKey: [queryKey, documentId] });
     },
   });
   const data = report.data;
   const status = summary?.status ?? "none";
+  const title = PANEL_TITLE[scope];
+  const anchor = PANEL_ANCHOR[scope];
   // Opened from the pilot result's "看质检报告": bring the report into view.
   const { hash } = useLocation();
   const section = useRef<HTMLElement>(null);
   const loaded = Boolean(data);
   useEffect(() => {
-    if (hash === "#pilot-quality") section.current?.scrollIntoView?.({ block: "start" });
-  }, [hash, loaded]);
+    if (hash === `#${anchor}`) section.current?.scrollIntoView?.({ block: "start" });
+  }, [hash, loaded, anchor]);
 
   return (
-    <section ref={section} id="pilot-quality" className={s.health} aria-label="试译质检" data-status={status === "error" ? "blocking" : status}>
+    <section ref={section} id={anchor} className={s.health} aria-label={title} data-status={status === "error" ? "blocking" : status}>
       <div className={s.healthHead}>
-        <h2 className={s.heading}>试译质检</h2>
+        <h2 className={s.heading}>{title}</h2>
         <button className="btn btn-sm" disabled={run.isPending} onClick={() => run.mutate()}>
           {run.isPending ? "质检中…" : summary ? "重新质检" : "立即质检"}
         </button>
       </div>
       {!summary ? (
-        <div className={s.empty}>试译完成后会自动质检：按结构、图表、表格、代码与格式、术语、忠实度、排版七层检查试译的两章，只用规则，不花钱。</div>
+        <div className={s.empty}>{EMPTY_TEXT[scope]}</div>
       ) : (
         <>
           <p className={s.healthStatus} role={summary.status === "blocking" ? "alert" : "status"}>
-            {qualityHeadline(summary)}
+            {qualityHeadline(summary, scope)}
             {summary.checked_at && <span className={s.meta}> · 质检于 {formatDate(summary.checked_at)}</span>}
           </p>
+          {repair && <RepairLine repair={repair} />}
           {data?.error && <div className={s.error}>质检出错：{data.error}</div>}
           {report.isError && <div className={s.error}>质检报告没能加载：{(report.error as Error).message}</div>}
           {data && data.layers.length > 0 && (

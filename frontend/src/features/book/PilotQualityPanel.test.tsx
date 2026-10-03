@@ -197,6 +197,75 @@ describe("Pilot quality report", () => {
     expect(within(summary).getByRole("link", { name: "看质检报告" })).toHaveAttribute("href", `/books/${ID}/progress#pilot-quality`);
   });
 
+  it("shows the whole book's QA as 全书质检, with its repair, beside the pilot's", async () => {
+    const calls: { url: string; method: string }[] = [];
+    const bookReport: PilotQualityReport = { ...report, report_id: "b1", run_id: "run-b", scope: "book", trigger: "book_qa", status: "warnings", counts: counts(0, 1, 2) };
+    const bookSummary: PilotQualitySummary = {
+      ...summary,
+      report_id: "b1",
+      status: "warnings",
+      counts: counts(0, 1, 2),
+      layers: summary.layers.map((layer) => (layer.layer === "L1" ? { ...layer, status: "passed", counts: counts(0, 0, 0) } : layer)),
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        calls.push({ url, method: init?.method ?? "GET" });
+        if (url.includes(`/v1/documents/${ID}/overview`)) {
+          return json(
+            makeOverview(ID, {
+              source_type: "pdf_text",
+              headline: "中文版可以阅读了。",
+              primary_action: { kind: "read", label: "阅读中文版" },
+              translation: { state: "succeeded", scope: "book", run_id: "run-b", stop_reason: null, stop_reason_text: null, steps: [], progress: { done: 9, total: 9 } },
+              book_quality: {
+                quality: bookSummary,
+                chapter_count: 21,
+                repair: {
+                  repair_id: "r1",
+                  scope: "book",
+                  status: "finished",
+                  outcome: "passed",
+                  repaired_kinds: ["小标题被排成了正文段落"],
+                  stop_reason: "clean",
+                  rounds: 1,
+                  repaired: 12,
+                  remaining: { blocking: 0, major: 1 },
+                  questions: 0,
+                  attempts: 14,
+                  cost_usd: 0.08,
+                  text: "自动修复了 12 个问题，还有 1 个一般问题，不影响阅读。",
+                  finished_at: "2026-09-30T08:00:00Z",
+                },
+              },
+            }),
+          );
+        }
+        if (url.includes(`/v1/documents/${ID}/book-quality`)) return json(bookReport);
+        if (url.includes("/parse-health")) return notFound();
+        if (url.includes("/v1/runs/")) return json({ run_id: "run-b", event_count: 0, record_count: 0, offset: 0, limit: 50, has_more: false, entries: [] });
+        if (url.includes("/v1/health")) return json({ status: "ok" });
+        if (url.includes("/v1/inbox")) return json({ count: 0, items: [], updates: [] });
+        return notFound();
+      }),
+    );
+    render(
+      <MemoryRouter initialEntries={[`/books/${ID}/progress`]}>
+        <App />
+      </MemoryRouter>,
+    );
+    const panel = await screen.findByRole("region", { name: "全书质检" });
+    expect(within(panel).getByRole("heading", { name: "全书质检" })).toBeInTheDocument();
+    expect(within(panel).getByRole("status")).toHaveTextContent("没有严重问题；有 1 处一般问题，不影响阅读。");
+    expect(within(panel).getByTestId("quality-repair")).toHaveTextContent("自动修复了 12 个问题，还有 1 个一般问题，不影响阅读。");
+    await within(panel).findByText(/L5 术语/);
+    expect(calls.some((call) => call.url.includes("/book-quality") && call.method === "GET")).toBe(true);
+    await userEvent.click(within(panel).getByRole("button", { name: "重新质检" }));
+    expect(calls.some((call) => call.url.includes("/book-quality") && call.method === "POST")).toBe(true);
+    expect(calls.some((call) => call.url.includes("/pilot-quality"))).toBe(false);
+  });
+
   it("opens the reading copy at the finding's chapter", async () => {
     vi.stubGlobal(
       "fetch",

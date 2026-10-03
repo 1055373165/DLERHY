@@ -72,6 +72,69 @@ def start_pilot_repair(
     return {"repair_id": repair_id, "status": "running"}
 
 
+@documents_router.get("/{document_id}/book-quality")
+def get_book_quality(document_id: str, session: Session = Depends(get_db_session)) -> dict[str, Any]:
+    """The latest layered QA of the whole book (after the whole-book run), in the pilot report's shape."""
+    from book_agent.services.book_quality import latest_book_report
+    from book_agent.services.pilot_quality import report_payload
+
+    _document_or_404(session, document_id)
+    report = latest_book_report(session, document_id)
+    if report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no whole-book quality report yet")
+    return report_payload(session, report)
+
+
+@documents_router.post("/{document_id}/book-quality")
+def run_book_quality(document_id: str, session: Session = Depends(get_db_session)) -> dict[str, Any]:
+    """Run the layered QA on every translated chapter now (rules only, no model call)."""
+    from book_agent.services.book_quality import BOOK_QA_TRIGGER, SCOPE_BOOK, book_chapter_ids
+    from book_agent.services.pilot import latest_book_run
+    from book_agent.services.pilot_quality import PilotQualityService, report_payload
+
+    _document_or_404(session, document_id)
+    chapter_ids = book_chapter_ids(session, document_id)
+    if not chapter_ids:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="这本书没有可以质检的章节。")
+    report = PilotQualityService(session).run(
+        document_id, run=latest_book_run(session, document_id), trigger=BOOK_QA_TRIGGER, chapter_ids=chapter_ids, scope=SCOPE_BOOK
+    )
+    return report_payload(session, report)
+
+
+@documents_router.get("/{document_id}/book-repair")
+def get_book_repair(document_id: str, session: Session = Depends(get_db_session)) -> dict[str, Any]:
+    """The latest repair of the whole book: summary, attempts, defect tickets and open questions."""
+    from book_agent.services.book_quality import latest_book_repair
+    from book_agent.services.pilot_repair import repair_payload
+
+    _document_or_404(session, document_id)
+    repair = latest_book_repair(session, document_id)
+    if repair is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no whole-book repair yet")
+    return repair_payload(session, repair)
+
+
+@documents_router.post("/{document_id}/book-repair", status_code=status.HTTP_202_ACCEPTED)
+def start_book_repair(
+    document_id: str, request: Request, body: RepairRequest | None = None, session: Session = Depends(get_db_session)
+) -> dict[str, Any]:
+    """Run the whole book's repair loop now, in the background; GET the same path to follow it."""
+    from book_agent.app.runtime.document_run_executor import ensure_document_run_executor
+    from book_agent.services.book_quality import latest_book_repair
+
+    _document_or_404(session, document_id)
+    running = latest_book_repair(session, document_id)
+    if running is not None and running.status == "running":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="这本书正在自动修复，等它完成后再试。")
+    executor = ensure_document_run_executor(request.app)
+    start = getattr(executor, "start_pilot_repair", None)
+    if start is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="the run executor is not running")
+    repair_id = start(document_id, budget_usd=body.budget_usd if body else None, scope="book")
+    return {"repair_id": repair_id, "status": "running"}
+
+
 @documents_router.get("/{document_id}/pilot-repair/evidence/{name}")
 def get_pilot_repair_evidence(document_id: str, name: str, request: Request, session: Session = Depends(get_db_session)) -> FileResponse:
     """A page image attached to a question (the problem outlined on the original page)."""

@@ -12,7 +12,8 @@ free two-chapter pilot of services/pilot.py): the same stages, but translate,
 rule review and exports own only those chapters, while the terminology stage
 still samples the whole book. A pilot ends with its layered QA
 (``pilot_qa``, services/pilot_quality.py) and the repair loop that follows it
-(``pilot_repair``, services/pilot_repair.py); a whole-book run has neither.
+(``pilot_repair``, services/pilot_repair.py); a whole-book run ends with the same two on every
+chapter (``book_qa``, ``book_repair``, services/book_quality.py).
 Who pays for it is the run's billing category, not part of the plan.
 """
 
@@ -66,6 +67,16 @@ PILOT_QA_STAGE = "pilot_qa"
 # ``pilot_repair: "off"`` leaves it out.
 PILOT_REPAIR_STAGE = "pilot_repair"
 PILOT_REPAIR_REQUEST_KEY = "pilot_repair"
+# Whole-book runs only, after their exports: the same layered QA on every chapter, then the repair
+# loop scoped to the whole book (services/book_quality.py). Run request ``book_repair: "off"`` leaves
+# the repair out, ``book_qa: "off"`` both.
+BOOK_QA_STAGE = "book_qa"
+BOOK_REPAIR_STAGE = "book_repair"
+BOOK_QA_REQUEST_KEY = "book_qa"
+BOOK_REPAIR_REQUEST_KEY = "book_repair"
+# Whole-book runs: before anything else, re-read the untranslated chapters when the parser changed
+# since import (services/chapter_reparse.py). ``reparse_untranslated: "off"`` skips it.
+REPARSE_REQUEST_KEY = "reparse_untranslated"
 # Run request flag: approve the terminology agent's term locks without asking (see RunPlan.fast_reading).
 FAST_READING_REQUEST_KEY = "fast_reading"
 # Web page documents also get the Chinese page in the original layout, right after the reading copy.
@@ -152,6 +163,11 @@ def _mode(value: Any, allowed: tuple[str, ...], default: str) -> str:
     return mode if mode in allowed else default
 
 
+def _on(value: Any) -> bool:
+    """A default-on flag: anything but an explicit "off"."""
+    return str(value or "on").strip().lower() not in {"off", "false", "0", "no"}
+
+
 def _ids(value: Any) -> frozenset[str] | None:
     if not isinstance(value, (list, tuple, set, frozenset)):
         return None
@@ -185,8 +201,13 @@ def plan_for_run(run_type: DocumentRunType | str, status_detail_json: Mapping[st
             stages = (*stages[:at], WEB_EXPORT_STAGE, *stages[at:])
         if pilot:
             stages = (*stages, PILOT_QA_STAGE)
-            if str(request.get(PILOT_REPAIR_REQUEST_KEY) or "on").strip().lower() not in {"off", "false", "0", "no"}:
+            if _on(request.get(PILOT_REPAIR_REQUEST_KEY)):
                 stages = (*stages, PILOT_REPAIR_STAGE)
+        elif not request.get(WEB_EXPORT_REQUEST_KEY) and _on(request.get(BOOK_QA_REQUEST_KEY)):
+            # A web page is one short article; its reading copy has no chapters to check one by one.
+            stages = (*stages, BOOK_QA_STAGE)
+            if _on(request.get(BOOK_REPAIR_REQUEST_KEY)):
+                stages = (*stages, BOOK_REPAIR_STAGE)
         return RunPlan(
             run_type=run_type,
             stages=stages,

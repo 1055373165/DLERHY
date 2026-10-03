@@ -42,6 +42,8 @@ export interface PilotQualityReport {
   report_id: string;
   document_id: string;
   run_id: string | null;
+  /** The pilot's two chapters, or the whole book after its run (全书质检); absent from older servers. */
+  scope?: QualityScope;
   trigger: string;
   status: PilotQualityStatus;
   counts: SeverityCounts;
@@ -62,12 +64,16 @@ export interface PilotQualitySummary {
   layers: { layer: string; name: string; status: PilotQualityLayer["status"]; counts: SeverityCounts }[];
 }
 
-export async function getPilotQuality(documentId: string): Promise<PilotQualityReport> {
-  return requestJson<PilotQualityReport>(`/documents/${encodeURIComponent(documentId)}/pilot-quality`);
+export type QualityScope = "pilot" | "book";
+
+const QUALITY_PATH: Record<QualityScope, string> = { pilot: "pilot-quality", book: "book-quality" };
+
+export async function getPilotQuality(documentId: string, scope: QualityScope = "pilot"): Promise<PilotQualityReport> {
+  return requestJson<PilotQualityReport>(`/documents/${encodeURIComponent(documentId)}/${QUALITY_PATH[scope]}`);
 }
 
-export async function runPilotQuality(documentId: string): Promise<PilotQualityReport> {
-  return requestJson<PilotQualityReport>(`/documents/${encodeURIComponent(documentId)}/pilot-quality`, { method: "POST" });
+export async function runPilotQuality(documentId: string, scope: QualityScope = "pilot"): Promise<PilotQualityReport> {
+  return requestJson<PilotQualityReport>(`/documents/${encodeURIComponent(documentId)}/${QUALITY_PATH[scope]}`, { method: "POST" });
 }
 
 export const SEVERITY_LABEL: Record<PilotQualitySeverity, string> = { blocking: "严重", major: "一般", minor: "轻微" };
@@ -80,11 +86,12 @@ export function layerVerdict(status: PilotQualityLayer["status"], counts: Severi
 }
 
 /** The headline of a report or its summary. */
-export function qualityHeadline(summary: Pick<PilotQualitySummary, "status" | "counts" | "layers">): string {
+export function qualityHeadline(summary: Pick<PilotQualitySummary, "status" | "counts" | "layers">, scope: QualityScope = "pilot"): string {
   const layers = summary.layers.filter((layer) => layer.status === "blocking").map((layer) => layer.name);
-  if (summary.status === "error") return "这次试译质检没能完成，可以重新质检。";
+  const what = scope === "book" ? "全书" : "试译";
+  if (summary.status === "error") return `这次${what}质检没能完成，可以重新质检。`;
   if (summary.status === "blocking") {
-    return `试译质检发现 ${summary.counts.blocking} 处严重问题（${layers.join("、")}）。试译照常给你看，问题都列在这里。`;
+    return `${what}质检发现 ${summary.counts.blocking} 处严重问题（${layers.join("、")}）。${scope === "book" ? "中文版" : "试译"}照常给你看，问题都列在这里。`;
   }
   if (summary.status === "warnings") {
     return `没有严重问题；有 ${summary.counts.major} 处一般问题，不影响阅读。`;

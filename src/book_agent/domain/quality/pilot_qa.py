@@ -233,6 +233,8 @@ class QaBlock:
     regions: tuple[tuple[int, tuple[float, float, float, float]], ...] = ()
     # The parsed blocks the export joined into this one ((id, text)): a code block and the prose after it.
     merged_blocks: tuple[tuple[str, str], ...] = ()
+    # A figure whose page gives it no caption, accepted as such (the repair's ``accept_uncaptioned_figure``).
+    caption_absent_accepted: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -329,6 +331,9 @@ class PilotQaInputs:
     # The exported reading copy's chapter sections; None when the pilot has no export to read.
     exported: Sequence[ExportedChapter] | None = None
     health: HealthInputs | None = None
+    # "pilot": the two pilot chapters; "book": every chapter after the whole-book run, where front
+    # matter, a contents page and the index are the book's own chapters, not a wrong pick.
+    scope: str = "pilot"
 
 
 # ---------------------------------------------------------------------------
@@ -726,7 +731,11 @@ def check_pilot_chapters(inputs: PilotQaInputs) -> list[CheckRun]:
         blocks_by_chapter[block.chapter_id].append(block)
     for chapter in inputs.chapters:
         title = chapter.title_src or ""
-        if _FRONT_OR_BACK.match(title):
+        surrounding = bool(_FRONT_OR_BACK.match(title))
+        if surrounding and inputs.scope == "book":
+            # The whole book has its contents page and index: they are chapters of their own there.
+            continue
+        if surrounding:
             not_body.findings.append(
                 Finding(
                     "L1.not_body_chapter",
@@ -1214,7 +1223,7 @@ def check_figures(inputs: PilotQaInputs) -> list[CheckRun]:
                         f"{_snippet(block.source_text, 40) if captioned else '这张图'}在中文版里没有图片",
                     )
                 )
-            if not captioned and block.has_image is not False:
+            if not captioned and block.has_image is not False and not block.caption_absent_accepted:
                 no_caption.findings.append(_block_finding("L2.figure_without_caption", block, "这张图没有图注"))
             continue
         label = _FIGURE_CAPTION_RE.match(block.source_text or "") if block.block_type in {"caption", "paragraph"} else None

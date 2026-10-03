@@ -322,6 +322,26 @@ class PilotRunTests(unittest.TestCase):
         self.assertNotIn("terminology", book_cached)
         self.assertIsNone(merged.input_version_bundle_json["chapter_scope"])
 
+        # After the whole book: the layered QA and the repair loop on every chapter (全书质检).
+        for stage in ("book_qa", "book_repair"):
+            self.assertEqual((book_cached.get(stage) or {}).get("status"), "succeeded", stage)
+        book_quality = done["book_quality"]
+        self.assertIsNotNone(book_quality)
+        self.assertEqual(book_quality["chapter_count"], len(chapters))
+        self.assertIn(book_quality["quality"]["status"], {"passed", "warnings", "blocking"})
+        self.assertEqual(book_quality["repair"]["status"], "finished")
+        self.assertEqual(book_quality["repair"]["scope"], "book")
+        report = self.client.get(f"/v1/documents/{document_id}/book-quality").json()
+        self.assertEqual(report["scope"], "book")
+        self.assertEqual(len(report["chapters"]), len(chapters))
+        # The pilot's own report and card stay the pilot's.
+        pilot_report = self.client.get(f"/v1/documents/{document_id}/pilot-quality").json()
+        self.assertEqual(pilot_report["scope"], "pilot")
+        self.assertEqual({chapter["chapter_id"] for chapter in pilot_report["chapters"]}, pilot_chapters)
+        repair = self.client.get(f"/v1/documents/{document_id}/book-repair").json()
+        self.assertEqual((repair["scope"], repair["run_id"]), ("book", book_id))
+        self.assertIsNotNone(repair["budget_usd"] if repair["budget_usd"] is not None else repair["summary"]["budget"]["max_packets"])
+
     def test_translating_the_whole_book_directly_skips_the_pilot(self) -> None:
         document_id = self._import()
         created = self.client.post(

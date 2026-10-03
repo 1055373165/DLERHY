@@ -170,17 +170,18 @@ class ClassifyRunOutcomeTests(unittest.TestCase):
 
     def test_translate_full_requires_every_pipeline_stage(self) -> None:
         # The repair, structure review and export review agent stages are opt-in, only web pages get
-        # the web_html export, and only a pilot has the layered QA; every other pipeline stage is required by default.
+        # the web_html export, only a pilot has the pilot's layered QA and only a whole book (not a web
+        # page) the book's; every other pipeline stage is required by default.
         self.assertEqual(
             plan_for_run("translate_full", {}).required_stages,
-            frozenset(PIPELINE_STAGES) - {"repair", "structure_review", "export_review", "web_html", "pilot_qa"},
+            frozenset(PIPELINE_STAGES) - {"repair", "structure_review", "export_review", "web_html", "pilot_qa", "pilot_repair"},
         )
         self.assertEqual(
             plan_for_run(
                 "translate_full",
                 {"run_request": {"repair_agent": "on", "structure_review": "sampled", "export_review": "sampled", "web_export": True}},
             ).required_stages,
-            frozenset(PIPELINE_STAGES) - {"pilot_qa"},
+            frozenset(PIPELINE_STAGES) - {"pilot_qa", "pilot_repair", "book_qa", "book_repair"},
         )
         self.assertIn("pilot_qa", plan_for_run("translate_full", {"run_request": {"scope": "pilot"}}).required_stages)
         self.assertEqual(plan_for_run("translate_targeted", {}).required_stages, REQUIRED_PIPELINE_STAGES)

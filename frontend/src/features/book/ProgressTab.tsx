@@ -36,9 +36,13 @@ function elapsed(from: string | null | undefined, to: string | null | undefined)
 export function ProgressTab() {
   const book = useBook();
   const quality = book.pilot?.quality ?? null;
+  const bookQuality = book.book_quality ?? null;
   return (
     <div className={s.stack}>
       <ParseHealthPanel documentId={book.document_id} summary={book.parse_health ?? null} />
+      {bookQuality && (
+        <PilotQualityPanel documentId={book.document_id} summary={bookQuality.quality} repair={bookQuality.repair} scope="book" />
+      )}
       {(quality || book.pilot?.state === "ready") && <PilotQualityPanel documentId={book.document_id} summary={quality} />}
       <RunProgress />
     </div>

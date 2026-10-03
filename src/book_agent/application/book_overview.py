@@ -139,6 +139,8 @@ STEPS: tuple[tuple[str, str], ...] = (
     ("export_review", "检查导出"),
     ("pilot_qa", "试译质检"),
     ("pilot_repair", "自动修复试译"),
+    ("book_qa", "全书质检"),
+    ("book_repair", "自动修复全书"),
 )
 STEP_LABELS = dict(STEPS)
 
@@ -201,6 +203,7 @@ def _packet_progress(session: Session, document_id: str, packet_ids: frozenset[s
         statement = statement.where(TranslationPacket.id.in_(sorted(packet_ids)))
     rows = session.execute(statement).all()
     counts = {status.value if hasattr(status, "value") else str(status): int(count) for status, count in rows}
+    counts.pop(PacketStatus.INVALIDATED.value, None)
     return {"done": counts.get(PacketStatus.TRANSLATED.value, 0), "total": sum(counts.values())}
 
 
@@ -611,10 +614,18 @@ def build_overview(session: Session, document_id: str, context: OverviewContext,
         "needs_you": needs_you,
         "quality": {"open_issues": int(issues[0] or 0), "blocking": int(issues[1] or 0)},
         "parse_health": overview_summary(latest_report(session, document.id)),
+        # The whole book's layered QA and repair (services/book_quality.py); null before the first.
+        "book_quality": _book_quality(session, document.id),
         # The estimate reads the whole book: skipped for lists of books (the home page's cards).
         # After a pilot it is what the rest of the book costs.
         "cost": _cost(session, document, context, after_pilot=pilot["state"] == "ready") if include_cost else None,
     }
+
+
+def _book_quality(session: Session, document_id: str) -> dict[str, Any] | None:
+    from book_agent.services.book_quality import overview
+
+    return overview(session, document_id)
 
 
 def inbox_items(session: Session, *, org_id: str | None) -> list[dict[str, Any]]:

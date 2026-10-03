@@ -56,8 +56,12 @@ from book_agent.orchestrator.reconciler import Reconciler
 from book_agent.orchestrator.run_plan import (
     AGENT_STAGES,
     EXECUTABLE_RUN_TYPES,
+    BOOK_QA_STAGE,
+    BOOK_REPAIR_STAGE,
     PILOT_QA_STAGE,
     PILOT_REPAIR_STAGE,
+    REPARSE_REQUEST_KEY,
+    RUN_REQUEST_KEY,
     RunPlan,
     plan_for_run,
     translate_packet_scope,
@@ -509,6 +513,7 @@ class DocumentRunExecutor:
                 if self._enforce_budget_guardrails(run_id):
                     return
                 plan = plan_for_run(run_summary.run_type, run_summary.status_detail_json)
+                self._maybe_reparse_untranslated(run_id, plan)
                 if any(self._process_agent_stage(run_id, stage, plan) for stage in plan.agent_stages):
                     continue
                 if plan.includes("translate") and self._process_translate_stage(run_id, plan):
@@ -523,6 +528,10 @@ class DocumentRunExecutor:
                 if plan.includes(PILOT_QA_STAGE) and self._process_pilot_qa_stage(run_id, plan):
                     continue
                 if plan.includes(PILOT_REPAIR_STAGE) and self._process_pilot_repair_stage(run_id, plan):
+                    continue
+                if plan.includes(BOOK_QA_STAGE) and self._process_pilot_qa_stage(run_id, plan, stage=BOOK_QA_STAGE):
+                    continue
+                if plan.includes(BOOK_REPAIR_STAGE) and self._process_pilot_repair_stage(run_id, plan, stage=BOOK_REPAIR_STAGE):
                     continue
                 with session_scope(self.session_factory) as session:
                     execution = self._run_execution_service(session)
@@ -551,6 +560,51 @@ class DocumentRunExecutor:
 
             self._wake_event.wait(timeout=self.poll_interval_seconds)
             self._wake_event.clear()
+
+    def _maybe_reparse_untranslated(self, run_id: str, plan: RunPlan) -> None:
+        """A whole-book run first re-reads the untranslated chapters when the parser changed since the
+        book was imported (services/chapter_reparse.py), once, before anything is translated.
+
+        The outcome is kept in the run's detail (``chapter_reparse``): what was refreshed, or why not.
+        A refusal (source file gone, chapter boundaries changed) never fails the run: the book is
+        translated with the structure it has.
+        """
+        from book_agent.domain.enums import DocumentRunType
+        from book_agent.services.chapter_reparse import ChapterReparseService, ReparseRefused
+
+        if plan.run_type != DocumentRunType.TRANSLATE_FULL or plan.is_pilot:
+            return
+        with session_scope(self.session_factory) as session:
+            run = session.get(DocumentRun, run_id)
+            if run is None or "chapter_reparse" in (run.status_detail_json or {}):
+                return
+            request = dict((run.status_detail_json or {}).get(RUN_REQUEST_KEY) or {})
+            outcome: dict[str, Any]
+            if str(request.get(REPARSE_REQUEST_KEY) or "on").strip().lower() in {"off", "false", "0", "no"}:
+                outcome = {"skipped": "off"}
+            elif self._list_stage_items(session, run_id, WorkItemStage.TRANSLATE):
+                outcome = {"skipped": "translation_started"}
+            else:
+                service = ChapterReparseService(session)
+                if not service.needs_reparse(run.document_id):
+                    outcome = {"skipped": "parser_unchanged"}
+                else:
+                    try:
+                        with session.begin_nested():
+                            result = service.reparse_untranslated(run.document_id, run_id=run_id)
+                        summary = result.to_json()
+                        outcome = {
+                            "parse_revision_id": summary["parse_revision_id"],
+                            "refreshed_chapter_ids": result.refreshed_chapter_ids,
+                            "outcomes": summary["outcomes"],
+                        }
+                    except ReparseRefused as exc:
+                        outcome = {"refused": str(exc)}
+                    except Exception as exc:  # the run goes on with the structure it has
+                        logger.exception("re-parse before the whole-book run %s failed", run_id)
+                        outcome = {"error": f"{type(exc).__name__}: {exc}"[:500]}
+            run = session.get(DocumentRun, run_id, with_for_update=True, populate_existing=True)
+            run.status_detail_json = {**(run.status_detail_json or {}), "chapter_reparse": outcome}
 
     def _plan_for(self, run: DocumentRun) -> RunPlan:
         return plan_for_run(run.run_type, run.status_detail_json)
@@ -1186,29 +1240,38 @@ class DocumentRunExecutor:
             )
         return False
 
-    def _process_pilot_qa_stage(self, run_id: str, plan: RunPlan) -> bool:
+    def _process_pilot_qa_stage(self, run_id: str, plan: RunPlan, *, stage: str = PILOT_QA_STAGE) -> bool:
         """A pilot's layered QA (services/pilot_quality.py), run on this thread: rules only, seconds.
+        ``stage=book_qa``: the same checks on every chapter after a whole-book run (services/book_quality.py).
 
         Its report is the stage's physical state (``StageStatusCalculator``). A QA error is kept as
         an "error" report, so the pilot still goes to the reader with its blocking issues listed.
         """
+        from book_agent.services.book_quality import BOOK_QA_TRIGGER, SCOPE_BOOK, book_chapter_ids
         from book_agent.services.pilot_quality import PilotQualityService, report_for_run
+
+        book = stage == BOOK_QA_STAGE
 
         with session_scope(self.session_factory) as session:
             run = RunControlRepository(session).get_run(run_id)
             if report_for_run(session, run_id) is not None:
                 return False
             if not StageGateKeeper(session).can_start(
-                run_id, run.document_id, PILOT_QA_STAGE, plan_stages=plan.stages, packet_ids=plan.packet_ids
+                run_id, run.document_id, stage, plan_stages=plan.stages, packet_ids=plan.packet_ids
             ):
                 return False
-            self._update_pipeline_stage(run_id, PILOT_QA_STAGE, status="running", current_stage=PILOT_QA_STAGE, session=session)
+            self._update_pipeline_stage(run_id, stage, status="running", current_stage=stage, session=session)
         with session_scope(self.session_factory) as session:
             run = RunControlRepository(session).get_run(run_id)
-            report = PilotQualityService(session).run_for_pilot(run)
+            if book:
+                report = PilotQualityService(session).run_for_pilot(
+                    run, trigger=BOOK_QA_TRIGGER, scope=SCOPE_BOOK, chapter_ids=book_chapter_ids(session, run.document_id)
+                )
+            else:
+                report = PilotQualityService(session).run_for_pilot(run)
             self._update_pipeline_stage(
                 run_id,
-                PILOT_QA_STAGE,
+                stage,
                 status="succeeded",
                 extra={
                     "report_id": report.id,
@@ -1217,15 +1280,15 @@ class DocumentRunExecutor:
                     "major_count": report.major_count,
                     "minor_count": report.minor_count,
                 },
-                current_stage=self._next_stage_label(plan, PILOT_QA_STAGE),
+                current_stage=self._next_stage_label(plan, stage),
                 session=session,
             )
         return True
 
-    def _pilot_repair_thread_key(self, run_id: str) -> str:
-        return f"pilot-repair:{run_id}"
+    def _pilot_repair_thread_key(self, run_id: str, stage: str = PILOT_REPAIR_STAGE) -> str:
+        return f"pilot-repair:{run_id}" if stage == PILOT_REPAIR_STAGE else f"book-repair:{run_id}"
 
-    def _process_pilot_repair_stage(self, run_id: str, plan: RunPlan) -> bool:
+    def _process_pilot_repair_stage(self, run_id: str, plan: RunPlan, *, stage: str = PILOT_REPAIR_STAGE) -> bool:
         """A pilot's repair loop (services/pilot_repair.py), on its own thread: it retranslates packets.
 
         The repair row is written here, running, before the thread starts, so the stage is RUNNING
@@ -1233,9 +1296,10 @@ class DocumentRunExecutor:
         A run resumed after a restart finds a running row without a thread: it records that one as
         interrupted and starts again from the current QA.
         """
-        from book_agent.services.pilot_repair import PilotRepairService, repair_for_run
+        from book_agent.services.pilot_repair import SCOPE_BOOK, SCOPE_PILOT, PilotRepairService, repair_for_run
 
-        key = self._pilot_repair_thread_key(run_id)
+        scope = SCOPE_BOOK if stage == BOOK_REPAIR_STAGE else SCOPE_PILOT
+        key = self._pilot_repair_thread_key(run_id, stage)
         with self._lock:
             thread = self._active_work_threads.get(run_id, {}).get(key)
         if thread is not None and thread.is_alive():
@@ -1252,35 +1316,34 @@ class DocumentRunExecutor:
                 existing.finished_at = datetime.now(timezone.utc)
                 session.flush()
             if not StageGateKeeper(session).can_start(
-                run_id, run.document_id, PILOT_REPAIR_STAGE, plan_stages=plan.stages, packet_ids=plan.packet_ids
+                run_id, run.document_id, stage, plan_stages=plan.stages, packet_ids=plan.packet_ids
             ):
                 return False
-            repair = PilotRepairService(session, workflow_factory=self._workflow_service).start(run.document_id, run=run)
+            repair = PilotRepairService(session, workflow_factory=self._workflow_service, scope=scope).start(run.document_id, run=run)
             repair_id = repair.id
-            self._update_pipeline_stage(
-                run_id, PILOT_REPAIR_STAGE, status="running", current_stage=PILOT_REPAIR_STAGE, session=session
-            )
+            self._update_pipeline_stage(run_id, stage, status="running", current_stage=stage, session=session)
         self._ensure_work_thread(
             run_id=run_id,
             work_item_id=key,
-            thread_name=f"book-agent-pilot-repair-{run_id}",
-            target=lambda: self._execute_pilot_repair(run_id, repair_id, plan),
+            thread_name=f"book-agent-{scope}-repair-{run_id}",
+            target=lambda: self._execute_pilot_repair(run_id, repair_id, plan, stage=stage),
         )
         return True
 
-    def start_pilot_repair(self, document_id: str, *, budget_usd: float | None = None) -> str:
+    def start_pilot_repair(self, document_id: str, *, budget_usd: float | None = None, scope: str = "pilot") -> str:
         """Run the pilot repair again by hand (POST /documents/{id}/pilot-repair), on its own thread.
 
         For the book's latest pilot run when it has one, else for the chapters a pilot would take
         (a book translated some other way). Returns the new repair's id; it runs in the background.
         """
         from book_agent.harness.agents.pilot_repair import AgentStructureJudge
-        from book_agent.services.pilot import latest_pilot_run
+        from book_agent.services.pilot import latest_book_run, latest_pilot_run
         from book_agent.services.pilot_repair import PilotRepairService
 
         with session_scope(self.session_factory) as session:
-            run = latest_pilot_run(session, document_id)
-            repair = PilotRepairService(session, workflow_factory=self._workflow_service).start(document_id, run=run)
+            # scope "book": the whole book's repair, for its latest whole-book run.
+            run = latest_book_run(session, document_id) if scope == "book" else latest_pilot_run(session, document_id)
+            repair = PilotRepairService(session, workflow_factory=self._workflow_service, scope=scope).start(document_id, run=run)
             repair_id, run_id = repair.id, run.id if run is not None else None
 
         def _run() -> None:
@@ -1295,7 +1358,9 @@ class DocumentRunExecutor:
                         model_name=worker.metadata().model_name if worker is not None else "echo-worker",
                         run_id=run_id,
                     )
-                    service = PilotRepairService(session, workflow_factory=self._workflow_service, judge=judge, budget_usd=budget_usd)
+                    service = PilotRepairService(
+                        session, workflow_factory=self._workflow_service, judge=judge, budget_usd=budget_usd, scope=scope
+                    )
                     if run is not None:
                         service.run_for_pilot(run, repair_id=repair_id)
                     else:
@@ -1318,9 +1383,11 @@ class DocumentRunExecutor:
         threading.Thread(target=_run, name=f"book-agent-pilot-repair-{document_id}", daemon=True).start()
         return repair_id
 
-    def _execute_pilot_repair(self, run_id: str, repair_id: str, plan: RunPlan) -> None:
+    def _execute_pilot_repair(self, run_id: str, repair_id: str, plan: RunPlan, *, stage: str = PILOT_REPAIR_STAGE) -> None:
         from book_agent.harness.agents.pilot_repair import AgentStructureJudge
-        from book_agent.services.pilot_repair import PilotRepairService
+        from book_agent.services.pilot_repair import SCOPE_BOOK, SCOPE_PILOT, PilotRepairService
+
+        scope = SCOPE_BOOK if stage == BOOK_REPAIR_STAGE else SCOPE_PILOT
 
         with bind_run_context(run_id), tracing.span("pilot_repair", **{"book_agent.run_id": run_id}):
             session = self.session_factory()
@@ -1333,9 +1400,9 @@ class DocumentRunExecutor:
                     model_name=worker.metadata().model_name if worker is not None else "echo-worker",
                     run_id=run_id,
                 )
-                repair = PilotRepairService(session, workflow_factory=self._workflow_service, judge=judge).run_for_pilot(
-                    run, repair_id=repair_id
-                )
+                repair = PilotRepairService(
+                    session, workflow_factory=self._workflow_service, judge=judge, scope=scope
+                ).run_for_pilot(run, repair_id=repair_id)
                 extra = {
                     "repair_id": repair.id,
                     "repair_status": repair.status,
@@ -1362,10 +1429,10 @@ class DocumentRunExecutor:
                 session.close()
         self._update_pipeline_stage(
             run_id,
-            PILOT_REPAIR_STAGE,
+            stage,
             status="succeeded",
             extra=extra,
-            current_stage=self._next_stage_label(plan, PILOT_REPAIR_STAGE),
+            current_stage=self._next_stage_label(plan, stage),
         )
         self.wake(run_id)
 

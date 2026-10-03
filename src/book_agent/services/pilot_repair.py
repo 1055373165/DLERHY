@@ -61,7 +61,9 @@ from book_agent.domain.quality.pilot_repair import (
     escalation_question,
     findings_of,
     judge,
+    repairable_findings,
     plan_work,
+    self_inflicted_packets,
 )
 from book_agent.domain.structure.parse_health import BLOCKING, MAJOR
 from book_agent.orchestrator.run_plan import CHAPTER_IDS_REQUEST_KEY, PACKET_IDS_REQUEST_KEY, RUN_REQUEST_KEY
@@ -84,7 +86,15 @@ MAX_ROUNDS = 3
 BUDGET_MULTIPLIER = 2.0
 MAX_SECONDS = 30 * 60
 MAX_ATTEMPTS = 150
+# The whole book's repair has more chapters to cover: more time and attempts, a budget of its own
+# (services/book_quality.py: book_repair_budget).
+BOOK_MAX_SECONDS = 120 * 60
+BOOK_MAX_ATTEMPTS = 600
+SCOPE_PILOT = "pilot"
+SCOPE_BOOK = "book"
+BOOK_TRIGGER = "book_repair"
 QUESTION_KIND = "pilot_question"
+RETRY_HINT = "上一次重译有句子没有译成中文，或混进了程序提示。这次每一句都要完整译成中文，只输出译文。"
 TRIGGER = "pilot_repair"
 EVIDENCE_DIR = "pilot-repair"
 MAX_EVIDENCE_SAMPLES = 8
@@ -128,10 +138,13 @@ class PilotRepairService:
         max_rounds: int = MAX_ROUNDS,
         budget_multiplier: float = BUDGET_MULTIPLIER,
         budget_usd: float | None = None,
-        max_seconds: float = MAX_SECONDS,
-        max_attempts: int = MAX_ATTEMPTS,
+        max_seconds: float | None = None,
+        max_attempts: int | None = None,
+        scope: str = SCOPE_PILOT,
     ) -> None:
         self.session = session
+        # "pilot": the pilot's chapters; "book": every translated chapter, after the whole-book run.
+        self.scope = scope
         self.workflow_factory = workflow_factory
         self.judge = judge
         self.ledger = ledger or NoLedger()
@@ -139,8 +152,9 @@ class PilotRepairService:
         self.budget_multiplier = budget_multiplier
         # An explicit cap (tests, a person); otherwise twice the pilot's cost.
         self.budget_override = budget_usd
-        self.max_seconds = max_seconds
-        self.max_attempts = max_attempts
+        book = scope == SCOPE_BOOK
+        self.max_seconds = max_seconds if max_seconds is not None else (BOOK_MAX_SECONDS if book else MAX_SECONDS)
+        self.max_attempts = max_attempts if max_attempts is not None else (BOOK_MAX_ATTEMPTS if book else MAX_ATTEMPTS)
 
     # --- entry points ---------------------------------------------------------------------------
 
@@ -150,6 +164,7 @@ class PilotRepairService:
         repair = PilotRepair(
             document_id=document_id,
             run_id=run.id if run is not None else None,
+            scope=self.scope,
             status="running",
             rounds=0,
             before_report_id=before_report.id if before_report is not None else None,
@@ -179,6 +194,7 @@ class PilotRepairService:
                 repair = PilotRepair(
                     document_id=run.document_id,
                     run_id=run.id,
+                    scope=self.scope,
                     status="error",
                     rounds=0,
                     repaired_count=0,
@@ -198,7 +214,12 @@ class PilotRepairService:
 
     def run(self, document_id: str, *, run: DocumentRun | None = None, repair_id: str | None = None) -> PilotRepair:
         started = time.monotonic()
-        chapter_ids = pilot_chapter_ids(self.session, document_id, run)
+        if self.scope == SCOPE_BOOK:
+            from book_agent.services.book_quality import book_chapter_ids
+
+            chapter_ids = book_chapter_ids(self.session, document_id)
+        else:
+            chapter_ids = pilot_chapter_ids(self.session, document_id, run)
         repair = self.session.get(PilotRepair, repair_id) if repair_id else None
         if repair is None:
             repair = self.start(document_id, run=run)
@@ -222,8 +243,8 @@ class PilotRepairService:
         toolbox = PilotRepairToolbox(ctx)
         qa = PilotQualityService(self.session)
         try:
-            layers, _source = qa.evaluate(document_id, ctx.chapter_ids, use_export_file=False)
-            initial = findings_of(layers)
+            layers, _source = qa.evaluate(document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope)
+            initial = repairable_findings(layers)
             classes = self._classes(initial)
             self.session.commit()
             self._begin_write()
@@ -237,10 +258,10 @@ class PilotRepairService:
             round_no = 0
             while round_no < self.max_rounds:
                 round_no += 1
-                round_keys = {finding["key"] for finding in findings_of(layers)}
+                round_keys = {finding["key"] for finding in repairable_findings(layers)}
                 kept_in_round = 0
                 while True:
-                    current = [finding for finding in findings_of(layers) if finding["key"] in round_keys]
+                    current = [finding for finding in repairable_findings(layers) if finding["key"] in round_keys]
                     work = plan_work(current, tried)
                     if not work:
                         break
@@ -274,7 +295,7 @@ class PilotRepairService:
                 self.session.commit()
                 if stop_reason is not None:
                     break
-                remaining = findings_of(layers)
+                remaining = repairable_findings(layers)
                 if not remaining:
                     stop_reason = "clean"
                     break
@@ -290,11 +311,11 @@ class PilotRepairService:
                 self.session.commit()
                 self._reexport(ctx)
                 self._begin_write()
-                final_report = qa.run(document_id, run=run, trigger=TRIGGER, chapter_ids=ctx.chapter_ids)
+                final_report = qa.run(document_id, run=run, trigger=self._trigger, chapter_ids=ctx.chapter_ids, scope=self.scope)
                 self.session.commit()
             elif final_report is None:
                 self._begin_write()
-                final_report = qa.run(document_id, run=run, trigger=TRIGGER, chapter_ids=ctx.chapter_ids)
+                final_report = qa.run(document_id, run=run, trigger=self._trigger, chapter_ids=ctx.chapter_ids, scope=self.scope)
                 self.session.commit()
             self._begin_write()
             final_layers = list(final_report.layers_json or [])
@@ -307,9 +328,17 @@ class PilotRepairService:
             if pages is not None:
                 pages.close()
 
+    @property
+    def _trigger(self) -> str:
+        return BOOK_TRIGGER if self.scope == SCOPE_BOOK else TRIGGER
+
     # --- budget ----------------------------------------------------------------------------------
 
     def _budget(self, run: DocumentRun | None, chapter_ids: Sequence[str]) -> RepairBudget:
+        if self.scope == SCOPE_BOOK:
+            from book_agent.services.book_quality import book_repair_budget
+
+            return book_repair_budget(self.session, chapter_ids, override_usd=self.budget_override)
         packets = int(
             self.session.scalar(select(func.count(TranslationPacket.id)).where(TranslationPacket.chapter_id.in_(list(chapter_ids) or ["-"])))
             or 0
@@ -390,9 +419,19 @@ class PilotRepairService:
         try:
             result = toolbox.apply(item)
             self.session.flush()
-            new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False)
+            new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope)
             after = QaSnapshot.from_layers(new_layers)
             verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings})
+            # Reverted only for the retranslation's own flake (a line back in English, a leaked note):
+            # retranslate those packets once more before giving up on a good repair.
+            flaky = self_inflicted_packets(verdict, before, new_layers, result.packet_ids)
+            if flaky:
+                toolbox.retranslate(flaky, [RETRY_HINT])
+                self.session.flush()
+                result.params = {**result.params, "retried_packet_ids": flaky, "retry_reason": verdict.reason}
+                new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope)
+                after = QaSnapshot.from_layers(new_layers)
+                verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings})
             outcome = _AttemptOutcome("kept" if verdict.keep else "reverted", None if verdict.keep else verdict.reason, new_layers, verdict.resolved_keys)
             # A repair must not leave translations the export cannot align (ALIGNMENT_FAILURE).
             misaligned_after = alignment_anomalies(self.session, ctx.chapter_ids)
@@ -551,11 +590,46 @@ class PilotRepairService:
         return tickets
 
     def _ticket(self, repair: PilotRepair, state: _ClassState, findings: Sequence[dict[str, Any]]) -> PilotDefectTicket:
+        """The defect ticket of this issue class: the book's open one updated, else a new one.
+
+        One ticket per issue class, document and suspected cause: a repair run again (by hand, or the
+        whole book's after the pilot's) adds its evidence and counts to the ticket already open.
+        """
         cause = state.classification.cause
         spec = CHECKS.get(state.check_id)
         document = self.session.get(Document, repair.document_id)
         evidence = [self._evidence(finding) for finding in list(findings)[:MAX_EVIDENCE_SAMPLES]]
         pages = sorted({item["page"] for item in evidence if isinstance(item.get("page"), int)})
+        suspected = cause.cause if cause is not None else state.classification.reason
+        existing = self.session.scalars(
+            select(PilotDefectTicket)
+            .where(
+                PilotDefectTicket.document_id == repair.document_id,
+                PilotDefectTicket.issue_class == state.issue_class,
+                PilotDefectTicket.suspected_cause == suspected,
+                PilotDefectTicket.status == "open",
+            )
+            .order_by(PilotDefectTicket.created_at)
+            .limit(1)
+        ).first()
+        if existing is not None:
+            impact = dict(existing.impact_json or {})
+            repair_ids = list(impact.get("repair_ids") or ([existing.repair_id] if existing.repair_id else []))
+            if repair.id not in repair_ids:
+                repair_ids.append(repair.id)
+                impact["occurrences"] = int(impact.get("occurrences") or 1) + 1
+            impact["repair_ids"] = repair_ids
+            impact["findings_before"] = len(findings)
+            impact["findings_seen_total"] = int(impact.get("findings_seen_total") or 0) + len(findings)
+            impact["pages"] = sorted({*(impact.get("pages") or []), *pages})
+            impact["last_seen_at"] = _utcnow().isoformat()
+            seen = {(item.get("key"), item.get("block_id")) for item in existing.evidence_json or []}
+            fresh = [item for item in evidence if (item.get("key"), item.get("block_id")) not in seen]
+            existing.evidence_json = [*fresh, *(existing.evidence_json or [])][: MAX_EVIDENCE_SAMPLES * 2]
+            existing.impact_json = impact
+            existing.updated_at = _utcnow()
+            self.session.flush()
+            return existing
         ticket = PilotDefectTicket(
             document_id=repair.document_id,
             repair_id=repair.id,
@@ -565,14 +639,22 @@ class PilotRepairService:
             classification_rule=state.classification.rule,
             component=cause.component if cause is not None else "pipeline",
             title=f"{spec.title if spec else state.check_id}（{document.title_src or document.title or repair.document_id if document else repair.document_id}）",
-            suspected_cause=cause.cause if cause is not None else state.classification.reason,
+            suspected_cause=suspected,
             reproduction=(
                 f"导入《{(document.title_src or document.title) if document else ''}》（{document.source_type.value if document else ''}），"
                 f"试译后运行分层质检，{state.check_id} 在第 {', '.join(str(page) for page in pages[:8]) or '?'} 页报告 "
                 f"{len(findings)} 处；样例见 evidence（块 id、原文、译文）。"
             ),
             evidence_json=evidence,
-            impact_json={"findings_before": len(findings), "pages": pages, "severity": spec.severity if spec else None},
+            impact_json={
+                "findings_before": len(findings),
+                "findings_seen_total": len(findings),
+                "pages": pages,
+                "severity": spec.severity if spec else None,
+                "occurrences": 1,
+                "repair_ids": [repair.id],
+                "last_seen_at": _utcnow().isoformat(),
+            },
             workaround_json={},
             status="open",
         )
@@ -620,7 +702,7 @@ class PilotRepairService:
 
     def _persist_chapter_scope(self, run: DocumentRun | None, chapter_ids: Sequence[str], original: Sequence[str]) -> None:
         """A chapter split out of a pilot chapter joins the pilot: its request names it (the overview, the QA)."""
-        if run is None or list(chapter_ids) == list(original):
+        if run is None or self.scope != SCOPE_PILOT or list(chapter_ids) == list(original):
             return
         # The run loop writes this row too (its stage cache): read it fresh, locked.
         self._begin_write()
@@ -648,7 +730,8 @@ class PilotRepairService:
                     ctx.document_id,
                     export_type,
                     auto_execute_followup_on_gate=False,
-                    chapter_ids=list(ctx.chapter_ids),
+                    # The whole book's reading copy is the book's, not a list of its chapters.
+                    chapter_ids=None if self.scope == SCOPE_BOOK else list(ctx.chapter_ids),
                     despite_gate=True,
                 )
                 self.session.commit()
@@ -899,9 +982,9 @@ def spacing_convention(session: Session, chapter_ids: Sequence[str]) -> str | No
 # --- reading ------------------------------------------------------------------------------------------
 
 
-def latest_repair(session: Session, document_id: str) -> PilotRepair | None:
+def latest_repair(session: Session, document_id: str, *, scope: str = SCOPE_PILOT) -> PilotRepair | None:
     return session.scalars(
-        select(PilotRepair).where(PilotRepair.document_id == document_id).order_by(PilotRepair.created_at.desc(), PilotRepair.id.desc()).limit(1)
+        select(PilotRepair).where(PilotRepair.document_id == document_id, PilotRepair.scope == scope).order_by(PilotRepair.created_at.desc(), PilotRepair.id.desc()).limit(1)
     ).first()
 
 
@@ -933,7 +1016,11 @@ def overview_summary(session: Session, repair: PilotRepair | None) -> dict[str, 
     finished = list(
         session.scalars(
             select(PilotRepair)
-            .where(PilotRepair.document_id == repair.document_id, PilotRepair.status == "finished")
+            .where(
+                PilotRepair.document_id == repair.document_id,
+                PilotRepair.status == "finished",
+                PilotRepair.scope == repair.scope,
+            )
             .order_by(PilotRepair.created_at)
         ).all()
     )
@@ -946,9 +1033,9 @@ def overview_summary(session: Session, repair: PilotRepair | None) -> dict[str, 
     questions = open_questions(session, repair.document_id)
     left = int(repair.remaining_blocking or 0) + int(repair.remaining_major or 0)
     if repair.status == "running":
-        text = "正在自动修复试译里的问题…"
+        text = "正在自动修复全书里的问题…" if repair.scope == SCOPE_BOOK else "正在自动修复试译里的问题…"
     elif repair.status == "error":
-        text = "自动修复没能完成，试译照常给你看，问题都列在下面。"
+        text = f"自动修复没能完成，{'全书' if repair.scope == SCOPE_BOOK else '试译'}照常给你看，问题都列在下面。"
     elif repair.outcome == "nothing_to_do" and not repaired:
         text = "质检没有发现需要修复的严重或一般问题。"
     else:
@@ -964,6 +1051,7 @@ def overview_summary(session: Session, repair: PilotRepair | None) -> dict[str, 
         text = "，".join(parts) + "。"
     return {
         "repair_id": repair.id,
+        "scope": repair.scope,
         "status": repair.status,
         "outcome": repair.outcome,
         # What kinds of problem were repaired, most first ("同一术语用了几种译法", ...).
@@ -986,7 +1074,14 @@ def repair_payload(session: Session, repair: PilotRepair) -> dict[str, Any]:
     attempts = session.scalars(
         select(PilotRepairAttempt).where(PilotRepairAttempt.repair_id == repair.id).order_by(PilotRepairAttempt.ordinal)
     ).all()
-    tickets = session.scalars(select(PilotDefectTicket).where(PilotDefectTicket.repair_id == repair.id).order_by(PilotDefectTicket.created_at)).all()
+    # A ticket stays with the repair that filed it; later repairs that saw the defect again are in its impact.
+    tickets = [
+        ticket
+        for ticket in session.scalars(
+            select(PilotDefectTicket).where(PilotDefectTicket.document_id == repair.document_id).order_by(PilotDefectTicket.created_at)
+        ).all()
+        if ticket.repair_id == repair.id or repair.id in ((ticket.impact_json or {}).get("repair_ids") or [])
+    ]
     return {
         **(overview_summary(session, repair) or {}),
         "document_id": repair.document_id,
@@ -1085,6 +1180,10 @@ def heal_alignment(session: Session, workflow: Any, document_id: str) -> dict[st
     from book_agent.domain.models.translation import AlignmentEdge, PacketSentenceMap, TargetSegment, TranslationRun
     from book_agent.infra.repositories.translation import TranslationRepository
 
+    from book_agent.services.parse_revision_fork import ParseRevisionForkService
+
+    # Packets an earlier merge left on the same block: one stays, the others stop claiming its sentences.
+    collapsed = ParseRevisionForkService(session).collapse_document_duplicates(document_id)
     issues = session.scalars(
         select(ReviewIssue).where(
             ReviewIssue.document_id == document_id,
@@ -1148,7 +1247,7 @@ def heal_alignment(session: Session, workflow: Any, document_id: str) -> dict[st
             )
         ).all()
     ]
-    return {"healed": healed, "needs_retranslation": skipped, "open_alignment_issues": still_open}
+    return {"healed": healed, "needs_retranslation": skipped, "open_alignment_issues": still_open, "collapsed_duplicate_packets": collapsed}
 
 
 def reaudit_pilot_exports(session: Session, document_id: str) -> dict[str, Any]:
