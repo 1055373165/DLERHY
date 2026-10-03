@@ -50,8 +50,8 @@ ARTIFACT_PLACEHOLDER_TEXTS = frozenset({"", "[Image]", "[Figure]"})
 # A bullet glyph opening a list item, optionally after a translator prefix such as "ZH::".
 _LEADING_BULLET_GLYPH = re.compile(r"^(\s*(?:[A-Z]{2}::)?)\s*[\u2022\u25cf\u25e6\u25aa\u2023\u2219\u25a0-]\s+")
 # A sub-item's dash ("\u2013 Basic data structures") and a numbered item's number ("1 Data layer", "1. \u6570\u636e\u5c42").
-_LEADING_DASH_MARKER = re.compile(r"^(\s*)[\u2013\u2014-]\s*")
-_LEADING_NUMBER_MARKER = re.compile(r"^(\s*)(\d{1,3})(?:[.)\u3001]\s*|\s+)")
+_LEADING_DASH_MARKER = re.compile(r"^(\s*(?:[A-Z]{2}::)?)\s*[\u2013\u2014-]\s*")
+_LEADING_NUMBER_MARKER = re.compile(r"^(\s*(?:[A-Z]{2}::)?)\s*(\d{1,3})(?:[.)\u3001]\s*|\s+)")
 
 
 def is_callout_block(block: MergedRenderBlock) -> bool:
@@ -568,7 +568,7 @@ def should_inline_join_target_text(
 
 
 def render_blocks_html(blocks: list[MergedRenderBlock], render_one) -> str:
-    """Blocks as HTML, the blocks of one sidebar inside one ``<aside class='sidebar'>`` box."""
+    """Blocks as HTML, the blocks of one sidebar inside one ``<aside class='book-sidebar'>`` box."""
     parts: list[str] = []
     open_sidebar: object = None
     for block in blocks:
@@ -577,7 +577,7 @@ def render_blocks_html(blocks: list[MergedRenderBlock], render_one) -> str:
             if open_sidebar:
                 parts.append("</aside>")
             if sidebar_id:
-                parts.append("<aside class='sidebar'>")
+                parts.append("<aside class='book-sidebar'>")
             open_sidebar = sidebar_id
         parts.append(render_one(block))
     if open_sidebar:
