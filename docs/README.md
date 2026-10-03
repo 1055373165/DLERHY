@@ -1,5 +1,7 @@
 # book-agent 文档索引
 
+**接手开发先读 [`HANDOFF.md`](HANDOFF.md)（2026-10-03，现状、待办与约定）。**
+
 安装、启动与 API 速览见仓库根目录 [`README.md`](../README.md)。面向使用者的操作说明见 [`user-guide.md`](user-guide.md)（配服务商、上传、费用预估、暂停原因、下载格式）。本目录是设计与实现认知文档，全部基于 2026-09-16 对分支 `refactor/p0-stabilize`（HEAD `2176d51`）的逐文件源码阅读，是后续「生产级优化」与「agent 升级」的依据。
 
 ## 架构与实现（现状）
