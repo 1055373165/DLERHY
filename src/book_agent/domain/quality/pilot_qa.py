@@ -9,11 +9,13 @@ layer  name        what the rules look at
 L1     结构        parse health's chapter checks on the pilot chapters; a pilot chapter that is front
                    matter, a contents page or holds another chapter; the exported reading copy's
                    chapters and their titles; sentences set as headings; running headers kept as text;
-                   section headings set as body paragraphs
+                   section headings set as body paragraphs; sub-lists set as loose paragraphs, a
+                   sidebar's title set as body, a sentence cut in two by a figure or a page break
 L2     图表        figure crops (``figure_region_problems`` through parse health), image fragments,
                    figure labels kept as text, body text folded into or swallowed by a caption, a
                    figure without its picture or caption, a caption without its figure, a figure's
-                   own text kept as a table or code block beside it
+                   own text kept as a table or code block beside it, a listing's title not linked
+                   to its code
 L3     表格        the rendered table: flattened to text, cells still holding the source's "|", rows of
                    different widths, no header, mostly empty (a chart read as a table), code set as a
                    table, English cells left untranslated
@@ -96,6 +98,12 @@ REPAIR_EXPORT_CODE = "export_code"
 REPAIR_PILOT = "pilot_selection"
 # Run the review pass or the export gate that opened a review issue again (a stale issue resolves).
 REPAIR_REVIEW_RECHECK = "review_recheck"
+# Structure edits of the reading structure: each names the edit a repair tool makes, and its
+# finding names the blocks the edit takes in ``target`` and ``evidence``.
+REPAIR_NEST_LIST_ITEMS = f"{REPAIR_STRUCTURE}.nest_list_items"
+REPAIR_RELABEL_AS_SIDEBAR = f"{REPAIR_STRUCTURE}.relabel_as_sidebar"
+REPAIR_JOIN_CONTINUATION = f"{REPAIR_STRUCTURE}.join_continuation"
+REPAIR_LINK_LISTING_CAPTION = f"{REPAIR_STRUCTURE}.link_listing_caption"
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,12 +131,16 @@ _SPECS = (
     CheckSpec("L1.heading_merged_into_text", MAJOR, "小标题和正文粘在了一起", REPAIR_STRUCTURE),
     CheckSpec("L1.heading_as_text", MAJOR, "小标题被排成了正文段落", REPAIR_STRUCTURE),
     CheckSpec("L1.icon_callout_split", MAJOR, "图标引出的提示框被拆成了零散段落", REPAIR_STRUCTURE),
+    CheckSpec("L1.sublist_as_text", MAJOR, "子列表项被排成了正文或挤在上一项里", REPAIR_NEST_LIST_ITEMS),
+    CheckSpec("L1.sidebar_as_text", MAJOR, "侧栏的标题被排成了正文，侧栏没有成框", REPAIR_RELABEL_AS_SIDEBAR),
+    CheckSpec("L1.paragraph_split_midsentence", MAJOR, "一句话被图或分页断成了两段", REPAIR_JOIN_CONTINUATION),
     CheckSpec("L1.review_blocking", BLOCKING, "审校标记的结构阻断问题（如阅读顺序错乱）", REPAIR_REVIEW_RECHECK),
     CheckSpec("L2.figure_regions", BLOCKING, "图片裁剪不对（切掉了图，或框进了页眉、图注）", REPAIR_FIGURE_REGION),
     CheckSpec("L2.figure_without_image", BLOCKING, "图没有图片", REPAIR_FIGURE_REGION),
     CheckSpec("L2.caption_swallows_body", BLOCKING, "图注里混进了正文", REPAIR_STRUCTURE),
     CheckSpec("L2.caption_folds", BLOCKING, "正文被并进了图注", REPAIR_STRUCTURE),
     CheckSpec("L2.orphan_caption", MAJOR, "图注没有配到图", REPAIR_STRUCTURE),
+    CheckSpec("L2.listing_caption_unlinked", MAJOR, "代码清单的标题成了零散段落，没有配到代码", REPAIR_LINK_LISTING_CAPTION),
     CheckSpec("L2.duplicated_labels", MAJOR, "图中的标注又作为正文出现", REPAIR_STRUCTURE),
     # Blocking when the reader sees it as garbage (words split over cells, a token repeated over and over).
     CheckSpec("L2.figure_residue", MAJOR, "图里的文字被当成表格或代码，留在了正文里", REPAIR_STRUCTURE),
@@ -221,6 +233,8 @@ class QaBlock:
     regions: tuple[tuple[int, tuple[float, float, float, float]], ...] = ()
     # The parsed blocks the export joined into this one ((id, text)): a code block and the prose after it.
     merged_blocks: tuple[tuple[str, str], ...] = ()
+    # A figure whose page gives it no caption, accepted as such (the repair's ``accept_uncaptioned_figure``).
+    caption_absent_accepted: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -317,6 +331,9 @@ class PilotQaInputs:
     # The exported reading copy's chapter sections; None when the pilot has no export to read.
     exported: Sequence[ExportedChapter] | None = None
     health: HealthInputs | None = None
+    # "pilot": the two pilot chapters; "book": every chapter after the whole-book run, where front
+    # matter, a contents page and the index are the book's own chapters, not a wrong pick.
+    scope: str = "pilot"
 
 
 # ---------------------------------------------------------------------------
@@ -714,7 +731,11 @@ def check_pilot_chapters(inputs: PilotQaInputs) -> list[CheckRun]:
         blocks_by_chapter[block.chapter_id].append(block)
     for chapter in inputs.chapters:
         title = chapter.title_src or ""
-        if _FRONT_OR_BACK.match(title):
+        surrounding = bool(_FRONT_OR_BACK.match(title))
+        if surrounding and inputs.scope == "book":
+            # The whole book has its contents page and index: they are chapters of their own there.
+            continue
+        if surrounding:
             not_body.findings.append(
                 Finding(
                     "L1.not_body_chapter",
@@ -954,6 +975,190 @@ def check_headings_as_text(inputs: PilotQaInputs) -> CheckRun:
     return run
 
 
+_DASH_ITEM_RE = re.compile(r"^\s*[–—]\s+\S")
+_LISTING_TITLE_RE = re.compile(r"^\s*Listing\s+\d+(?:\.\d+)+\b", re.IGNORECASE)
+_MONOSPACE_FONT_RE = re.compile(r"mono|courier|consol|menlo|code", re.IGNORECASE)
+# A sentence runs on after these: a word, a comma, a dash, an identifier cut after its underscore.
+_RUNS_ON_AFTER = frozenset(",-–—&_")
+# What a page sets inside a sentence where it has room: a figure, its caption.
+_BETWEEN_HALVES_TYPES = frozenset({"image", "figure", "caption"})
+
+
+def _chapter_runs(blocks: Sequence[QaBlock]) -> list[list[QaBlock]]:
+    runs: dict[str, list[QaBlock]] = {}
+    for block in blocks:
+        runs.setdefault(block.chapter_id, []).append(block)
+    return list(runs.values())
+
+
+def _body_font(blocks: Sequence[QaBlock]) -> str | None:
+    """The font most paragraphs of the pilot are set in."""
+    counts = Counter(name for block in blocks if block.block_type == "paragraph" for name in set(block.font_names))
+    return counts.most_common(1)[0][0] if counts else None
+
+
+def check_reading_structure(inputs: PilotQaInputs) -> list[CheckRun]:
+    """Structure a reader sees flattened: sub-lists, sidebars, sentences cut in two, listing titles.
+
+    * ``L1.sublist_as_text``: dash sub-items ("– Basic data structures") run into their bullet's
+      text, or left after the list as loose paragraphs. Target: the parent item; evidence:
+      ``parent_block_id``, ``item_block_ids`` (loose items) or ``inline_items`` (lines inside it).
+    * ``L1.sidebar_as_text``: a sidebar's title set as a heading or paragraph of the chapter: a
+      short unnumbered line followed by paragraphs set in a face other than the body's, and not
+      drawn as a sidebar. Target: the title; evidence: ``title_block_id``, ``member_block_ids``.
+    * ``L1.paragraph_split_midsentence``: a paragraph that starts mid-sentence after one that
+      stops without ending it, with only a figure or caption between. Target: the second half;
+      evidence: ``block_id``, ``join_into_block_id``, ``between_block_ids``.
+    * ``L2.listing_caption_unlinked``: "Listing 2.1 ..." set as a paragraph over its code instead
+      of the code box's caption. Target: the title; evidence: ``caption_block_id``, ``code_block_id``.
+    """
+    sublists = CheckRun("L1.sublist_as_text")
+    sidebars = CheckRun("L1.sidebar_as_text")
+    splits = CheckRun("L1.paragraph_split_midsentence")
+    listings = CheckRun("L2.listing_caption_unlinked")
+    body_font = _body_font(inputs.blocks)
+    for chapter_blocks in _chapter_runs(inputs.blocks):
+        _find_sublists(chapter_blocks, sublists)
+        if body_font:
+            _find_sidebars(chapter_blocks, body_font, sidebars)
+        _find_midsentence_splits(chapter_blocks, splits)
+        _find_unlinked_listing_titles(chapter_blocks, listings)
+    return [sublists, sidebars, splits, listings]
+
+
+def _find_sublists(blocks: Sequence[QaBlock], run: CheckRun) -> None:
+    index = 0
+    while index < len(blocks):
+        block = blocks[index]
+        if block.block_type == "list_item" and "sub-item" not in block.html and "dashed" not in block.html:
+            inline = [line.strip() for line in (block.parsed_text or block.source_text).splitlines()[1:] if _DASH_ITEM_RE.match(line)]
+            if inline:
+                run.findings.append(
+                    _block_finding(
+                        "L1.sublist_as_text",
+                        block,
+                        f"「{_snippet(block.source_text, 30)}」里的 {len(inline)} 个子项（「{_snippet(inline[0], 30)}」）挤在这一项的正文里",
+                        parent_block_id=block.block_id,
+                        inline_items=inline,
+                    )
+                )
+            loose: list[QaBlock] = []
+            cursor = index + 1
+            while cursor < len(blocks) and blocks[cursor].block_type == "paragraph" and _DASH_ITEM_RE.match(blocks[cursor].source_text):
+                if "dashed" not in blocks[cursor].html:
+                    loose.append(blocks[cursor])
+                cursor += 1
+            if loose:
+                run.findings.append(
+                    Finding(
+                        check_id="L1.sublist_as_text",
+                        severity=CHECKS["L1.sublist_as_text"].severity,
+                        target={"kind": "block", "id": block.block_id},
+                        location=_loc(loose[0]),
+                        message=f"列表项后面的 {len(loose)} 段子项（「{_snippet(loose[0].source_text, 30)}」）被排成了零散段落",
+                        evidence={
+                            "source": _snippet(loose[0].source_text),
+                            "parent_block_id": block.block_id,
+                            "item_block_ids": [item.block_id for item in loose],
+                        },
+                    )
+                )
+            index = max(cursor, index + 1)
+            continue
+        index += 1
+
+
+def _find_sidebars(blocks: Sequence[QaBlock], body_font: str, run: CheckRun) -> None:
+    for index, block in enumerate(blocks):
+        text = " ".join((block.source_text or "").split())
+        if (
+            block.block_type not in {"heading", "paragraph"}
+            or "sidebar-title" in block.html
+            or not text
+            or len(text) > 80
+            or "\n" in (block.parsed_text or block.source_text).strip()
+            or _SECTION_NUMBER_RE.match(text)
+            # A title may ask ("Do you always need an indexing pipeline?"); it does not end a sentence.
+            or text[-1] in ".:;"
+            or body_font in block.font_names
+        ):
+            continue
+        members: list[QaBlock] = []
+        for follower in blocks[index + 1 :]:
+            fonts = set(follower.font_names)
+            if follower.block_type == "code" and members:
+                members.append(follower)
+                continue
+            if (
+                follower.block_type != "paragraph"
+                or not fonts
+                or body_font in fonts
+                or all(_MONOSPACE_FONT_RE.search(name) for name in fonts)
+            ):
+                break
+            members.append(follower)
+        if not any(member.block_type == "paragraph" for member in members):
+            continue
+        run.findings.append(
+            _block_finding(
+                "L1.sidebar_as_text",
+                block,
+                f"侧栏「{_snippet(text, 40)}」的标题被排成了正文，它后面的 {len(members)} 段不在侧栏框里",
+                title_block_id=block.block_id,
+                member_block_ids=[member.block_id for member in members],
+            )
+        )
+
+
+def _find_midsentence_splits(blocks: Sequence[QaBlock], run: CheckRun) -> None:
+    for index, block in enumerate(blocks):
+        text = (block.source_text or "").lstrip()
+        if block.block_type != "paragraph" or not text[:1].islower() or "list-continuation" in block.html:
+            continue
+        between: list[QaBlock] = []
+        cursor = index - 1
+        while cursor >= 0 and (blocks[cursor].block_type in _BETWEEN_HALVES_TYPES or _is_figure(blocks[cursor])):
+            between.append(blocks[cursor])
+            cursor -= 1
+        if cursor < 0:
+            continue
+        first = blocks[cursor]
+        tail = (first.source_text or "").rstrip().rstrip("\"'”’)")
+        if first.block_type not in {"paragraph", "list_item"} or not tail:
+            continue
+        if not (tail[-1].isalpha() or tail[-1] in _RUNS_ON_AFTER):
+            continue
+        run.findings.append(
+            _block_finding(
+                "L1.paragraph_split_midsentence",
+                block,
+                f"「{_snippet(text, 30)}」从半句开始：它是上一段「…{_snippet(tail[-30:], 30)}」的后半句，"
+                + ("中间隔着一幅图" if between else "被分页断开了"),
+                block_id=block.block_id,
+                join_into_block_id=first.block_id,
+                between_block_ids=[item.block_id for item in reversed(between)],
+            )
+        )
+
+
+def _find_unlinked_listing_titles(blocks: Sequence[QaBlock], run: CheckRun) -> None:
+    for index, block in enumerate(blocks[:-1]):
+        if block.block_type not in {"paragraph", "caption"} or not _LISTING_TITLE_RE.match(block.source_text or ""):
+            continue
+        code = blocks[index + 1]
+        if not _is_code(code) or "listing-caption" in code.html:
+            continue
+        run.findings.append(
+            _block_finding(
+                "L2.listing_caption_unlinked",
+                block,
+                f"「{_snippet(block.source_text, 40)}」是下面代码的标题，却被排成了单独的段落",
+                caption_block_id=block.block_id,
+                code_block_id=code.block_id,
+            )
+        )
+
+
 # ---------------------------------------------------------------------------
 # L2 图表
 
@@ -1018,7 +1223,7 @@ def check_figures(inputs: PilotQaInputs) -> list[CheckRun]:
                         f"{_snippet(block.source_text, 40) if captioned else '这张图'}在中文版里没有图片",
                     )
                 )
-            if not captioned and block.has_image is not False:
+            if not captioned and block.has_image is not False and not block.caption_absent_accepted:
                 no_caption.findings.append(_block_finding("L2.figure_without_caption", block, "这张图没有图注"))
             continue
         label = _FIGURE_CAPTION_RE.match(block.source_text or "") if block.block_type in {"caption", "paragraph"} else None
@@ -2059,6 +2264,7 @@ def run_layers(inputs: PilotQaInputs, extra_checks: Sequence[ExtraCheck] = ()) -
         *check_exported_chapters(inputs),
         *check_headings_and_headers(inputs),
         check_headings_as_text(inputs),
+        *check_reading_structure(inputs),
         *check_figures(inputs),
         *check_icon_callouts(inputs),
         check_figure_residue(inputs),

@@ -70,6 +70,8 @@ export interface PilotProblems {
 /** The repair loop after the pilot's QA (services/pilot_repair.py): what it repaired, what is left. */
 export interface PilotRepairSummary {
   repair_id: string;
+  /** The pilot's repair, or the whole book's after its run; absent from older servers. */
+  scope?: "pilot" | "book";
   status: "running" | "finished" | "error";
   outcome: "passed" | "escalated" | "nothing_to_do" | "error" | null;
   /** What kinds of problem it repaired, most first. */
@@ -108,6 +110,13 @@ export interface PilotOverview {
   repair?: PilotRepairSummary | null;
 }
 
+/** The whole book's quality gate (services/book_quality.py): the pilot's checks and repair on every chapter. */
+export interface BookQualityOverview {
+  quality: PilotQualitySummary | null;
+  repair: PilotRepairSummary | null;
+  chapter_count: number;
+}
+
 export interface BookOverview {
   document_id: string;
   title: string | null;
@@ -141,6 +150,8 @@ export interface BookOverview {
   quality: { open_issues: number; blocking: number };
   /** The latest parse health report, summarised; null before the first report. */
   parse_health?: ParseHealthSummary | null;
+  /** The whole book's layered QA and repair after its run (全书质检); null before, absent from older servers. */
+  book_quality?: BookQualityOverview | null;
   // null in lists of books (GET /overviews skips the estimate).
   cost: { estimate_usd_range: [number, number] | null; max_charge_usd: number | null; prepaid: boolean; spent_usd: number } | null;
 }

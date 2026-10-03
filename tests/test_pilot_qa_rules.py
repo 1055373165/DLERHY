@@ -907,5 +907,108 @@ class HiddenPageTopHeadingTests(unittest.TestCase):
         self.assertEqual(self.found(self._header(["NewBaskervilleStd-Bold"])), [])
 
 
+SIDEBAR_FACE = "ITCFranklinGothicStd-Boo"
+
+
+class ReadingStructureTests(unittest.TestCase):
+    """Structure the reading copies flattened: sub-lists, sidebars, split sentences, listing titles."""
+
+    def hits(self, blocks: list[QaBlock], check_id: str) -> list[dict[str, Any]]:
+        return [finding for finding in findings(build(blocks)) if finding["check_id"] == check_id]
+
+    def test_loose_dash_items_after_a_bullet(self) -> None:
+        # Build an AI Agent 1.6: "– OpenAI API key ..." left after the list as a paragraph.
+        blocks = styled_pilot(
+            rendered("b-li", C1, "list_item", "• Development-environment setup—you need:", "• 开发环境搭建：", page=38),
+            rendered("b-d1", C1, "paragraph", "– OpenAI API key for accessing GPT models", "– 用于访问 GPT 模型的 OpenAI API 密钥", page=38),
+            rendered("b-d2", C1, "paragraph", "– Tavily API key for web search", "– 用于网页搜索的 Tavily API 密钥", page=38),
+        )
+        [hit] = self.hits(blocks, "L1.sublist_as_text")
+        self.assertEqual((hit["target"], hit["severity"], hit["repair"]), ({"kind": "block", "id": "b-li"}, MAJOR, "structure_edit.nest_list_items"))
+        self.assertEqual(hit["evidence"]["parent_block_id"], "b-li")
+        self.assertEqual(hit["evidence"]["item_block_ids"], ["b-d1", "b-d2"])
+
+    def test_dash_items_run_into_their_bullet(self) -> None:
+        # Build an AI Agent 1.4.3: "构建智能体的流程如下：– 判断… – 观察…" in one item.
+        item = rendered(
+            "b-li",
+            C1,
+            "list_item",
+            "• The process goes like this:\n– Determine whether an agent would help.\n– Observe when the agent fails.",
+            "• 流程如下：– 判断智能体是否有帮助。– 观察智能体何时失败。",
+            page=32,
+        )
+        [hit] = self.hits(styled_pilot(item), "L1.sublist_as_text")
+        self.assertEqual(hit["evidence"]["inline_items"], ["– Determine whether an agent would help.", "– Observe when the agent fails."])
+
+    def test_nested_sub_items_are_not_found(self) -> None:
+        blocks = styled_pilot(
+            rendered("b-li", C1, "list_item", "• Development-environment setup—you need:", "• 开发环境搭建：", page=38),
+            rendered(
+                "b-d1",
+                C1,
+                "list_item",
+                "– OpenAI API key for accessing GPT models",
+                "– 用于访问 GPT 模型的 OpenAI API 密钥",
+                page=38,
+                metadata={"list_kind": "dash", "list_level": 2},
+            ),
+        )
+        self.assertEqual(self.hits(blocks, "L1.sublist_as_text"), [])
+
+    def test_sidebar_title_set_as_a_heading(self) -> None:
+        # A Simple Guide to RAG 2.3: "Do you always need an indexing pipeline?" over sans-set paragraphs.
+        title = styled(rendered("b-st", C1, "heading", "Do you always need an indexing pipeline?", "你总是需要索引流水线吗？", page=44), DEM)
+        member = styled(
+            rendered("b-sm", C1, "paragraph", "Offline indexing pipelines are typically used for large knowledge bases.", "离线索引流水线通常用于大型知识库。", page=44),
+            SIDEBAR_FACE,
+        )
+        after = styled(rendered("b-after", C1, "paragraph", BODY_TEXT, "智能体决定下一步调用哪个工具。", page=45), BODY)
+        [hit] = self.hits(styled_pilot(title, member, after), "L1.sidebar_as_text")
+        self.assertEqual((hit["target"]["id"], hit["repair"]), ("b-st", "structure_edit.relabel_as_sidebar"))
+        self.assertEqual(hit["evidence"]["member_block_ids"], ["b-sm"])
+        # Drawn as a sidebar, it is not a finding.
+        titled = styled(
+            rendered(
+                "b-st", C1, "paragraph", "Do you always need an indexing pipeline?", "你总是需要索引流水线吗？", page=44,
+                metadata={"sidebar_id": "s1", "sidebar_title": True},
+            ),
+            DEM,
+        )
+        self.assertEqual(self.hits(styled_pilot(titled, member, after), "L1.sidebar_as_text"), [])
+
+    def test_section_heading_over_body_text_is_not_a_sidebar(self) -> None:
+        self.assertEqual(self.hits(styled_pilot(), "L1.sidebar_as_text"), [])
+
+    def test_paragraph_starting_mid_sentence_after_a_figure(self) -> None:
+        # Build an AI Agent 1.2.1: "... thinking tokens starting" / figure 1.1 / "with <think>. This advance ...".
+        first = rendered("b-a", C1, "paragraph", "The reasoning model first generates thinking tokens starting", "推理模型首先生成以此开头的思考 token", page=24)
+        second = rendered("b-b", C1, "paragraph", "with <think>. This advance enables agents to tackle complex problems.", "有了 <think>，这一进展使智能体能够处理复杂问题。", page=25)
+        blocks = [*clean_blocks()[:4], first, figure_block("b-fig24", page=24), second, *clean_blocks()[4:]]
+        [hit] = self.hits(blocks, "L1.paragraph_split_midsentence")
+        self.assertEqual((hit["target"]["id"], hit["repair"]), ("b-b", "structure_edit.join_continuation"))
+        self.assertEqual(hit["evidence"]["join_into_block_id"], "b-a")
+        self.assertEqual(hit["evidence"]["between_block_ids"], ["b-fig24"])
+
+    def test_a_paragraph_after_a_finished_sentence_is_not_split(self) -> None:
+        first = rendered("b-a", C1, "paragraph", "The model answers.", "模型给出回答。", page=24)
+        second = rendered("b-b", C1, "paragraph", "iPhone owners use the app too.", "iPhone 用户也在使用这个应用。", page=25)
+        self.assertEqual(self.hits([*clean_blocks(), first, second], "L1.paragraph_split_midsentence"), [])
+
+    def test_listing_title_left_as_a_paragraph_over_its_code(self) -> None:
+        title = rendered("b-lt", C1, "paragraph", "Listing 2.1 Loading environment variables", "代码清单 2.1 加载环境变量", page=44)
+        code = rendered("b-lc", C1, "code", "load_dotenv(find_dotenv())", "", mode="source_artifact_full_width", kind="code", page=44)
+        [hit] = self.hits([*clean_blocks(), title, code], "L2.listing_caption_unlinked")
+        self.assertEqual((hit["target"]["id"], hit["repair"]), ("b-lt", "structure_edit.link_listing_caption"))
+        self.assertEqual((hit["evidence"]["caption_block_id"], hit["evidence"]["code_block_id"]), ("b-lt", "b-lc"))
+        # The code box with its title as the caption is not a finding.
+        linked = rendered(
+            "b-lc", C1, "code", "load_dotenv(find_dotenv())", "代码清单 2.1 加载环境变量",
+            mode="translated_wrapper_with_preserved_artifact", kind="code", page=44,
+            metadata={"linked_caption_text": "Listing 2.1 Loading environment variables"},
+        )
+        self.assertEqual(self.hits([*clean_blocks(), linked], "L2.listing_caption_unlinked"), [])
+
+
 if __name__ == "__main__":
     unittest.main()

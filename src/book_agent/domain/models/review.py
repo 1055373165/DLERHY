@@ -263,6 +263,7 @@ class PilotQualityReport(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "pilot_quality_reports"
     __table_args__ = (
         CheckConstraint("status IN ('passed', 'warnings', 'blocking', 'error')", name="ck_pilot_quality_reports_status"),
+        CheckConstraint("scope IN ('pilot', 'book')", name="ck_pilot_quality_reports_scope"),
         Index("idx_pilot_quality_reports_document", "document_id", "created_at"),
         Index("idx_pilot_quality_reports_run", "run_id"),
     )
@@ -271,6 +272,8 @@ class PilotQualityReport(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         Uuid(as_uuid=False), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
     )
     run_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), ForeignKey("document_runs.id", ondelete="SET NULL"))
+    # pilot: the pilot's chapters; book: every chapter, after the whole-book run (services/book_quality.py).
+    scope: Mapped[str] = mapped_column(Text, nullable=False, default="pilot", server_default="pilot")
     trigger: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)
     blocking_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -298,6 +301,7 @@ class PilotRepair(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "pilot_repairs"
     __table_args__ = (
         CheckConstraint("status IN ('running', 'finished', 'error')", name="ck_pilot_repairs_status"),
+        CheckConstraint("scope IN ('pilot', 'book')", name="ck_pilot_repairs_scope"),
         Index("idx_pilot_repairs_document", "document_id", "created_at"),
         Index("idx_pilot_repairs_run", "run_id"),
     )
@@ -306,6 +310,8 @@ class PilotRepair(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         Uuid(as_uuid=False), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
     )
     run_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), ForeignKey("document_runs.id", ondelete="SET NULL"))
+    # pilot: the pilot's chapters; book: every chapter, after the whole-book run (``book_repair``).
+    scope: Mapped[str] = mapped_column(Text, nullable=False, default="pilot", server_default="pilot")
     status: Mapped[str] = mapped_column(Text, nullable=False)
     # passed (no blocking finding left) | escalated (some left, asked the reader) | nothing_to_do | error
     outcome: Mapped[str | None] = mapped_column(Text)

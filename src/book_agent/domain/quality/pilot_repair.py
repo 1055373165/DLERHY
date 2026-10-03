@@ -98,6 +98,12 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     # The icon and its lines become one callout block; its packets are retranslated line by line.
     "L1.icon_callout_split": (RepairPath(TOOL_STRUCTURE, "merge_icon_callout", costs_model=True),),
     "L1.review_blocking": (_RECHECK,),
+    # Structure the reading copy draws (lists, sidebars, split paragraphs, listing captions): the parser
+    # side's QA rules name these paths in their repair hints; the findings carry the block ids.
+    "L1.sublist_as_text": (RepairPath(TOOL_STRUCTURE, "nest_list_items", costs_model=True),),
+    "L1.sidebar_as_text": (RepairPath(TOOL_STRUCTURE, "relabel_as_sidebar", costs_model=True),),
+    "L1.paragraph_split_midsentence": (RepairPath(TOOL_STRUCTURE, "join_continuation", costs_model=True),),
+    "L2.listing_caption_unlinked": (RepairPath(TOOL_STRUCTURE, "link_listing_caption"),),
     # L2 图表
     "L2.figure_regions": (RepairPath(TOOL_FIGURE_REGION, "fit_to_figure"),),
     "L2.caption_swallows_body": (
@@ -109,6 +115,11 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L2.orphan_caption": (RepairPath(TOOL_STRUCTURE, "link_caption"),),
     "L2.duplicated_labels": (RepairPath(TOOL_STRUCTURE, "hide_duplicated_label"),),
     "L2.figure_residue": (RepairPath(TOOL_STRUCTURE, "hide_figure_residue"),),
+    # Minor: link the caption set right next to it, else accept a figure its page gives no caption.
+    "L2.figure_without_caption": (
+        RepairPath(TOOL_STRUCTURE, "link_adjacent_caption"),
+        RepairPath(TOOL_STRUCTURE, "accept_uncaptioned_figure"),
+    ),
     # An icon drawn as a figure card: when it leads a callout, the callout takes it.
     "L2.tiny_icon_figure": (RepairPath(TOOL_STRUCTURE, "merge_icon_callout", costs_model=True),),
     # The export gate's "no picture" is stale once the figure has one: its recheck resolves it.
@@ -120,6 +131,8 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L3.table_untranslated": (_RETRANSLATE,),
     # The block becomes code (what the reading copy already shows) and the export gate checks it again.
     "L3.table_is_code": (RepairPath(TOOL_STRUCTURE, "relabel_table_as_code"), _RECHECK),
+    # A mostly empty "table" inside or next to a figure is the figure's text: the figure takes it.
+    "L3.table_sparse": (RepairPath(TOOL_STRUCTURE, "absorb_sparse_table_into_figure"),),
     "L3.review_blocking": (_RECHECK,),
     # L4 代码与格式
     "L4.code_translated": (_RETRANSLATE,),
@@ -162,8 +175,27 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
 }
 
 
-def paths_for(check_id: str) -> tuple[RepairPath, ...]:
-    return REPAIR_PATHS.get(check_id, ())
+STRUCTURE_HINT_PREFIX = "structure_edit."
+
+
+def paths_for(check_id: str, finding: Mapping[str, Any] | None = None) -> tuple[RepairPath, ...]:
+    """The check's paths; a check this table does not know may name its path in its finding's repair
+    hint ("structure_edit.nest_list_items"), taken when the toolbox has that structure edit."""
+    paths = REPAIR_PATHS.get(check_id, ())
+    hint = str((finding or {}).get("repair") or ((finding or {}).get("evidence") or {}).get("repair_path") or "")
+    if hint.startswith(STRUCTURE_HINT_PREFIX) and hint[len(STRUCTURE_HINT_PREFIX) :] in HINTED_STRUCTURE_EDITS:
+        hinted = RepairPath(TOOL_STRUCTURE, hint[len(STRUCTURE_HINT_PREFIX) :], costs_model=True)
+        if all(path.name != hinted.name for path in paths):
+            paths = (hinted, *paths)
+    return paths
+
+
+# Structure edits a finding's repair hint may ask for by name.
+HINTED_STRUCTURE_EDITS = frozenset({"nest_list_items", "relabel_as_sidebar", "join_continuation", "link_listing_caption"})
+
+
+# Minor checks the loop still takes on: their repair is cheap and deterministic (no model call).
+MINOR_REPAIRABLE_CHECKS = frozenset({"L2.figure_without_caption"})
 
 
 # ---------------------------------------------------------------------------
@@ -327,6 +359,14 @@ def findings_of(layers: Sequence[Mapping[str, Any]], severities: Iterable[str] =
     return sorted(findings, key=lambda finding: (order.get(finding.get("severity"), 9), str(finding.get("layer")), str(finding.get("check_id"))))
 
 
+def repairable_findings(layers: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """The loop's work: blocking and major findings, then the minor ones it repairs cheaply."""
+    return [
+        *findings_of(layers),
+        *[finding for finding in findings_of(layers, (MINOR,)) if finding.get("check_id") in MINOR_REPAIRABLE_CHECKS],
+    ]
+
+
 @dataclass(slots=True)
 class WorkItem:
     """Findings one attempt repairs with one path."""
@@ -366,7 +406,7 @@ def plan_work(findings: Sequence[Mapping[str, Any]], tried: set[tuple[str, str]]
     groups: dict[tuple[str, str, str], WorkItem] = {}
     for finding in findings:
         check_id = str(finding.get("check_id") or "")
-        path = next((path for path in paths_for(check_id) if (str(finding.get("key")), path.name) not in tried), None)
+        path = next((path for path in paths_for(check_id, finding) if (str(finding.get("key")), path.name) not in tried), None)
         if path is None:
             continue
         if path.scope == SCOPE_CHECK:
@@ -467,6 +507,35 @@ def judge(before: QaSnapshot, after: QaSnapshot, target_keys: Sequence[str], tar
     if any(after.check_counts.get(check_id, 0) > before.check_counts.get(check_id, 0) for check_id in targets):
         return Verdict(False, "not_improved", resolved)
     return Verdict(True, "improved", resolved)
+
+
+# Checks a retranslation can fail by itself (a line left in English, a program note leaked in):
+# the model's own flake, not a sign the repair was wrong.
+RETRANSLATION_FLAKE_CHECKS = frozenset({"L6.untranslated_sentence", "L7.untranslated_prose", "L7.leaked_marker"})
+
+
+def self_inflicted_packets(
+    verdict: Verdict, before: QaSnapshot, after_layers: Sequence[Mapping[str, Any]], retranslated: Iterable[str]
+) -> list[str]:
+    """The packets to retranslate once more when a repair was judged worse only for its retranslation's
+    own output: every check that got worse is one a flaky model output explains, and every new finding
+    of those checks is in a packet the attempt just retranslated. Empty otherwise (the repair is reverted).
+    """
+    retranslated = set(retranslated)
+    if verdict.keep or not verdict.worse_checks or not retranslated:
+        return []
+    worse = set(verdict.worse_checks) - {"blocking"}
+    if not worse or not worse <= RETRANSLATION_FLAKE_CHECKS:
+        return []
+    fresh = [
+        finding
+        for finding in findings_of(after_layers, (BLOCKING, MAJOR, MINOR))
+        if finding.get("check_id") in RETRANSLATION_FLAKE_CHECKS and str(finding.get("key")) not in before.keys
+    ]
+    packets = [str((finding.get("location") or {}).get("packet_id") or "") for finding in fresh]
+    if not fresh or not all(packet in retranslated for packet in packets):
+        return []
+    return sorted(set(packets))
 
 
 # ---------------------------------------------------------------------------

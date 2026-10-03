@@ -1702,15 +1702,15 @@ class ExportService:
         body_blocks = self._merged_body_blocks(
             list(render_blocks), str(title_text or "").strip()
         )
-        blocks_html = "".join(
-            markup.render_block_html(
+        blocks_html = markup.render_blocks_html(
+            body_blocks,
+            lambda block: markup.render_block_html(
                 block,
                 asset_path_by_block_id,
                 include_source_toggle=False,
                 include_notice=False,
                 include_source_caption=False,
-            )
-            for block in body_blocks
+            ),
         )
         if not title_text and not blocks_html:
             return ""
@@ -1993,6 +1993,24 @@ class ExportService:
                         ]
                     skipped_block_ids.add(linked_caption_block.id)
                     skipped_block_ids.update(grouped_block.id for grouped_block in grouped_context_blocks)
+            elif (
+                effective_block_type == BlockType.CODE
+                and linked_caption_block is not None
+                and linked_caption_block.block_type == BlockType.CAPTION
+                and not is_callout_metadata(source_metadata)
+            ):
+                # A listing's title is the code box's caption, translated above the code.
+                caption_sentences = sentences_by_block.get(linked_caption_block.id, [])
+                render_mode = "translated_wrapper_with_preserved_artifact"
+                render_source_sentence_ids = [
+                    *render_source_sentence_ids,
+                    *[sentence.id for sentence in caption_sentences],
+                ]
+                source_metadata["linked_caption_text"] = linked_caption_block.source_text
+                source_metadata["linked_caption_page"] = linked_caption_block.source_span_json.get("source_page_start")
+                target_ids = alignment.target_ids_for_block_sentences(caption_sentences, sentence_targets, target_map)
+                target_block_type = linked_caption_block.block_type
+                skipped_block_ids.add(linked_caption_block.id)
             elif effective_block_type == BlockType.IMAGE and source_metadata.get("linked_caption_text"):
                 render_mode = "image_anchor_with_translated_caption"
                 render_source_text = str(source_metadata.get("linked_caption_text") or "")
@@ -2482,9 +2500,8 @@ class ExportService:
         body_blocks = self._merged_body_blocks(
             list(render_blocks), str(chapter_title_target or "").strip()
         )
-        blocks_html = "".join(
-            markup.render_block_html(block, asset_path_by_block_id)
-            for block in body_blocks
+        blocks_html = markup.render_blocks_html(
+            body_blocks, lambda block: markup.render_block_html(block, asset_path_by_block_id)
         )
         # A reader opens this file: the run's token and cost figures belong on the run page, not here.
         if not blocks_html:

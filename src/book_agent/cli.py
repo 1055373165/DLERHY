@@ -123,6 +123,14 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--suite", action="append", default=[], help="terminology, review, structure or export; repeatable")
     evaluate.add_argument("--output", default=None, help="Report directory (default evals/reports/<timestamp>)")
 
+    reparse = subparsers.add_parser(
+        "reparse-untranslated",
+        help="Re-read the chapters nothing has translated yet with the current parser (translated chapters stay)",
+    )
+    reparse.add_argument("--document-id", required=True)
+    reparse.add_argument("--dry-run", action="store_true", help="Only report what would change")
+    reparse.add_argument("--revert", default=None, metavar="PARSE_REVISION_ID", help="Undo an earlier re-parse")
+
     heal = subparsers.add_parser(
         "heal-alignment",
         help="Supersede stale translation attempts behind export ALIGNMENT_FAILURE issues and re-check them",
@@ -228,6 +236,21 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.command == "bootstrap":
             _dump(asdict(service.bootstrap_document(args.source_path)))
+            return 0
+        if args.command == "reparse-untranslated":
+            from book_agent.services.chapter_reparse import ChapterReparseService, ReparseRefused
+
+            reparse_service = ChapterReparseService(session)
+            try:
+                if args.revert:
+                    _dump(reparse_service.revert(args.document_id, args.revert))
+                else:
+                    _dump(reparse_service.reparse_untranslated(args.document_id, dry_run=args.dry_run).to_json())
+            except ReparseRefused as exc:
+                session.rollback()
+                _dump({"refused": str(exc)})
+                return 1
+            session.commit()
             return 0
         if args.command == "heal-alignment":
             from book_agent.services.pilot_repair import heal_alignment

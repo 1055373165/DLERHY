@@ -49,6 +49,9 @@ from book_agent.infra.repositories.export import ChapterExportBundle
 ARTIFACT_PLACEHOLDER_TEXTS = frozenset({"", "[Image]", "[Figure]"})
 # A bullet glyph opening a list item, optionally after a translator prefix such as "ZH::".
 _LEADING_BULLET_GLYPH = re.compile(r"^(\s*(?:[A-Z]{2}::)?)\s*[\u2022\u25cf\u25e6\u25aa\u2023\u2219\u25a0-]\s+")
+# A sub-item's dash ("\u2013 Basic data structures") and a numbered item's number ("1 Data layer", "1. \u6570\u636e\u5c42").
+_LEADING_DASH_MARKER = re.compile(r"^(\s*)[\u2013\u2014-]\s*")
+_LEADING_NUMBER_MARKER = re.compile(r"^(\s*)(\d{1,3})(?:[.)\u3001]\s*|\s+)")
 
 
 def is_callout_block(block: MergedRenderBlock) -> bool:
@@ -315,8 +318,12 @@ def render_block_markdown(
         parts = [list_markdown or markdown_blockquote(target_text or source_text)]
     elif block.block_type == BlockType.LIST_ITEM.value:
         list_text = target_text or source_text
+        list_metadata = block.source_metadata or {}
+        if list_metadata.get("list_kind") == "dash":
+            list_text = _LEADING_DASH_MARKER.sub(r"\1", list_text, count=1)
         marker = "" if re.match(r"^\s*(?:[-*+]\s+|\d+\.\s+)", list_text) else "- "
-        parts = [f"{marker}{list_text}".rstrip()]
+        indent = "  " if list_metadata.get("list_level") == 2 else ""
+        parts = [f"{indent}{marker}{list_text}".rstrip()]
     elif block.block_type == BlockType.CAPTION.value:
         parts = [f"*{target_text or source_text}*"]
     else:
@@ -560,6 +567,24 @@ def should_inline_join_target_text(
     }
 
 
+def render_blocks_html(blocks: list[MergedRenderBlock], render_one) -> str:
+    """Blocks as HTML, the blocks of one sidebar inside one ``<aside class='sidebar'>`` box."""
+    parts: list[str] = []
+    open_sidebar: object = None
+    for block in blocks:
+        sidebar_id = (block.source_metadata or {}).get("sidebar_id") or None
+        if sidebar_id != open_sidebar:
+            if open_sidebar:
+                parts.append("</aside>")
+            if sidebar_id:
+                parts.append("<aside class='sidebar'>")
+            open_sidebar = sidebar_id
+        parts.append(render_one(block))
+    if open_sidebar:
+        parts.append("</aside>")
+    return "".join(parts)
+
+
 def render_block_html(
     block: MergedRenderBlock,
     asset_path_by_block_id: dict[str, str] | None = None,
@@ -623,6 +648,16 @@ def render_block_html(
             body = render_equation_html_metadata_aware(
                 block.source_metadata, block.source_text
             )
+        elif block.block_type == BlockType.CODE.value:
+            # A listing: its title as the box's caption, the code as it is.
+            caption_text = block.target_text or str(block.source_metadata.get("linked_caption_text") or "")
+            caption = (
+                f"<div class='zh listing-caption'>{format_inline_text(caption_text, code_spans=bool(block.target_text))}</div>"
+                if caption_text
+                else ""
+            )
+            code_html = f"<pre><code>{format_preformatted_text(block.source_text, block=block)}</code></pre>"
+            return f"<section class='block artifact code listing'>{caption}{note}{code_html}</section>"
         else:
             table_html = render_table_html_metadata_aware(
                 block.source_metadata, block.source_text
@@ -716,7 +751,35 @@ def render_block_html(
         if isinstance(level, int) and 1 <= level <= 6:
             block_class = f"{block_class} level-{level}"
     display_html = target_html or source_html
+    list_metadata = block.source_metadata or {}
+    if block.block_type == BlockType.LIST_ITEM.value and list_metadata.get("list_kind") in {"dash", "number"}:
+        # A sub-item ("– ...") or a numbered item ("1 Data layer—..."): the marker is drawn, not typed.
+        display_text = block.target_text or block.source_text or ""
+        kind = str(list_metadata["list_kind"])
+        pattern = _LEADING_DASH_MARKER if kind == "dash" else _LEADING_NUMBER_MARKER
+        number = _LEADING_NUMBER_MARKER.match(block.source_text or "") if kind == "number" else None
+        marker = f"{number.group(2)}." if number else "–" if kind == "dash" else ""
+        block_class = f"{block_class} {'dashed' if kind == 'dash' else 'numbered'}"
+        if list_metadata.get("list_level") == 2:
+            block_class = f"{block_class} sub-item"
+        display_html = format_inline_text(pattern.sub(r"\1", display_text, count=1), code_spans=bool(block.target_text))
+        return (
+            f"<section class='block {html.escape(block_class)}'>"
+            f"<div class='zh' data-marker='{html.escape(marker)}'>{display_html}</div>"
+            f"{source_details}"
+            "</section>"
+        )
+    if list_metadata.get("sidebar_continued_label"):
+        # "(continued)" at the head of a sidebar's second page: the box already runs on.
+        return ""
+    if list_metadata.get("sidebar_title"):
+        block_class = f"{block_class} sidebar-title"
+    if block.block_type == BlockType.PARAGRAPH.value and list_metadata.get("list_continuation"):
+        # Text the page sets inside a list ("Cost considerations:"): indented with the items' text.
+        block_class = f"{block_class} list-continuation"
     if block.block_type == BlockType.LIST_ITEM.value:
+        if list_metadata.get("list_level") == 2:
+            block_class = f"{block_class} sub-item"
         # PDF list items carry their bullet glyph in the text; draw it as a
         # hanging marker instead so wrapped item lines align.
         display_text = block.target_text or block.source_text

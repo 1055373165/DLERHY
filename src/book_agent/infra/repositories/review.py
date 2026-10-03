@@ -16,6 +16,7 @@ from book_agent.domain.enums import (
     IssueStatus,
     MemoryScopeType,
     MemoryStatus,
+    PacketSentenceRole,
     RootCauseLayer,
     RunStatus,
     SnapshotType,
@@ -24,7 +25,14 @@ from book_agent.domain.enums import (
 )
 from book_agent.domain.models import Block, Chapter, Document, MemorySnapshot, Sentence
 from book_agent.domain.models.review import ChapterQualitySummary, IssueAction, ReviewIssue, ReviewIssueEvent
-from book_agent.domain.models.translation import AlignmentEdge, TargetSegment, TermEntry, TranslationPacket, TranslationRun
+from book_agent.domain.models.translation import (
+    AlignmentEdge,
+    PacketSentenceMap,
+    TargetSegment,
+    TermEntry,
+    TranslationPacket,
+    TranslationRun,
+)
 
 
 def _utcnow() -> datetime:
@@ -75,24 +83,55 @@ def active_target_texts(session: Session, sentence_ids: Iterable[str]) -> dict[s
     ids = [sentence_id for sentence_id in dict.fromkeys(sentence_ids) if sentence_id]
     if not ids:
         return {}
-    rows = session.execute(
-        select(AlignmentEdge.sentence_id, TranslationRun.attempt, TargetSegment.ordinal, TargetSegment.text_zh)
-        .join(TargetSegment, AlignmentEdge.target_segment_id == TargetSegment.id)
-        .join(TranslationRun, TranslationRun.id == TargetSegment.translation_run_id)
-        .where(
-            AlignmentEdge.sentence_id.in_(ids),
-            TargetSegment.final_status != TargetSegmentStatus.SUPERSEDED,
-            TranslationRun.status == RunStatus.SUCCEEDED,
+    rows: list[Any] = []
+    current_packets: dict[str, set[str]] = {}
+    for start in range(0, len(ids), 1000):
+        chunk = ids[start : start + 1000]
+        rows.extend(
+            session.execute(
+                select(
+                    AlignmentEdge.sentence_id,
+                    TranslationRun.packet_id,
+                    TranslationRun.attempt,
+                    TranslationRun.created_at,
+                    TargetSegment.ordinal,
+                    TargetSegment.text_zh,
+                )
+                .join(TargetSegment, AlignmentEdge.target_segment_id == TargetSegment.id)
+                .join(TranslationRun, TranslationRun.id == TargetSegment.translation_run_id)
+                .where(
+                    AlignmentEdge.sentence_id.in_(chunk),
+                    TargetSegment.final_status != TargetSegmentStatus.SUPERSEDED,
+                    TranslationRun.status == RunStatus.SUCCEEDED,
+                )
+            ).all()
         )
-    ).all()
-    latest_attempt: dict[str, int] = {}
-    for sentence_id, attempt, _, _ in rows:
-        key = str(sentence_id)
-        latest_attempt[key] = max(latest_attempt.get(key, 0), int(attempt))
+        for sentence_id, packet_id in session.execute(
+            select(PacketSentenceMap.sentence_id, PacketSentenceMap.packet_id).where(
+                PacketSentenceMap.sentence_id.in_(chunk), PacketSentenceMap.role == PacketSentenceRole.CURRENT
+            )
+        ).all():
+            current_packets.setdefault(str(sentence_id), set()).add(str(packet_id))
+    # One attempt per sentence: of the packet that translates it now (another packet's attempt left
+    # active by a merge or a rebuild is stale), the newest; attempts count per packet, so across
+    # packets the newer one is the one made later.
+    candidates: dict[str, set[tuple[str, int, Any]]] = {}
+    for sentence_id, packet_id, attempt, created_at, _ordinal, _text in rows:
+        candidates.setdefault(str(sentence_id), set()).add((str(packet_id), int(attempt), created_at))
+    chosen: dict[str, tuple[str, int]] = {}
+    for key, options in candidates.items():
+        owned = [option for option in options if option[0] in current_packets.get(key, set())] or list(options)
+        newest: dict[str, tuple[int, float]] = {}
+        for packet_id, attempt, created_at in owned:
+            stamp = created_at.timestamp() if created_at is not None else 0.0
+            if packet_id not in newest or attempt > newest[packet_id][0]:
+                newest[packet_id] = (attempt, stamp)
+        packet_id = max(newest, key=lambda item: (newest[item][1], newest[item][0]))
+        chosen[key] = (packet_id, newest[packet_id][0])
     parts: dict[str, list[tuple[int, str]]] = {}
-    for sentence_id, attempt, ordinal, text in sorted(rows, key=lambda row: (str(row[0]), int(row[2]))):
+    for sentence_id, packet_id, attempt, _created, ordinal, text in sorted(rows, key=lambda row: (str(row[0]), int(row[4]))):
         key = str(sentence_id)
-        if int(attempt) != latest_attempt[key] or not text:
+        if chosen.get(key) != (str(packet_id), int(attempt)) or not text:
             continue
         if all(existing != text for _, existing in parts.setdefault(key, [])):
             parts[key].append((int(ordinal), str(text)))

@@ -175,6 +175,13 @@ class DocumentWorkflowService:
     def bootstrap_document(self, source_path: str | Path, *, org_id: str | None = None) -> DocumentSummary:
         artifacts: BootstrapArtifacts = BootstrapOrchestrator().bootstrap_document(source_path, org_id=org_id)
         self.bootstrap_repository.save(artifacts)
+        from book_agent.services.chapter_reparse import record_parser_fingerprint
+
+        # Which parser code read the book: the whole-book run re-reads untranslated chapters when it changed.
+        document = self.session.get(Document, artifacts.document.id)
+        if document is not None:
+            record_parser_fingerprint(document)
+            self.session.flush()
         # Free rule checks on what was just parsed, before anyone spends money translating it.
         ParseHealthService(self.session).run_quietly(artifacts.document.id, trigger="bootstrap")
         return self.documents.get_document_summary(artifacts.document.id)

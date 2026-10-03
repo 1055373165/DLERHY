@@ -18,6 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -30,6 +31,7 @@ from book_agent.domain.enums import (
     PacketSentenceRole,
     ProtectedPolicy,
     RunStatus,
+    SentenceStatus,
     TargetSegmentStatus,
 )
 from book_agent.domain.event_kinds import TRANSLATION_SEGMENT_EDITED
@@ -409,6 +411,196 @@ class SegmentEditService:
             packet_id=run.packet_id,
             changed_segment_count=len(changes),
             changed_sentence_ids=changed_sentences,
+        )
+
+    def fill_sentences(
+        self,
+        packet_id: str,
+        texts: dict[str, str],
+        *,
+        reason: str,
+        actor_id: str,
+        actor_type: ActorType = ActorType.MODEL,
+        run_id: str | None = None,
+    ) -> PacketRewriteResult | None:
+        """Give sentences of a packet that have no translation yet a known one, as one new attempt.
+
+        The translation memory's write: the packet's latest attempt is copied and one segment is added
+        per sentence (``texts``: sentence id -> Chinese), in reading order. Nothing else changes, so a
+        structure edit that made one heading translatable does not retranslate its whole packet. The
+        locked-term guard applies to each new segment. Returns None without a previous attempt.
+        """
+        texts = {sentence_id: (text or "").strip() for sentence_id, text in texts.items() if (text or "").strip()}
+        if not texts:
+            return None
+        run = self.session.scalars(
+            select(TranslationRun)
+            .where(TranslationRun.packet_id == packet_id, TranslationRun.status == RunStatus.SUCCEEDED)
+            .order_by(TranslationRun.attempt.desc())
+            .limit(1)
+        ).first()
+        if run is None:
+            return None
+        segments = list(
+            self.session.scalars(
+                select(TargetSegment).where(TargetSegment.translation_run_id == run.id).order_by(TargetSegment.ordinal)
+            ).all()
+        )
+        edges = (
+            list(self.session.scalars(select(AlignmentEdge).where(AlignmentEdge.target_segment_id.in_([item.id for item in segments]))).all())
+            if segments
+            else []
+        )
+        sentences = {
+            sentence.id: sentence
+            for sentence in self.session.scalars(
+                select(Sentence).where(Sentence.id.in_(list(texts) + [edge.sentence_id for edge in edges]))
+            ).all()
+        }
+        for sentence_id, text in texts.items():
+            sentence = sentences.get(sentence_id)
+            if sentence is None:
+                raise EditRejected(f"sentence not found: {sentence_id}")
+            self._check_locked_terms(sentence, [sentence.source_text or ""], text)
+        block_ordinals = dict(
+            self.session.execute(select(Block.id, Block.ordinal).where(Block.id.in_({s.block_id for s in sentences.values()}))).all()
+        )
+
+        def position(sentence_id: str) -> tuple[int, int]:
+            sentence = sentences.get(sentence_id)
+            if sentence is None:
+                return (10**9, 0)
+            return (int(block_ordinals.get(sentence.block_id, 10**9)), int(sentence.ordinal_in_block or 0))
+
+        sentences_by_segment: dict[str, list[str]] = {}
+        for edge in edges:
+            sentences_by_segment.setdefault(edge.target_segment_id, []).append(edge.sentence_id)
+        # Old segments and the new ones, in reading order of the sentences they translate.
+        items: list[tuple[tuple[int, int], int, Any]] = [
+            (min((position(s) for s in sentences_by_segment.get(segment.id, [])), default=(10**9, segment.ordinal)), 0, segment)
+            for segment in segments
+        ]
+        items.extend((position(sentence_id), 1, sentence_id) for sentence_id in texts)
+        items.sort(key=lambda item: (item[0], item[1]))
+
+        now = _utcnow()
+        attempt = self.translations.next_attempt(packet_id)
+        new_run = TranslationRun(
+            id=stable_id("translation-run", packet_id, attempt),
+            packet_id=packet_id,
+            model_name=run.model_name,
+            model_config_json={
+                **(run.model_config_json or {}),
+                "worker": "segment_edit",
+                "edited_from_run_id": run.id,
+                "filled_sentence_ids": sorted(texts),
+                "edit_reason": reason,
+                "edit_actor": actor_id,
+            },
+            prompt_version=run.prompt_version,
+            attempt=attempt,
+            status=RunStatus.SUCCEEDED,
+            output_json={"edited_from_run_id": run.id},
+            token_in=0,
+            token_out=0,
+            cost_usd=0,
+            latency_ms=0,
+            created_at=now,
+            updated_at=now,
+        )
+        self.session.add(new_run)
+        self.session.flush()
+        chapter_id = segments[0].chapter_id if segments else next(iter(sentences.values())).chapter_id
+        new_segment_ids: dict[str, str] = {}
+        for ordinal, (_position, kind, item) in enumerate(items, start=1):
+            new_id = stable_id("target-segment", new_run.id, ordinal)
+            if kind == 0:
+                new_segment_ids[item.id] = new_id
+                self.session.add(
+                    TargetSegment(
+                        id=new_id,
+                        chapter_id=item.chapter_id,
+                        translation_run_id=new_run.id,
+                        ordinal=ordinal,
+                        text_zh=item.text_zh,
+                        segment_type=item.segment_type,
+                        confidence=item.confidence,
+                        final_status=TargetSegmentStatus.DRAFT,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+                item.final_status = TargetSegmentStatus.SUPERSEDED
+                item.updated_at = now
+            else:
+                self.session.add(
+                    TargetSegment(
+                        id=new_id,
+                        chapter_id=chapter_id,
+                        translation_run_id=new_run.id,
+                        ordinal=ordinal,
+                        text_zh=texts[item],
+                        segment_type="sentence",
+                        confidence=0.9,
+                        final_status=TargetSegmentStatus.DRAFT,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+                self.session.flush()
+                self.session.add(
+                    AlignmentEdge(
+                        id=stable_id("alignment-edge", item, new_id),
+                        sentence_id=item,
+                        target_segment_id=new_id,
+                        relation_type="1:1",
+                        confidence=0.9,
+                        created_by=actor_type,
+                    )
+                )
+        self.session.flush()
+        for edge in edges:
+            self.session.add(
+                AlignmentEdge(
+                    id=stable_id("alignment-edge", edge.sentence_id, new_segment_ids[edge.target_segment_id]),
+                    sentence_id=edge.sentence_id,
+                    target_segment_id=new_segment_ids[edge.target_segment_id],
+                    relation_type=edge.relation_type,
+                    confidence=edge.confidence,
+                    created_by=edge.created_by,
+                )
+            )
+        for sentence_id in texts:
+            sentences[sentence_id].sentence_status = SentenceStatus.TRANSLATED
+            sentences[sentence_id].updated_at = now
+        self.session.add(
+            AuditEvent(
+                object_type="translation_run",
+                object_id=new_run.id,
+                action="target_segment.edited",
+                actor_type=actor_type,
+                actor_id=actor_id,
+                payload_json={"reason": reason, "packet_id": packet_id, "filled": [{"sentence_id": k, "new_text": v} for k, v in texts.items()]},
+            )
+        )
+        emit_event(
+            self.session,
+            kind=TRANSLATION_SEGMENT_EDITED,
+            run_id=run_id,
+            chapter_id=chapter_id,
+            packet_id=packet_id,
+            actor_kind="user" if actor_type == ActorType.HUMAN else "agent" if actor_type == ActorType.MODEL else "system",
+            actor_id=actor_id,
+            payload={"translation_run_id": new_run.id, "attempt": attempt, "sentence_ids": sorted(texts), "segment_count": len(texts), "reason": reason},
+        )
+        self.session.flush()
+        self.translations.supersede_other_attempts(packet_id, new_run.id)
+        return PacketRewriteResult(
+            translation_run_id=new_run.id,
+            attempt=attempt,
+            packet_id=packet_id,
+            changed_segment_count=len(texts),
+            changed_sentence_ids=sorted(texts),
         )
 
     def _latest_translation(
