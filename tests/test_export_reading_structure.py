@@ -100,9 +100,9 @@ class SidebarHtmlTest(unittest.TestCase):
             _list_item("After the sidebar.", "侧栏之后。", block_type="paragraph"),
         ]
         html = render_blocks_html(blocks, render_block_html)
-        self.assertEqual(html.count("<aside class='sidebar'>"), 1)
+        self.assertEqual(html.count("<aside class='book-sidebar'>"), 1)
         self.assertEqual(html.count("</aside>"), 1)
-        inside = html.split("<aside class='sidebar'>", 1)[1].split("</aside>", 1)[0]
+        inside = html.split("<aside class='book-sidebar'>", 1)[1].split("</aside>", 1)[0]
         self.assertIn("<section class='block paragraph sidebar-title'><div class='zh'>你总是需要索引流水线吗？</div>", inside)
         self.assertIn("离线索引流水线很常见。", inside)
         self.assertNotIn("（续）", html)

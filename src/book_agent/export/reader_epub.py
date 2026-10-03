@@ -58,7 +58,7 @@ h3,h4{font-size:1.1em;margin:1em 0 .5em}
 .list_item.dashed .zh::before,.list_item.numbered .zh::before{content:attr(data-marker) " "}
 .list_item.sub-item{margin-left:1.2em}
 .paragraph.list-continuation{margin-left:1.2em}
-.sidebar{border:1px solid #bbb;background:#f6f3ea;border-radius:.4em;padding:.6em .8em;margin:1em 0}
+.book-sidebar{border:1px solid #bbb;background:#f6f3ea;border-radius:.4em;padding:.6em .8em;margin:1em 0}
 .sidebar-title .zh{font-weight:bold}
 .listing-caption{font-weight:bold;font-size:.9em;margin-bottom:.3em}
 .quote{border-left:3px solid #999;padding-left:.8em;color:#333}
