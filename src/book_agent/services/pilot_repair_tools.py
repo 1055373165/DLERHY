@@ -1242,13 +1242,38 @@ class PilotRepairToolbox:
             )
         )
 
+    def _split_inline_items(self, parent: Block, items: Sequence[str]) -> tuple[list[Block], list[Any]]:
+        """Sub-items set inside their bullet's text, one per line: each split off as its own block."""
+        outcomes: list[Any] = []
+        blocks: list[Block] = []
+        current = parent
+        for line in items:
+            text = current.source_text or ""
+            at = text.find(line.strip()[:40])
+            if at <= 0:
+                raise NotApplicable(f"cannot find the sub-item {line[:30]!r} in its bullet")
+            outcome = self.structure.split_block(self.ctx.document_id, current.id, _marker(text, at), actor_id=ACTOR_ID, reason="子项从上一项里拆出来")
+            outcomes.append(outcome)
+            current = self.session.get(Block, outcome.block_ids[-1])
+            blocks.append(current)
+        return blocks, outcomes
+
     def _structure_edit__nest_list_items(self, item: WorkItem) -> ToolResult:
-        """Sub-items ("– Basic data structures") and numbered items the parse kept flat: drawn as a nested list."""
+        """Sub-items ("– Basic data structures") the parse kept flat: drawn as a nested list.
+
+        Loose sub-item paragraphs after the list (evidence ``item_block_ids``) become level-2 items;
+        sub-items set inside their bullet's text (``inline_items``) are split off first.
+        """
         finding = item.findings[0]
         evidence = finding.get("evidence") or {}
-        blocks = self._hint_blocks(finding, "item_block_ids", "block_ids")
         level = int(evidence.get("list_level") or 2)
         outcomes: list[Any] = []
+        inline = [str(line) for line in evidence.get("inline_items") or [] if str(line).strip()]
+        if inline and not evidence.get("item_block_ids"):
+            parent = self._block(str(evidence.get("parent_block_id") or (finding.get("target") or {}).get("id") or ""))
+            blocks, outcomes = self._split_inline_items(parent, inline)
+        else:
+            blocks = self._hint_blocks(finding, "item_block_ids", "block_ids")
         changed: list[dict[str, Any]] = []
         for block in blocks:
             if block.block_type not in {BlockType.LIST_ITEM, BlockType.PARAGRAPH}:
@@ -1278,8 +1303,8 @@ class PilotRepairToolbox:
         """A sidebar's blocks drawn as one titled box; its title is not a section heading of the chapter."""
         finding = item.findings[0]
         evidence = finding.get("evidence") or {}
-        blocks = self._hint_blocks(finding, "sidebar_block_ids", "block_ids")
-        title_id = str(evidence.get("title_block_id") or blocks[0].id)
+        blocks = self._hint_blocks(finding, "member_block_ids", "sidebar_block_ids", "block_ids")
+        title_id = str(evidence.get("title_block_id") or (finding.get("target") or {}).get("id") or blocks[0].id)
         title = next((block for block in blocks if block.id == title_id), None) or self._block(title_id)
         sidebar_id = str(evidence.get("sidebar_id") or title.id)
         outcomes: list[Any] = []
@@ -1305,8 +1330,13 @@ class PilotRepairToolbox:
         """A paragraph the page cut (at a figure or a page break): its two parts become one block again."""
         finding = item.findings[0]
         evidence = finding.get("evidence") or {}
-        first = self._finding_block(finding)
-        second_id = evidence.get("continuation_block_id") or evidence.get("next_block_id")
+        if evidence.get("join_into_block_id"):
+            # The finding is on the second half; the first half is where it joins.
+            first = self._block(str(evidence["join_into_block_id"]))
+            second_id = evidence.get("block_id") or (finding.get("target") or {}).get("id")
+        else:
+            first = self._finding_block(finding)
+            second_id = evidence.get("continuation_block_id") or evidence.get("next_block_id")
         if second_id:
             second = self._block(str(second_id))
         else:

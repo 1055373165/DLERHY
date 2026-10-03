@@ -100,10 +100,10 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L1.review_blocking": (_RECHECK,),
     # Structure the reading copy draws (lists, sidebars, split paragraphs, listing captions): the parser
     # side's QA rules name these paths in their repair hints; the findings carry the block ids.
-    "L1.list_not_nested": (RepairPath(TOOL_STRUCTURE, "nest_list_items"),),
-    "L1.sidebar_as_section": (RepairPath(TOOL_STRUCTURE, "relabel_as_sidebar"),),
-    "L1.paragraph_split": (RepairPath(TOOL_STRUCTURE, "join_continuation"),),
-    "L4.listing_caption_orphan": (RepairPath(TOOL_STRUCTURE, "link_listing_caption"),),
+    "L1.sublist_as_text": (RepairPath(TOOL_STRUCTURE, "nest_list_items", costs_model=True),),
+    "L1.sidebar_as_text": (RepairPath(TOOL_STRUCTURE, "relabel_as_sidebar", costs_model=True),),
+    "L1.paragraph_split_midsentence": (RepairPath(TOOL_STRUCTURE, "join_continuation", costs_model=True),),
+    "L2.listing_caption_unlinked": (RepairPath(TOOL_STRUCTURE, "link_listing_caption"),),
     # L2 图表
     "L2.figure_regions": (RepairPath(TOOL_FIGURE_REGION, "fit_to_figure"),),
     "L2.caption_swallows_body": (

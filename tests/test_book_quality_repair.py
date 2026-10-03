@@ -257,16 +257,16 @@ class FlakyRetranslationTests(ToolboxCase):
 class HintedStructureEditTests(ToolboxCase):
     """The four structure edits the parser side's QA rules name in their repair hints."""
 
-    def _item(self, check_id: str, hint: str, block_id: str, **evidence) -> WorkItem:
+    def _item(self, check_id: str, hint: str, target_id: str, **evidence) -> WorkItem:
         from book_agent.domain.quality.pilot_repair import paths_for
 
         finding = {
-            "key": f"{check_id}:block:{block_id}",
+            "key": f"{check_id}:block:{target_id}",
             "check_id": check_id,
             "severity": "major",
             "repair": f"structure_edit.{hint}",
-            "location": {"block_id": block_id},
-            "target": {"kind": "block", "id": block_id},
+            "location": {"block_id": target_id},
+            "target": {"kind": "block", "id": target_id},
             "evidence": evidence,
         }
         path = paths_for(check_id, finding)[0]
@@ -286,18 +286,36 @@ class HintedStructureEditTests(ToolboxCase):
         chapter_ids = self.translate()
         dash = self.restyle("Retrieval gives the LLM facts", text="– Retrieval gives the LLM facts from outside sources.", block_type="list_item")
         with self.bench.session_factory() as session:
-            result = self.toolbox(session, chapter_ids).apply(self._item("L1.list_not_nested", "nest_list_items", dash))
+            result = self.toolbox(session, chapter_ids).apply(self._item("L1.sublist_as_text", "nest_list_items", dash))
             session.commit()
             span = session.get(Block, dash).source_span_json
             self.assertEqual((span["list_level"], span["list_kind"]), (2, "dash"))
             self.assertEqual(result.params["items"][0]["block_id"], dash)
+
+    def test_nest_sub_items_set_inside_their_bullet(self) -> None:
+        chapter_ids = self.translate()
+        parent = self.restyle(
+            "Retrieval gives the LLM facts",
+            text="Retrieval gives the LLM facts from outside sources.\n\u2013 Basic data structures\n\u2013 Vector stores",
+            block_type="list_item",
+        )
+        with self.bench.session_factory() as session:
+            item = self._item(
+                "L1.sublist_as_text", "nest_list_items", parent, parent_block_id=parent, inline_items=["\u2013 Basic data structures", "\u2013 Vector stores"]
+            )
+            result = self.toolbox(session, chapter_ids).apply(item)
+            session.commit()
+            items = [session.get(Block, entry["block_id"]) for entry in result.params["items"]]
+            self.assertEqual([block.source_text.strip() for block in items], ["\u2013 Basic data structures", "\u2013 Vector stores"])
+            self.assertTrue(all(block.source_span_json["list_level"] == 2 and block.source_span_json["list_kind"] == "dash" for block in items))
+            self.assertNotIn("Vector stores", session.get(Block, parent).source_text)
 
     def test_relabel_as_sidebar(self) -> None:
         chapter_ids = self.translate()
         title = self.restyle("An LLM answers from", text="Why tokens matter", block_type="heading")
         with self.bench.session_factory() as session:
             body = block_with_text(session, self.bench.document_id, "Retrieval gives the LLM facts").id
-            item = self._item("L1.sidebar_as_section", "relabel_as_sidebar", title, sidebar_block_ids=[title, body])
+            item = self._item("L1.sidebar_as_text", "relabel_as_sidebar", title, title_block_id=title, member_block_ids=[body])
             self.toolbox(session, chapter_ids).apply(item)
             session.commit()
             title_block, body_block = session.get(Block, title), session.get(Block, body)
@@ -322,7 +340,8 @@ class HintedStructureEditTests(ToolboxCase):
             if any(block.block_type not in {BlockType.FIGURE, BlockType.IMAGE, BlockType.CAPTION} and (block.source_span_json or {}).get("pdf_block_role") not in {"header", "footer"} for block in between):
                 self.skipTest("the bench puts text between the paragraphs around its figure")
             first_text, second_text = before.source_text, after.source_text
-            item = self._item("L1.paragraph_split", "join_continuation", before.id, continuation_block_id=after.id)
+            # As the parser side's rule reports it: on the second half, joining into the first.
+            item = self._item("L1.paragraph_split_midsentence", "join_continuation", after.id, block_id=after.id, join_into_block_id=before.id)
             self.toolbox(session, chapter_ids).apply(item)
             session.commit()
             joined = session.get(Block, before.id)
@@ -335,7 +354,7 @@ class HintedStructureEditTests(ToolboxCase):
         caption = self.restyle("The first technique reads", text="Listing 1.1 The retrieval loop", block_type="paragraph")
         code = self.restyle("The second technique masks", text="def retrieve(query):\n    return store.search(query)", block_type="code")
         with self.bench.session_factory() as session:
-            self.toolbox(session, chapter_ids).apply(self._item("L4.listing_caption_orphan", "link_listing_caption", caption, listing_block_id=code))
+            self.toolbox(session, chapter_ids).apply(self._item("L2.listing_caption_unlinked", "link_listing_caption", caption, caption_block_id=caption, code_block_id=code))
             session.commit()
             self.assertEqual(session.get(Block, caption).block_type, BlockType.CAPTION)
             self.assertEqual(session.get(Block, code).source_span_json["linked_caption_block_id"], caption)
