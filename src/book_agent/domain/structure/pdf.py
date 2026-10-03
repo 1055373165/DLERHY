@@ -97,6 +97,7 @@ from book_agent.ingestion.pdf.extract import (
     PdfTextExtractor,
 )
 from book_agent.ingestion.pdf.hyphenation import inline_word_counts, rejoin_line_break_hyphens
+from book_agent.ingestion.pdf.identifiers import inline_identifier_counts, rejoin_split_identifiers
 from book_agent.ingestion.pdf.models import (
     PdfExtraction,
     PdfFileProfile,
@@ -150,6 +151,7 @@ from book_agent.domain.structure.callouts import (
     block_key,
     callout_metadata,
     detect_icon_callouts,
+    is_callout_metadata,
 )
 from book_agent.domain.structure.geometry import bleeds_off_page, horizontal_overlap_ratio, union_bbox
 
@@ -200,6 +202,10 @@ _LISTING_ANNOTATION_PROSE_RE = re.compile(
     r"Required|Required:|Optional:)\s+\w"
     r")",
 )
+
+
+# Markers of a list item split out by its hanging indent (``PdfTextBlock.list_marker``).
+_LIST_ITEM_MARKERS = frozenset({"bullet", "dash", "number"})
 
 
 class PdfStructureRecoveryService:
@@ -634,6 +640,10 @@ class PdfStructureRecoveryService:
                     metadata, flags = self._metadata_for_block(role, raw_block.text, page_context)
                     if all_lines_bold:
                         metadata["pdf_all_lines_bold"] = True
+                    if raw_block.list_marker:
+                        metadata["pdf_list_marker"] = raw_block.list_marker
+                    if raw_block.sidebar_panel is not None:
+                        metadata["pdf_sidebar_panel"] = [page.page_number, *(round(value, 2) for value in raw_block.sidebar_panel)]
                     # Font metadata enrichment
                     metadata["pdf_font_names"] = sorted(raw_block.font_names) if raw_block.font_names else []
                     # Bold lines in a block set wholly in a monospace font are
@@ -1309,6 +1319,8 @@ class PdfStructureRecoveryService:
             return "toc_entry"
         if page_context.is_toc_page and text.casefold() in page_context.toc_entries_by_text:
             return "toc_entry"
+        if raw_block.list_marker in _LIST_ITEM_MARKERS:
+            return "list_item"
         if zone == "bottom" and raw_block.font_size_avg and raw_block.font_size_avg < page_font_median * 0.95:
             if _FOOTNOTE_PATTERN.match(text):
                 return "footnote"
@@ -1325,7 +1337,7 @@ class PdfStructureRecoveryService:
             # then the title over two lines. Each piece of the page's outline
             # title, in heading type, is part of that heading.
             return "heading"
-        if _HEADING_PATTERN.match(text) and len(text) <= 150:
+        if _HEADING_PATTERN.match(text) and len(text) <= 150 and not _is_body_sentence(raw_block, text, page_font_median):
             return "heading"
         if (
             raw_block.font_size_max >= page_font_median * 1.25
@@ -1489,6 +1501,18 @@ class PdfStructureRecoveryService:
         pages: list[PdfPage],
     ) -> bool:
         if previous.role not in {"body", "list_item"} or current.role != "body":
+            return False
+        if _crosses_sidebar_edge(previous, current):
+            return False
+        if current.metadata.get("pdf_list_marker"):
+            # The page set it apart from the list item above: a label inside the list, or the body after it.
+            return False
+        if (
+            previous.metadata.get("pdf_list_marker") in _LIST_ITEM_MARKERS
+            and current.page_start == previous.page_start
+            and current.bbox_regions[0]["bbox"][0] < previous.bbox_regions[0]["bbox"][0] - 2.0
+        ):
+            # Set left of the item's marker: the body after the list, not the item's wrapped text.
             return False
         if previous.block_type not in {BlockType.PARAGRAPH, BlockType.LIST_ITEM} or current.block_type != BlockType.PARAGRAPH:
             return False
@@ -2385,15 +2409,170 @@ class PdfStructureRecoveryService:
         if not recovered:
             return None
         index = len(recovered) - 1
-        while index >= 0 and self._is_ignorable_prose_separator(recovered[index]):
+        across_figure = False
+        while index >= 0 and (
+            self._is_ignorable_prose_separator(recovered[index]) or _is_figure_between_prose(recovered[index])
+        ):
+            across_figure = across_figure or _is_figure_between_prose(recovered[index])
             index -= 1
         if index < 0:
             return None
-        if any(not self._is_ignorable_prose_separator(block) for block in recovered[index + 1 :]):
-            return None
-        if self._should_merge_cross_page_prose_continuation(recovered[index], current, pages):
+        if self._should_merge_cross_page_prose_continuation(recovered[index], current, pages, across_figure=across_figure):
             return index
         return None
+
+    def _link_listing_captions(self, recovered_blocks: list[_RecoveredBlock]) -> None:
+        """Make a listing's title ("Listing 2.1 Loading environment variables") the caption of the code below it.
+
+        Books set the title in a bar right over the code; it names the listing
+        the way a figure's caption names the figure, and reads as a stray
+        paragraph when left on its own.
+        """
+        for index, block in enumerate(recovered_blocks):
+            text = (block.text or "").strip()
+            if (
+                block.block_type not in {BlockType.PARAGRAPH, BlockType.CAPTION}
+                or not _LISTING_TITLE_RE.match(text)
+                or len(text) > 200
+                or block.metadata.get("caption_for_source_anchor")
+            ):
+                continue
+            code_index = index + 1
+            while code_index < len(recovered_blocks) and self._is_ignorable_prose_separator(recovered_blocks[code_index]):
+                code_index += 1
+            if code_index >= len(recovered_blocks):
+                continue
+            code_block = recovered_blocks[code_index]
+            if (
+                code_block.block_type != BlockType.CODE
+                or code_block.metadata.get("linked_caption_source_anchor")
+                or is_callout_metadata(code_block.metadata)
+            ):
+                continue
+            caption_anchor = self._source_anchor(block)
+            code_anchor = self._source_anchor(code_block)
+            block.role = "caption"
+            block.block_type = BlockType.CAPTION
+            block.metadata.update(
+                {
+                    "caption_for_source_anchor": code_anchor,
+                    "caption_for_page": code_block.page_start,
+                    "caption_for_role": "code",
+                }
+            )
+            block.flags = list(dict.fromkeys([*block.flags, "code_caption_linked"]))
+            code_block.metadata.update(
+                {
+                    "linked_caption_text": block.text,
+                    "linked_caption_source_anchor": caption_anchor,
+                    "linked_caption_page": block.page_start,
+                }
+            )
+            code_block.flags = list(dict.fromkeys([*code_block.flags, "caption_linked"]))
+
+    def _group_sidebars(
+        self,
+        recovered_blocks: list[_RecoveredBlock],
+        pages: list[PdfPage],
+    ) -> list[_RecoveredBlock]:
+        """Give the blocks of each sidebar one ``sidebar_id`` and mark its title.
+
+        A sidebar is the text inside one shaded panel, or inside a panel that
+        runs to the foot of a page and the panel continuing it at the head of the
+        next. Its title is the single line at the top of its first panel
+        ("Do you always need an indexing pipeline?"): the sidebar's own title,
+        not a section of the chapter, so it stops being a heading. A
+        "(continued)" line opening the next page's panel is only a label.
+        """
+        page_heights = {page.page_number: page.height for page in pages}
+        sidebar_id: str | None = None
+        current_panel: tuple[int, tuple[float, float, float, float]] | None = None
+        for block in recovered_blocks:
+            panel = _sidebar_panel(block)
+            if panel is None:
+                if self._is_ignorable_prose_separator(block) or _is_page_number_text((block.text or "").split("\n", 1)[0]):
+                    # The running head between a sidebar and its continuation on the next page.
+                    continue
+                sidebar_id = None
+                current_panel = None
+                continue
+            opens_panel = panel != current_panel
+            continued = (
+                opens_panel
+                and sidebar_id is not None
+                and current_panel is not None
+                and _continues_sidebar_panel(current_panel, panel, page_heights)
+            )
+            if opens_panel and not continued:
+                sidebar_id = self._source_anchor(block)
+            current_panel = panel
+            block.metadata["sidebar_id"] = sidebar_id
+            if not (opens_panel and _opens_sidebar_panel(block)):
+                continue
+            if _SIDEBAR_CONTINUED_LABEL.match((block.text or "").strip()):
+                block.metadata["sidebar_continued_label"] = True
+            elif not continued:
+                block.metadata["sidebar_title"] = True
+            else:
+                continue
+            if block.block_type == BlockType.HEADING:
+                block.block_type = BlockType.PARAGRAPH
+                block.role = "body"
+                block.metadata.pop("heading_level", None)
+            block.flags = list(dict.fromkeys([*block.flags, "sidebar_title_detected"]))
+        return recovered_blocks
+
+    def _nest_list_items(self, recovered_blocks: list[_RecoveredBlock]) -> list[_RecoveredBlock]:
+        """Give each list item its level, and mark text set inside a list as the list's own.
+
+        A run of list items opens with a marker kind ("•"); an item of another kind
+        inside the run ("– Basic data structures ...") is a sub-item, level 2,
+        unless the page sets it no further in than the item above. A paragraph
+        after an item that the page indents to the items' text ("If you're
+        unfamiliar with these topics ...", "Cost considerations:") continues the
+        list at level 1 instead of starting the body again.
+        """
+        body_left = _page_body_left_edges(recovered_blocks)
+        run_kind: str | None = None
+        top_item: _RecoveredBlock | None = None
+        last_in_run: _RecoveredBlock | None = None
+        for block in recovered_blocks:
+            if self._is_ignorable_prose_separator(block) or _is_page_number_text((block.text or "").split("\n", 1)[0]):
+                continue
+            marker = str(block.metadata.get("pdf_list_marker") or "")
+            if block.block_type == BlockType.LIST_ITEM and block.role == "list_item":
+                kind = marker if marker in _LIST_ITEM_MARKERS else _list_kind_of_text(block.text)
+                level = 1
+                if run_kind is not None and kind != run_kind and top_item is not None:
+                    nested_on_page = not (
+                        block.page_start == top_item.page_start
+                        and block.bbox_regions[0]["bbox"][0] <= top_item.bbox_regions[0]["bbox"][0] + 2.0
+                    )
+                    level = 2 if nested_on_page else 1
+                if level == 1:
+                    run_kind = kind
+                    top_item = block
+                block.metadata["list_kind"] = kind
+                block.metadata["list_level"] = level
+                last_in_run = block
+                continue
+            if (
+                run_kind is not None
+                and block.role == "body"
+                and block.block_type == BlockType.PARAGRAPH
+                and (
+                    marker == "list_text"
+                    or (_is_indented_past_body(block, body_left) and _sits_under(block, last_in_run))
+                )
+            ):
+                block.metadata["list_level"] = 1
+                block.metadata["list_continuation"] = True
+                last_in_run = block
+                continue
+            run_kind = None
+            top_item = None
+            last_in_run = None
+        return recovered_blocks
 
     def _is_ignorable_prose_separator(self, block: _RecoveredBlock) -> bool:
         if block.role in {"header", "footer", "footnote"}:
@@ -2407,6 +2586,16 @@ class PdfStructureRecoveryService:
         # cross-page sentence continuation chain.
         if block.block_type == BlockType.PARAGRAPH and _is_book_running_header_text(text):
             return True
+        lines = text.strip().splitlines()
+        if (
+            block.block_type == BlockType.PARAGRAPH
+            and len(lines) == 2
+            and _is_page_number_text(lines[0])
+            and len(lines[1]) <= 80
+            and not lines[1].rstrip().endswith((".", "!", "?"))
+        ):
+            # A folio over the running title ("27\nThe RAGOps Stack").
+            return True
         return False
 
     def _should_merge_cross_page_prose_continuation(
@@ -2414,12 +2603,19 @@ class PdfStructureRecoveryService:
         previous: _RecoveredBlock,
         current: _RecoveredBlock,
         pages: list[PdfPage],
+        *,
+        across_figure: bool = False,
     ) -> bool:
-        if previous.role != "body" or current.role != "body":
+        # An item's sentence runs on past a figure or a page break too ("• Rejection rate— ... is also" / "evaluated").
+        if previous.role not in {"body", "list_item"} or current.role != "body":
             return False
-        if previous.block_type != BlockType.PARAGRAPH or current.block_type != BlockType.PARAGRAPH:
+        if previous.block_type not in {BlockType.PARAGRAPH, BlockType.LIST_ITEM} or current.block_type != BlockType.PARAGRAPH:
             return False
-        if current.page_start <= previous.page_end:
+        if current.page_start < previous.page_end or (current.page_start == previous.page_end and not across_figure):
+            # On one page only a figure set between them splits a sentence in two.
+            return False
+        if across_figure and current.font_size_avg < previous.font_size_avg - 1.0:
+            # The figure's own words (its labels, set small) are not the rest of the sentence.
             return False
         if current.page_start > previous.page_end + 2:
             return False
@@ -2430,6 +2626,9 @@ class PdfStructureRecoveryService:
         # Current must NOT itself be a separator (page number, running
         # header) — otherwise we would graft the page header onto the
         # previous body block.
+        if bool(previous.metadata.get("pdf_sidebar_panel")) != bool(current.metadata.get("pdf_sidebar_panel")):
+            # The body before a sidebar does not go on inside it (nor the reverse).
+            return False
         if self._is_ignorable_prose_separator(current):
             return False
 
@@ -2448,7 +2647,8 @@ class PdfStructureRecoveryService:
             return False
         # Mid-word hyphen break or trailing connector (comma, dash, ampersand,
         # open-paren leftover, alphabetic char) signals continuation.
-        if last_char not in {",", "-", "–", "—", "&"} and not last_char.isalpha():
+        # An identifier broken after its underscore ("get_" / "user_by_id") runs on as well.
+        if last_char not in {",", "-", "–", "—", "&", "_"} and not last_char.isalpha():
             return False
 
         first_char = curr_text[0]
@@ -4633,6 +4833,134 @@ def _is_running_prose(text: str) -> bool:
     return sum(1 for words in sentences if words >= 4) >= 2 or any(words >= 12 for words in sentences)
 
 
+# How far (pt) past a page's body edge text must start to be set inside a list.
+_LIST_TEXT_MIN_INDENT = 20.0
+# Further in than this it is another column, not a list's text indent.
+_LIST_TEXT_MAX_INDENT = 60.0
+
+
+def _list_kind_of_text(text: str) -> str:
+    stripped = (text or "").lstrip()
+    if stripped[:1] in {"–", "—"}:
+        return "dash"
+    if stripped[:1].isdigit():
+        return "number"
+    return "bullet"
+
+
+def _page_body_left_edges(blocks: list[_RecoveredBlock]) -> dict[int, float]:
+    """The body edge of left and right pages: where most unlisted body paragraphs of the book start.
+
+    Facing pages mirror their margins, so odd and even pages each have one edge.
+    Counted over the book, not the page: a page with two paragraphs, one of
+    them inside a list, has no majority of its own.
+    """
+    edges: dict[int, Counter[float]] = defaultdict(Counter)
+    for block in blocks:
+        if block.role != "body" or block.block_type != BlockType.PARAGRAPH or block.metadata.get("pdf_list_marker"):
+            continue
+        for region in block.bbox_regions:
+            bbox = region.get("bbox") if isinstance(region, dict) else None
+            if bbox:
+                edges[int(region.get("page_number") or block.page_start) % 2][round(float(bbox[0]))] += 1
+    return {parity: counts.most_common(1)[0][0] for parity, counts in edges.items() if counts}
+
+
+# How close (pt) to its panel's top a sidebar's first line sits when it is the title.
+_SIDEBAR_TITLE_TOP_GAP = 14.0
+_SIDEBAR_CONTINUED_LABEL = re.compile(r"^\(\s*continued\s*\)$", re.IGNORECASE)
+
+
+def _sidebar_panel(block: _RecoveredBlock) -> tuple[int, tuple[float, float, float, float]] | None:
+    panel = block.metadata.get("pdf_sidebar_panel")
+    if not isinstance(panel, (list, tuple)) or len(panel) != 5:
+        return None
+    return int(panel[0]), (float(panel[1]), float(panel[2]), float(panel[3]), float(panel[4]))
+
+
+def _opens_sidebar_panel(block: _RecoveredBlock) -> bool:
+    """A single line at the top of its sidebar panel: the sidebar's title (or its "(continued)" label)."""
+    panel = _sidebar_panel(block)
+    if panel is None or not block.bbox_regions or "\n" in (block.text or "").strip():
+        return False
+    top = float(block.bbox_regions[0]["bbox"][1])
+    return top - panel[1][1] <= _SIDEBAR_TITLE_TOP_GAP and len(block.text or "") <= 120
+
+
+def _is_figure_between_prose(block: _RecoveredBlock) -> bool:
+    """A figure, its caption or its labels: set where the page had room, even inside a sentence."""
+    return (
+        block.role in {"image", "caption"}
+        or block.block_type in {BlockType.IMAGE, BlockType.FIGURE, BlockType.CAPTION}
+        or _is_figure_label_block(block)
+    )
+
+
+def _crosses_sidebar_edge(previous: _RecoveredBlock, current: _RecoveredBlock) -> bool:
+    """Whether two blocks sit on different sides of a sidebar's edge, or are its title and its text."""
+    previous_panel, current_panel = _sidebar_panel(previous), _sidebar_panel(current)
+    if (previous_panel is None) != (current_panel is None):
+        return True
+    if previous_panel is None:
+        return False
+    if previous_panel[0] == current_panel[0] and previous_panel != current_panel:
+        return True
+    return _opens_sidebar_panel(previous) or _opens_sidebar_panel(current)
+
+
+def _continues_sidebar_panel(
+    previous: tuple[int, tuple[float, float, float, float]],
+    current: tuple[int, tuple[float, float, float, float]],
+    page_heights: dict[int, float],
+) -> bool:
+    """A panel that runs to the foot of one page and a panel at the head of the next are one sidebar."""
+    if current[0] != previous[0] + 1:
+        return False
+    previous_height = page_heights.get(previous[0])
+    current_height = page_heights.get(current[0])
+    if not previous_height or not current_height:
+        return False
+    return previous[1][3] >= previous_height * 0.8 and current[1][1] <= current_height * 0.25
+
+
+_CROSS_REFERENCE_SENTENCE = re.compile(r"^(?i:chapter|part|appendix)\s+[\dA-Z]{1,3}\s+[a-z]")
+
+
+def _is_body_sentence(raw_block: PdfTextBlock, text: str, page_font_median: float) -> bool:
+    """A sentence set in the body size ("Chapter 7 explores the various layers ... systems."), not a title.
+
+    The label and its number go on with a lowercase verb; a title ("Appendix Tool Catalog", even
+    run into its first sentence) goes on capitalised.
+    """
+    return bool(
+        _CROSS_REFERENCE_SENTENCE.match(text)
+        and page_font_median > 0
+        and raw_block.font_size_max <= page_font_median * 1.15
+        and not any(bold for _size, bold in raw_block.line_styles)
+        and text.rstrip().endswith((".", "!", "?"))
+        and len(text.split()) >= 6
+    )
+
+
+def _sits_under(block: _RecoveredBlock, above: _RecoveredBlock | None) -> bool:
+    """Whether ``block`` follows ``above`` at a paragraph's distance (or opens the next page)."""
+    if above is None or not above.bbox_regions or not block.bbox_regions:
+        return False
+    if block.page_start != above.page_end:
+        return block.page_start == above.page_end + 1
+    gap = float(block.bbox_regions[0]["bbox"][1]) - float(above.bbox_regions[-1]["bbox"][3])
+    return gap <= max(block.font_size_avg, 8.0) * 2.0
+
+
+def _is_indented_past_body(block: _RecoveredBlock, body_left: dict[int, float]) -> bool:
+    edge = body_left.get(block.page_start % 2)
+    if edge is None or not block.bbox_regions:
+        return False
+    if str(block.metadata.get("pdf_page_family") or "body") != "body":
+        return False
+    return _LIST_TEXT_MIN_INDENT <= float(block.bbox_regions[0]["bbox"][0]) - edge <= _LIST_TEXT_MAX_INDENT
+
+
 def _is_figure_label_block(block: _RecoveredBlock) -> bool:
     """Whether every region of ``block`` holds only labels of a figure measured on its page."""
     regions = block.bbox_regions or []
@@ -4858,6 +5186,25 @@ def _rejoin_line_break_hyphens_pass(service, blocks, context):
     return blocks
 
 
+def _rejoin_split_identifiers_pass(service, blocks, context):
+    """Remove spaces that split an identifier ("final_ answer"), using the book's own identifiers as evidence."""
+    identifier_counts = inline_identifier_counts(
+        line
+        for page in context.extraction.pages
+        for block in page.blocks
+        if not block.ruled_table
+        for line in (block.line_texts or [block.text])
+    )
+    for block in blocks:
+        if block.block_type == BlockType.CODE:
+            continue
+        rejoined = rejoin_split_identifiers(block.text, identifier_counts)
+        if rejoined != block.text:
+            block.text = rejoined
+            block.flags = list(dict.fromkeys([*block.flags, "identifier_rejoined"]))
+    return blocks
+
+
 # Ordered block-shaping passes run by PdfStructureRecoveryService.recover after
 # the per-page block recovery and before chapters are built.
 _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
@@ -4892,5 +5239,9 @@ _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
     BlockRecoveryPass("recover_text_only_figures", _returning("_recover_text_only_figures")),
     BlockRecoveryPass("link_artifact_captions", _in_place("_link_artifact_captions")),
     BlockRecoveryPass("link_artifact_group_contexts", _in_place("_link_artifact_group_contexts", academic_paper="academic_lane")),
+    BlockRecoveryPass("nest_list_items", _returning("_nest_list_items")),
+    BlockRecoveryPass("group_sidebars", _returning("_group_sidebars", "ordered_pages")),
+    BlockRecoveryPass("link_listing_captions", _in_place("_link_listing_captions")),
     BlockRecoveryPass("rejoin_line_break_hyphens", _rejoin_line_break_hyphens_pass),
+    BlockRecoveryPass("rejoin_split_identifiers", _rejoin_split_identifiers_pass),
 )

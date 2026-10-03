@@ -40,6 +40,8 @@ from book_agent.ingestion.pdf.models import (
 )
 from book_agent.ingestion.text import (
     _MONOSPACE_FONT_PATTERNS,
+    _has_monospace_font,
+    _has_prose_body_font,
     _normalize_multiline_text,
     _normalize_text,
     _safe_mean,
@@ -162,6 +164,80 @@ def _is_background_panel(
     left_edges = [extent[0] for _drawing, extent in members]
     right_edges = [extent[1] for _drawing, extent in members]
     return max(left_edges) - min(left_edges) <= 2.0 and max(right_edges) - min(right_edges) <= 2.0
+
+
+# A sidebar's panel spans the text column; the narrower "This chapter covers" box does not.
+_SIDEBAR_MIN_WIDTH_RATIO = 0.6
+_SIDEBAR_MIN_HEIGHT = 30.0
+# Prose size: the panel's text is read, not a diagram's labels.
+_SIDEBAR_MIN_TEXT_SIZE = 8.5
+
+
+def _sidebar_panels(
+    drawings: list[dict[str, Any]],
+    blocks: list[PdfTextBlock],
+    page_width: float,
+) -> list[tuple[float, float, float, float]]:
+    """The shaded panels of the page's sidebars.
+
+    A sidebar is painted as borderless filled rectangles of one colour and one
+    width stacked behind its text, as wide as the text column, and holds prose
+    (its title and paragraphs), not the labels of a figure.
+    """
+    stacks: list[list] = []
+    for drawing in sorted(drawings, key=lambda item: float(item["rect"][1]) if item.get("rect") is not None else 0.0):
+        rect = drawing.get("rect")
+        items = drawing.get("items") or ()
+        if rect is None or drawing.get("fill") is None or drawing.get("color") is not None:
+            continue
+        if not items or any(item[0] != "re" for item in items):
+            continue
+        x0, y0, x1, y1 = (float(value) for value in rect)
+        if x1 - x0 < page_width * _SIDEBAR_MIN_WIDTH_RATIO:
+            continue
+        fill = tuple(round(float(channel), 3) for channel in drawing["fill"])
+        for stack in stacks:
+            if stack[0] == fill and abs(stack[1][0] - x0) <= 2.0 and abs(stack[1][2] - x1) <= 2.0 and y0 <= stack[1][3] + 2.0:
+                stack[1] = (min(stack[1][0], x0), stack[1][1], max(stack[1][2], x1), max(stack[1][3], y1))
+                break
+        else:
+            stacks.append([fill, (x0, y0, x1, y1)])
+    panels = []
+    for _fill, box in stacks:
+        if box[3] - box[1] < _SIDEBAR_MIN_HEIGHT:
+            continue
+        if box[0] <= 1.0 or box[1] <= 1.0 or box[2] >= page_width - 1.0:
+            # Painted to the page's edge: a cover or a page background, not a panel in the text.
+            continue
+        inside = [block for block in blocks if _center_inside(block.bbox, box)]
+        prose_lines = sum(
+            block.line_count
+            for block in inside
+            if not block.figure_label and not block.ruled_table and block.font_size_avg >= _SIDEBAR_MIN_TEXT_SIZE
+        )
+        if prose_lines >= 2:
+            panels.append(box)
+    return panels
+
+
+def _center_inside(bbox: tuple[float, float, float, float], box: tuple[float, float, float, float]) -> bool:
+    center_x, center_y = (bbox[0] + bbox[2]) / 2.0, (bbox[1] + bbox[3]) / 2.0
+    return box[0] <= center_x <= box[2] and box[1] <= center_y <= box[3]
+
+
+def _mark_sidebar_blocks(
+    blocks: list[PdfTextBlock],
+    drawings: list[dict[str, Any]],
+    page_width: float,
+) -> list[PdfTextBlock]:
+    panels = _sidebar_panels(drawings, blocks, page_width)
+    if not panels:
+        return blocks
+    marked = []
+    for block in blocks:
+        panel = next((box for box in panels if _center_inside(block.bbox, box)), None)
+        marked.append(replace(block, sidebar_panel=panel) if panel is not None and not block.figure_label else block)
+    return marked
 
 
 _MIN_RULED_TABLE_CELLS = 4
@@ -357,6 +433,204 @@ def _split_enumerated_line_blocks(
                 )
             )
     return result
+
+
+_BULLET_ITEM_LINE = re.compile(r"^[•●◦▪]\s+\S")
+_DASH_ITEM_LINE = re.compile(r"^[–—]\s+\S")
+_NUMBER_ITEM_LINE = re.compile(r"^(\d{1,3})[.)]?\s+[^\d\s]")
+# A table-of-contents line ends in its page number ("1 What is an AI agent? 1").
+_TRAILING_PAGE_NUMBER = re.compile(r"\s\d{1,4}$")
+# How far (pt) two lines may start apart and still be set at the same indent.
+_INDENT_TOLERANCE = 2.0
+
+
+def _list_item_kinds(lines: list[str], line_bboxes: list[tuple[float, float, float, float]]) -> list[str]:
+    """The list marker each line starts with: "bullet", "dash", "number" or "".
+
+    A number counts only as the next of a run of numbers set at one indent
+    ("1 Data layer", "2 Model layer"): a line that happens to start with a year
+    is not a list item.
+    """
+    kinds = [
+        "bullet" if _BULLET_ITEM_LINE.match(line) else "dash" if _DASH_ITEM_LINE.match(line) else ""
+        for line in lines
+    ]
+    numbered = [(index, int(match.group(1))) for index, line in enumerate(lines) if (match := _NUMBER_ITEM_LINE.match(line))]
+    if len(numbered) >= 2:
+        first_x = line_bboxes[numbered[0][0]][0]
+        numbers = [number for _index, number in numbered]
+        same_indent = all(abs(line_bboxes[index][0] - first_x) <= _INDENT_TOLERANCE for index, _number in numbered)
+        toc_like = sum(bool(_TRAILING_PAGE_NUMBER.search(lines[index])) for index, _number in numbered) * 2 >= len(numbered)
+        if same_indent and not toc_like and numbers == list(range(numbers[0], numbers[0] + len(numbers))):
+            for index, _number in numbered:
+                kinds[index] = "number"
+    return kinds
+
+
+def _split_hanging_list_blocks(
+    blocks: list[PdfTextBlock],
+    line_bboxes_by_block: dict[int, list[tuple[float, float, float, float]]],
+) -> list[PdfTextBlock]:
+    """Split a block that holds several items of a list set with hanging indents.
+
+    A book sets an item's marker at one indent and wraps its text further in;
+    a sub-list ("– Basic data structures ...") sits at the parent's text indent
+    with its own hanging indent. The text layer often hands a bullet, its dash
+    sub-items and the paragraph after the list over as one block. Each item
+    becomes its own block marked with its kind; a line set at an item's text
+    indent without a marker ("Cost considerations:") is "list_text"; lines set
+    left of the list's markers are "body" again.
+    """
+    result: list[PdfTextBlock] = []
+    for block in blocks:
+        line_bboxes = line_bboxes_by_block.get(id(block))
+        lines = block.line_texts
+        if (
+            not line_bboxes
+            or len(line_bboxes) != len(lines)
+            or block.ruled_table
+            or (block.font_names and _has_monospace_font(block.font_names) and not _has_prose_body_font(block.font_names))
+        ):
+            result.append(block)
+            continue
+        kinds = _list_item_kinds(lines, line_bboxes)
+        marked = [index for index, kind in enumerate(kinds) if kind]
+        if (marked and sum(bool(_TRAILING_PAGE_NUMBER.search(lines[index])) for index in marked) * 2 >= len(marked)) or any(
+            line.strip().isdigit() for line in lines
+        ):
+            # Table-of-contents entries ("• LLMs and the need for RAG 3", a chapter
+            # number on its own line) are not a list of the text.
+            result.append(block)
+            continue
+        if not any(kinds[1:]) and not (kinds[0] and _leaves_list(kinds, line_bboxes)):
+            result.append(replace(block, list_marker=kinds[0]) if kinds[0] in {"bullet", "dash"} else block)
+            continue
+        # (first line, kind, marker indent) per segment.
+        segments: list[list] = []
+        list_indent: float | None = None
+        for index, (kind, bbox) in enumerate(zip(kinds, line_bboxes)):
+            x0 = bbox[0]
+            if kind:
+                segments.append([index, kind, x0])
+                list_indent = x0 if list_indent is None else min(list_indent, x0)
+                continue
+            if not segments:
+                # Lines before the first item: the end of whatever the block above holds.
+                segments.append([index, "", x0])
+                continue
+            _start, current_kind, current_x = segments[-1]
+            if current_kind in {"", "body", "list_text"}:
+                # A paragraph's own lines, first-line indent or not.
+                continue
+            if x0 > current_x + _INDENT_TOLERANCE:
+                continue  # the item's hanging text
+            if current_kind in {"bullet", "number"} and x0 >= current_x - _INDENT_TOLERANCE:
+                # Wrapped flush with its marker (a reference list): still the item. Only under a
+                # sub-item is text at the marker's indent the parent item's own ("Cost considerations:").
+                continue
+            inside = list_indent is not None and x0 >= list_indent - _INDENT_TOLERANCE
+            segments.append([index, "list_text" if inside else "body", x0])
+        if len(segments) < 2:
+            result.append(block)
+            continue
+        for position, (start, kind, _x) in enumerate(segments):
+            end = segments[position + 1][0] if position + 1 < len(segments) else len(lines)
+            segment_lines = list(lines[start:end])
+            segment_bboxes = line_bboxes[start:end]
+            piece = replace(
+                block,
+                text=_normalize_multiline_text("\n".join(segment_lines)),
+                bbox=_union_bbox(segment_bboxes),
+                line_texts=segment_lines,
+                line_count=len(segment_lines),
+                line_styles=block.line_styles[start:end],
+                raw_text=None,
+                list_marker=kind,
+            )
+            line_bboxes_by_block[id(piece)] = segment_bboxes
+            result.append(piece)
+    return result
+
+
+def _mark_numbered_list_blocks(blocks: list[PdfTextBlock]) -> list[PdfTextBlock]:
+    """Mark a run of blocks that are the consecutive items of a numbered list ("1 Data layer—...").
+
+    The text layer may hand each item (and each wrapped line of an item) over
+    as its own block. Items are blocks opening with the next number at one
+    indent; a block between two of them set right of the number (the item's
+    wrapped text) joins the item before it.
+    """
+    result: list[PdfTextBlock] = []
+    sizes = sorted(block.font_size_avg for block in blocks if block.font_size_avg > 0)
+    # Footnotes ("1 First footnote ...") are numbered too, but set below the body size.
+    min_item_size = sizes[len(sizes) // 2] * 0.9 if sizes else 0.0
+    index = 0
+    while index < len(blocks):
+        block = blocks[index]
+        start = (
+            _NUMBER_ITEM_LINE.match(block.line_texts[0])
+            if block.line_texts and not block.list_marker and block.font_size_max >= min_item_size
+            else None
+        )
+        if start is None:
+            result.append(block)
+            index += 1
+            continue
+        marker_x = block.bbox[0]
+        expected = int(start.group(1))
+        items: list[list[PdfTextBlock]] = []
+        cursor = index
+        while cursor < len(blocks):
+            candidate = blocks[cursor]
+            first_line = candidate.line_texts[0] if candidate.line_texts else ""
+            match = _NUMBER_ITEM_LINE.match(first_line)
+            if (
+                match
+                and int(match.group(1)) == expected
+                and abs(candidate.bbox[0] - marker_x) <= _INDENT_TOLERANCE
+                and not candidate.list_marker
+                and not _TRAILING_PAGE_NUMBER.search(first_line)
+            ):
+                items.append([candidate])
+                expected += 1
+                cursor += 1
+                continue
+            if items and not match and candidate.bbox[0] > marker_x + _INDENT_TOLERANCE and not candidate.list_marker:
+                # Wrapped text of the item above, set at its hanging indent.
+                if candidate.bbox[1] - items[-1][-1].bbox[3] <= max(candidate.font_size_avg, 1.0):
+                    items[-1].append(candidate)
+                    cursor += 1
+                    continue
+            break
+        if len(items) < 2:
+            result.append(block)
+            index += 1
+            continue
+        for pieces in items:
+            head = pieces[0]
+            lines = [line for piece in pieces for line in piece.line_texts]
+            result.append(
+                replace(
+                    head,
+                    text=_normalize_multiline_text("\n".join(lines)),
+                    bbox=_union_bbox([piece.bbox for piece in pieces]),
+                    line_texts=lines,
+                    line_count=len(lines),
+                    span_count=sum(piece.span_count for piece in pieces),
+                    line_styles=tuple(style for piece in pieces for style in piece.line_styles),
+                    font_names=frozenset().union(*(piece.font_names for piece in pieces)),
+                    raw_text=None,
+                    list_marker="number",
+                )
+            )
+        index = cursor
+    return result
+
+
+def _leaves_list(kinds: list[str], line_bboxes: list[tuple[float, float, float, float]]) -> bool:
+    """Whether a block that opens with an item goes on, left of the item's marker, as body text."""
+    marker_x = line_bboxes[0][0]
+    return any(not kind and bbox[0] < marker_x - _INDENT_TOLERANCE for kind, bbox in zip(kinds[1:], line_bboxes[1:]))
 
 
 def _split_mid_block_captions(
@@ -605,6 +879,8 @@ class PyMuPDFTextExtractor:
                         drawings, visible_drawing_rects = [], None
                 blocks = _split_vector_bullet_blocks(blocks, line_bboxes_by_block, drawings)
                 blocks = _split_enumerated_line_blocks(blocks, line_bboxes_by_block)
+                blocks = _split_hanging_list_blocks(blocks, line_bboxes_by_block)
+                blocks = _mark_numbered_list_blocks(blocks)
                 blocks = _split_mid_block_captions(blocks, line_bboxes_by_block)
                 blocks = self._merge_ruled_table_blocks(page, blocks, drawings)
                 text_lines = page_text_lines(text_dict, float(page.rect.width), float(page.rect.height))
@@ -624,6 +900,7 @@ class PyMuPDFTextExtractor:
                         replace(block, figure_label=True) if is_label and not block.ruled_table else block
                         for block, is_label in zip(blocks, labels)
                     ]
+                blocks = _mark_sidebar_blocks(blocks, drawings, float(page.rect.width))
 
                 # Text-layer sanity assessment (PDF v2 M1.2). Runs per page
                 # over the concatenated text of all non-image blocks. A failure
