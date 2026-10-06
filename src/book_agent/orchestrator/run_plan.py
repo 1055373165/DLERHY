@@ -134,8 +134,11 @@ class RunPlan:
 
     @property
     def tolerates_blockers(self) -> bool:
-        """A pilot finishes with its blocking issues listed for the reader instead of failing on them."""
-        return self.is_pilot
+        """A run that ends with the layered QA (a pilot, or a whole book with ``book_qa``) finishes with
+        its blocking issues handed to that QA and its repair, which fix them or ask the reader, instead
+        of failing on them in the rule review. A whole-book run of the Agent book failed on 2026-10-06
+        over three layout-risk flags (code annotations, a figure beside text, a two-column index)."""
+        return self.is_pilot or "book_qa" in self.stages
 
     def includes(self, stage: str) -> bool:
         return stage in self.stages

@@ -102,6 +102,10 @@ STOP_REASONS: dict[str, dict[str, Any]] = {
         "link": SETTINGS_LINK,
         "needs_person": True,
     },
+    "provider.unreachable": {
+        "text": "模型服务暂时连不上，已自动暂停，已翻译的部分都保留。稍后点「继续翻译」接着翻。",
+        "needs_person": True,
+    },
     "stage.evidence_failed": {"text": "有一个必需步骤没有完成。点「重试」只重做失败的部分。"},
     "runner.unhandled_exception": {"text": "翻译遇到了内部错误。点「重试」；如果反复出现，请联系管理员。"},
 }

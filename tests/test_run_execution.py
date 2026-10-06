@@ -714,6 +714,65 @@ class RunExecutionServiceTests(unittest.TestCase):
         self.assertEqual(summary.work_items.status_counts["retryable_failed"], 1)
         self.assertEqual(summary.work_items.status_counts["terminal_failed"], 0)
 
+    def _claim_one_packet(self, *, max_retry_count: int) -> tuple[str, object]:
+        run_id = self._create_running_run(
+            budget=RunBudgetSummary(
+                max_wall_clock_seconds=None,
+                max_total_cost_usd=None,
+                max_total_token_in=None,
+                max_total_token_out=None,
+                max_retry_count_per_work_item=max_retry_count,
+                max_consecutive_failures=24,
+                max_parallel_workers=1,
+                max_parallel_requests_per_provider=1,
+                max_auto_followup_attempts=1,
+            )
+        )
+        with self.session_factory() as session:
+            execution = RunExecutionService(RunControlRepository(session))
+            execution.seed_translate_work_items(run_id=run_id, packet_ids=[str(uuid4())])
+            claimed = execution.claim_next_translate_work_item(
+                run_id=run_id, worker_name="test.translate", worker_instance_id="worker-7", lease_seconds=60
+            )
+            assert claimed is not None
+            execution.start_work_item(lease_token=claimed.lease_token, lease_seconds=60)
+            session.commit()
+        return run_id, claimed
+
+    def _fail(self, run_id: str, claimed, exc: Exception):
+        executor = DocumentRunExecutor(session_factory=self.session_factory, export_root="/tmp", translation_worker=None)
+        executor._complete_failure(run_id=run_id, claimed=claimed, exc=exc, stage_key="translate")
+        with self.session_factory() as session:
+            return RunControlService(RunControlRepository(session)).get_run_summary(run_id)
+
+    def test_a_provider_outage_pauses_the_run_once_an_item_is_out_of_retries(self) -> None:
+        from book_agent.workers.providers.openai_compatible import ProviderNetworkError
+
+        # 2026-10-06: a whole-book run failed after DeepSeek calls timed out for half an hour.
+        run_id, claimed = self._claim_one_packet(max_retry_count=1)
+        summary = self._fail(run_id, claimed, ProviderNetworkError("timed out: "))
+
+        self.assertEqual(summary.status, "paused")
+        self.assertEqual(summary.stop_reason, "provider.unreachable")
+        self.assertEqual(summary.work_items.status_counts["retryable_failed"], 1)
+        self.assertEqual(summary.work_items.status_counts["terminal_failed"], 0)
+
+    def test_a_provider_outage_with_retries_left_just_retries(self) -> None:
+        from book_agent.workers.providers.openai_compatible import ProviderNetworkError
+
+        run_id, claimed = self._claim_one_packet(max_retry_count=3)
+        summary = self._fail(run_id, claimed, ProviderNetworkError("timed out: "))
+
+        self.assertEqual(summary.status, "running")
+        self.assertEqual(summary.work_items.status_counts["retryable_failed"], 1)
+
+    def test_a_bad_request_out_of_retries_still_fails_the_item(self) -> None:
+        run_id, claimed = self._claim_one_packet(max_retry_count=1)
+        summary = self._fail(run_id, claimed, ProviderHTTPError(400, "bad request"))
+
+        self.assertNotEqual(summary.stop_reason, "provider.unreachable")
+        self.assertEqual(summary.work_items.status_counts["terminal_failed"], 1)
+
     def test_run_control_isoformat_treats_naive_sqlite_datetimes_as_utc(self) -> None:
         with self.session_factory() as session:
             control = RunControlService(RunControlRepository(session))

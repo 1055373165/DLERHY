@@ -74,7 +74,10 @@ class PilotPlanTests(unittest.TestCase):
             DocumentRunType.TRANSLATE_FULL,
             {"run_request": {"terminology": "skip", "model_reviewed_chapter_ids": ["c1"]}},
         )
-        self.assertFalse(plan.is_pilot or plan.tolerates_blockers)
+        self.assertFalse(plan.is_pilot)
+        # It ends with the layered QA, so blocking review issues go to book_qa/book_repair, not to a failed run.
+        self.assertIn("book_qa", plan.stages)
+        self.assertTrue(plan.tolerates_blockers)
         self.assertIsNone(plan.chapter_ids)
         self.assertIsNone(plan.packet_ids)
         self.assertNotIn("terminology", plan.stages)

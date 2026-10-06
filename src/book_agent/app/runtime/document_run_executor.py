@@ -87,7 +87,7 @@ from book_agent.services.export_qa import AUDITED_EXPORT_TYPES, ExportQaService
 from book_agent.services.run_control import RunControlService
 from book_agent.services.run_execution import ClaimedRunWorkItem, RunExecutionService
 from book_agent.services.workflows import DocumentWorkflowService
-from book_agent.workers.failures import classify_failure
+from book_agent.workers.failures import PROVIDER_UNREACHABLE, classify_failure
 from book_agent.workers.translator import TranslationWorker
 
 
@@ -1919,6 +1919,13 @@ class DocumentRunExecutor:
             error_detail["export_unavailable"] = {"reason": exc.reason}
         with session_scope(self.session_factory) as session:
             execution = self._run_execution_service(session)
+            if (
+                pause_reason is None
+                and failure.provider_outage
+                and execution.retries_exhausted(claimed.work_item_id, run_id)
+            ):
+                # Out of retries only because the provider was unreachable: pause, keep the item.
+                pause_reason = PROVIDER_UNREACHABLE
             execution.complete_work_item_failure(
                 lease_token=claimed.lease_token,
                 error_class=error_class,

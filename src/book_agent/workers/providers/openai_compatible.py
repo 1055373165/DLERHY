@@ -20,6 +20,7 @@ concerns are implemented once:
 from __future__ import annotations
 
 import json
+import logging
 import random
 import re
 import threading
@@ -39,6 +40,8 @@ from book_agent.translation.contracts import (
 )
 from book_agent.workers.providers.pricing import price_multiplier_at
 from book_agent.workers.translator import TranslationModelClient, TranslationPromptRequest
+
+logger = logging.getLogger(__name__)
 
 # HTTP statuses worth another attempt: request timeout, conflict, too early,
 # rate limit and every server-side error. Both the client retry loop and the
@@ -186,6 +189,12 @@ class HttpxJSONTransport:
     """
 
     _CONNECT_TIMEOUT_SECONDS = 10.0
+    # Pooled connections can wedge: on 2026-10-06 every request through the backend's pool timed
+    # out for half an hour while a fresh process reached the same provider in two seconds. After
+    # this many timeouts within the window, the pool is dropped and the next request opens new
+    # connections; requests still on the old pool finish or fail on their own.
+    _RECYCLE_AFTER_TIMEOUTS = 4
+    _RECYCLE_WINDOW_SECONDS = 180.0
 
     def __init__(
         self,
@@ -196,6 +205,8 @@ class HttpxJSONTransport:
     ) -> None:
         self._client = client
         self._lock = threading.Lock()
+        self._timeouts: list[float] = []
+        self.recycle_count = 0
         self._limits = httpx.Limits(
             max_connections=max_connections,
             max_keepalive_connections=max_keepalive_connections,
@@ -207,6 +218,24 @@ class HttpxJSONTransport:
                 if self._client is None:
                     self._client = httpx.Client(limits=self._limits, follow_redirects=False)
         return self._client
+
+    def _note_timeout(self) -> None:
+        now = time.monotonic()
+        with self._lock:
+            self._timeouts = [at for at in self._timeouts if now - at < self._RECYCLE_WINDOW_SECONDS] + [now]
+            if len(self._timeouts) < self._RECYCLE_AFTER_TIMEOUTS or self._client is None:
+                return
+            stale, self._client = self._client, None
+            self._timeouts = []
+            self.recycle_count += 1
+        logger.warning("Provider requests keep timing out; opening a fresh connection pool.")
+        # Not closed: other threads may still be reading from it; it is collected once they finish.
+        del stale
+
+    def _note_success(self) -> None:
+        if self._timeouts:
+            with self._lock:
+                self._timeouts = []
 
     def close(self) -> None:
         with self._lock:
@@ -244,9 +273,11 @@ class HttpxJSONTransport:
                 "Provider disconnected before sending a complete response."
             ) from exc
         except httpx.TimeoutException as exc:
+            self._note_timeout()
             raise ProviderNetworkError(f"timed out: {exc}") from exc
         except httpx.HTTPError as exc:
             raise ProviderNetworkError(str(exc) or type(exc).__name__) from exc
+        self._note_success()
         if response.status_code >= 400:
             raise ProviderHTTPError(
                 response.status_code,
@@ -333,6 +364,7 @@ class HttpxJSONTransport:
                 "Provider disconnected before sending a complete response."
             ) from exc
         except httpx.TimeoutException as exc:
+            self._note_timeout()
             raise ProviderNetworkError(f"timed out: {exc}") from exc
         except httpx.HTTPError as exc:
             raise ProviderNetworkError(str(exc) or type(exc).__name__) from exc
