@@ -1278,8 +1278,9 @@ class ApiWorkflowTests(unittest.TestCase):
         self.assertEqual(resumed.status_code, 200)
 
         terminal = self._wait_for_run_terminal(run_id, timeout_seconds=20.0)
-        # Review is required for TRANSLATE_FULL runs: unresolved blockers fail the run.
-        self.assertEqual(terminal["status"], "failed")
+        # A whole-book run ends with book_qa/book_repair: unresolved blockers go to them (and from there
+        # to the reader) instead of failing the run; the partial repair progress is still kept.
+        self.assertEqual(terminal["status"], "succeeded", terminal.get("stop_reason"))
 
         with self.session_factory() as session:
             remaining_blocking_issue_count = session.scalar(
@@ -1289,7 +1290,9 @@ class ApiWorkflowTests(unittest.TestCase):
                     ReviewIssue.status.in_([IssueStatus.OPEN, IssueStatus.TRIAGED]),
                 )
             )
-            self.assertEqual(remaining_blocking_issue_count, 1)
+            # The unrepaired omission, and the export gate's alignment issue for the same sentence (the
+            # run now reaches the exports instead of stopping at review).
+            self.assertEqual(remaining_blocking_issue_count, 2)
 
             open_term_conflicts = session.scalar(
                 select(func.count(ReviewIssue.id)).where(
@@ -1314,7 +1317,9 @@ class ApiWorkflowTests(unittest.TestCase):
             pipeline = dict((run.status_detail_json or {}).get("pipeline") or {})
             cached_stages = pipeline.get("_cached_pipeline_stages") or pipeline.get("stages") or {}
             review_stage = dict(cached_stages.get("review") or {})
-            self.assertEqual(review_stage.get("status"), "failed")
+            # The review stage hands what it could not repair to book_qa rather than failing.
+            self.assertEqual(review_stage.get("status"), "succeeded")
+            self.assertEqual(int(review_stage.get("blockers_left_for_reader") or 0), 1)
             self.assertTrue(review_stage.get("blocker_repair_requested"))
             self.assertTrue(review_stage.get("blocker_repair_applied"))
             self.assertGreaterEqual(int(review_stage.get("blocker_repair_execution_count") or 0), 1)
