@@ -369,6 +369,14 @@ class RunExecutionService:
         )
         return self._to_claimed_run_work_item(ClaimedWorkItemBundle(work_item=work_item, worker_lease=lease))
 
+    def retries_exhausted(self, work_item_id: str, run_id: str) -> bool:
+        """Whether one more failed attempt would make this work item terminal."""
+        budget = self.repository.get_budget_for_run(run_id)
+        max_retry_count = budget.max_retry_count_per_work_item if budget is not None else None
+        if max_retry_count is None:
+            max_retry_count = DEFAULT_MAX_ATTEMPTS_PER_WORK_ITEM
+        return self.repository.get_work_item(work_item_id).attempt >= max_retry_count
+
     def complete_work_item_failure(
         self,
         *,

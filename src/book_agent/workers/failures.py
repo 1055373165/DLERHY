@@ -38,6 +38,21 @@ class FailureClassification:
     def retryable(self) -> bool:
         return self.disposition == FailureDisposition.RETRY
 
+    @property
+    def provider_outage(self) -> bool:
+        """The provider could not be reached or was overloaded: nothing about this work item is wrong."""
+        if self.reason in {"provider.transport", "network"}:
+            return True
+        if self.reason.startswith("provider.http_"):
+            code = self.reason.removeprefix("provider.http_")
+            return code.isdigit() and is_retryable_http_status(int(code))
+        return False
+
+
+# A work item that ran out of retries only because the provider was unreachable pauses the run
+# instead of failing it: what was translated stays, and 「继续翻译」 picks up where it stopped.
+PROVIDER_UNREACHABLE = "provider.unreachable"
+
 
 def classify_failure(exc: BaseException) -> FailureClassification:
     if isinstance(exc, ProviderHTTPError):
