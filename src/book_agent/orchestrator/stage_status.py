@@ -283,7 +283,15 @@ class StageStatusCalculator:
                 item.status == WorkItemStatus.SUCCEEDED and (item.output_artifact_refs_json or {}).get("degraded")
                 for item in items
             )
-            if turn is not None:
+            retry_pending = any(
+                item.status in {WorkItemStatus.PENDING, WorkItemStatus.LEASED, WorkItemStatus.RUNNING, WorkItemStatus.RETRYABLE_FAILED}
+                for item in items
+            )
+            if turn is not None and retry_pending and turn.status == AgentTurnStatus.FAILED:
+                # The turn died on a retryable error (a dropped connection) and its work item will run again:
+                # the stage is still going, not failed. A whole-book run failed over this on 2026-10-06.
+                status = StageStatus.RUNNING
+            elif turn is not None:
                 if turn.status == AgentTurnStatus.FAILED:
                     # An advisory agent that gave up finishes its stage as degraded, not failed.
                     status = StageStatus.SUCCEEDED if degraded else StageStatus.FAILED
