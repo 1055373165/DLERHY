@@ -175,6 +175,24 @@ class AgentStageExecutionTests(unittest.TestCase):
             self.assertIn("ProviderHTTPError", stage["degraded_reason"])
             self.assertTrue(StageGateKeeper(session).can_start(self.run_id, self.document_id, "translate", plan_stages=plan.stages))
 
+    def test_a_dropped_connection_leaves_the_stage_running_for_its_retry(self) -> None:
+        from book_agent.workers.providers.openai_compatible import ProviderNetworkError
+
+        class _DroppedModel:
+            def step(self, *, model_name, messages, tools):
+                raise ProviderNetworkError("Provider request failed: [Errno 54] Connection reset by peer")
+
+        plan = self._plan()
+        executor = self._executor(_DroppedModel())
+        executor._process_agent_stage(self.run_id, "terminology", plan)
+        executor._process_agent_stage(self.run_id, "terminology", plan)
+        self._join_work_threads(executor)
+        with self.session_factory() as session:
+            (item,) = session.scalars(select(WorkItem).where(WorkItem.run_id == self.run_id, WorkItem.stage == WorkItemStage.AGENT)).all()
+            self.assertEqual(item.status, WorkItemStatus.RETRYABLE_FAILED)
+        # The turn failed, but its work item runs again: a whole-book run must not fail over this.
+        self.assertEqual(self._stage("terminology"), StageStatus.RUNNING)
+
     def test_awaiting_approval_blocks_the_stage_until_a_decision_then_resumes(self) -> None:
         model = _ScriptedModel(
             [
