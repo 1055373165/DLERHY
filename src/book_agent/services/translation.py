@@ -46,7 +46,12 @@ from book_agent.translation.contracts import (
     TranslationWorkerResult,
 )
 from book_agent.translation.heuristics import DEFAULT_HEURISTICS
-from book_agent.translation.output_validation import OutputCorrection, OutputRejection, OutputValidator
+from book_agent.translation.output_validation import (
+    OutputCorrection,
+    OutputRejection,
+    OutputValidator,
+    callout_line_sentence_ids,
+)
 from book_agent.workers.failures import classify_failure
 from book_agent.workers.translator import (
     EchoTranslationWorker,
@@ -563,6 +568,7 @@ class TranslationService:
             worker_result.output,
             source_texts={sentence.id: sentence.source_text or "" for sentence in bundle.current_sentences},
             locked_terms=prepared.locked_terms,
+            line_locked=callout_line_sentence_ids(bundle.current_sentences),
         )
         artifacts = self._build_artifacts(bundle, worker_result, compiled_context_packet, worker_metadata)
         artifacts.translation_run.error_code = validation.error_code

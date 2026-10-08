@@ -127,6 +127,7 @@ def render_callout_html(
 
 
 # After the end of a Chinese sentence (closing quotes stay with it).
+_ZH_LINE_BREAK = re.compile(r"\n+")
 _ZH_SENTENCE_END = re.compile(r"(?<=[。！？!?])(?![”’」』）)])")
 # Before a labelled line ("行动：…" "响应：…"): prompt lines often start with a short label.
 _ZH_LABEL_START = re.compile(r"\s+(?=[一-鿿]{1,6}\s?\d*\s?[：:])")
@@ -158,7 +159,8 @@ def callout_target_text(
             continue
         pieces = [text]
         if len(sentence_ids) > 1:
-            for boundary in (_ZH_SENTENCE_END, _ZH_LABEL_START):
+            # The model's own line breaks first: one line per source line when it kept them.
+            for boundary in (_ZH_LINE_BREAK, _ZH_SENTENCE_END, _ZH_LABEL_START):
                 pieces = [piece.strip() for piece in boundary.split(text) if piece.strip()]
                 if len(pieces) == len(sentence_ids):
                     break
@@ -184,11 +186,14 @@ def callout_target_text(
             # Its translation is in an earlier line's (the model joined the lines).
             continue
         translated = True
-        line = render_repair.inline_join_target_text(texts).replace("\n", " ").strip()
-        if _LEADING_BULLET_GLYPH.match(source_line) and not _LEADING_BULLET_GLYPH.match(line):
+        # A translation that kept the prompt's line breaks but could not be split line by line keeps
+        # them: the reader sees the prompt's lines, not one run-on line.
+        joined = render_repair.inline_join_target_text(texts)
+        own_lines = [part.strip() for part in joined.split("\n") if part.strip()] or [""]
+        if _LEADING_BULLET_GLYPH.match(source_line) and not _LEADING_BULLET_GLYPH.match(own_lines[0]):
             # The translation dropped the line's bullet: it is still an item of the callout's list.
-            line = f"• {line}"
-        lines.append(line)
+            own_lines[0] = f"• {own_lines[0]}"
+        lines.extend(own_lines)
     return "\n".join(lines) if translated else ""
 
 
