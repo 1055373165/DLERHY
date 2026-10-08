@@ -357,6 +357,43 @@ class PilotRunTests(unittest.TestCase):
         self.assertEqual((overview["pilot"]["state"], overview["translation"]["scope"]), ("skipped", "book"))
         self.assertEqual(self.client.post(f"/v1/documents/{document_id}/pilot", json={}).status_code, 409)
 
+    def test_after_the_book_qa_a_standalone_export_is_not_stopped_by_listed_blockers(self) -> None:
+        from book_agent.services.workflows import DocumentWorkflowService
+
+        book = [
+            *BOOK[:2],
+            ("1 Why agents", "ch1.xhtml", _chapter("1 Why agents", "Alpha", extra="Selection bias matters. ")),
+            *BOOK[3:],
+        ]
+        document_id = self._import(book)
+        self.app.state.translation_worker = RepairLoopBrokenWorker()  # always leaves one sentence out
+        created = self.client.post(
+            "/v1/runs",
+            json={"document_id": document_id, "run_type": "translate_full", "requested_by": "t", "status_detail_json": {}},
+        )
+        run_id = created.json()["run_id"]
+        self.client.post(f"/v1/runs/{run_id}/resume", json={"actor_id": "t"})
+        terminal = self._wait(run_id)
+        self.assertEqual(terminal["status"], "succeeded", terminal.get("stop_reason"))
+        with self.session_factory() as session:
+            workflow = DocumentWorkflowService(
+                session, export_root=getattr(self.app.state, "export_root", "artifacts/exports"), translation_worker=None
+            )
+            self.assertGreaterEqual(
+                session.scalar(
+                    select(func.count(ReviewIssue.id)).where(
+                        ReviewIssue.document_id == document_id,
+                        ReviewIssue.blocking.is_(True),
+                        ReviewIssue.status.in_([IssueStatus.OPEN, IssueStatus.TRIAGED]),
+                    )
+                ),
+                1,
+            )
+            # The book QA has judged the book: its blockers are listed, and the export goes ahead.
+            result = workflow.export_document(document_id, ExportType.BILINGUAL_HTML)
+            self.assertIsNotNone(result)  # no ExportGateError
+            session.commit()
+
     def test_a_pilot_with_blockers_left_still_finishes_and_exports_with_them_listed(self) -> None:
         book = [
             *BOOK[:2],
