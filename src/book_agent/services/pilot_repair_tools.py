@@ -1829,6 +1829,17 @@ class PilotRepairToolbox:
             )
         except StructureEditRejected as exc:
             raise NotApplicable(str(exc)) from exc
+        # The part's running footer ("2 building your first llm agent"), read as a footnote: it repeats
+        # the name, now a heading, and leaves the reading copy.
+        footers = []
+        name_key = _norm(name)
+        for block in blocks:
+            if block.block_type not in {BlockType.FOOTNOTE, BlockType.PARAGRAPH} or block.id == intro.id:
+                continue
+            number = re.match(r"\s*\d{1,4}\s+(.+)$", " ".join((block.source_text or "").split()))
+            if number and _norm(number.group(1)) == name_key:
+                self._hide(block, "部分的页脚（页码 + 部分名称）")
+                footers.append(block.id)
         packets: list[str] = []
         for outcome in (split, relabel):
             packets.extend(getattr(outcome.fork, "retranslate_packet_ids", []) or [] if outcome.fork else [])
@@ -1836,7 +1847,11 @@ class PilotRepairToolbox:
             list(dict.fromkeys([*packets, *self._packets_of_blocks(split.block_ids)])),
             [f"「{name}」是这一部分（Part）的名称，单独译成简短的标题；后面的段落是这一部分的导言。"],
         )
-        return ToolResult(params={"label_block_id": label.id, "name": name, "page": page}, block_ids=list(split.block_ids), packet_ids=done)
+        return ToolResult(
+            params={"label_block_id": label.id, "name": name, "page": page, "hidden_footers": footers},
+            block_ids=[*split.block_ids, *footers],
+            packet_ids=done,
+        )
 
     def _part_name_on_page(self, page_number: int) -> str | None:
         """The display-size lines of a part page other than its "Part N" label, joined."""
