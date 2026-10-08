@@ -283,6 +283,15 @@ def _join_path(base_dir: str, href: str) -> str:
     return posixpath.normpath(posixpath.join(base_dir, href))
 
 
+# A trailing parenthetical that is empty, or one word and dots, is a
+# production leftover: an O'Reilly early release carried "An Illustrated Guide to AI Agents (for . .)".
+_TITLE_DEBRIS = re.compile(r"\s*\((?:\s*\w*\s*(?:\.\s*)+|\s*)\)\s*$")
+
+
+def _strip_title_debris(title: str) -> str:
+    return _TITLE_DEBRIS.sub("", title) or title
+
+
 def _looks_like_page_nav_label(value: str | None) -> bool:
     normalized = _normalize_text(value or "")
     if not normalized:
@@ -694,7 +703,7 @@ class EPUBParser:
         subtitle: str | None = None
         fallback_titles: list[str] = []
         for title_element in title_elements:
-            title_text = _normalize_text("".join(title_element.itertext()))
+            title_text = _strip_title_debris(_normalize_text("".join(title_element.itertext())))
             if not title_text:
                 continue
             title_type = title_refinements.get(title_element.attrib.get("id", ""), {}).get("title-type", "").casefold()
@@ -760,7 +769,9 @@ class EPUBParser:
             if not href or not title:
                 continue
             normalized_href = _join_path(nav_dir, href.split("#", 1)[0])
-            nav_map[posixpath.normpath(normalized_href)] = title
+            # A file's first TOC entry is its chapter; later entries point at its sections (an O'Reilly
+            # chapter file lists "1. Introduction", its sections, and last "Summary", which won before).
+            nav_map.setdefault(posixpath.normpath(normalized_href), title)
         return nav_map
 
     def _read_spine_chapters(

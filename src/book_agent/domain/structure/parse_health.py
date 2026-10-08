@@ -414,6 +414,23 @@ def check_chapter_titles(chapters: Sequence[HealthChapter], blocks: Sequence[Hea
                     detail="body_under_back_matter_title",
                 )
             )
+    # Several chapters under one title: a section name (every chapter "Summary") was taken for the
+    # chapter's title, as an EPUB whose TOC lists each chapter's sections after it once did.
+    by_title: dict[str, list[HealthChapter]] = defaultdict(list)
+    for chapter in chapters:
+        if _norm_title(chapter.title):
+            by_title[_norm_title(chapter.title)].append(chapter)
+    for title, same in by_title.items():
+        if len(same) >= 3:
+            breakdown["repeated_title"] += len(same)
+            samples.append(
+                Sample(
+                    text=_snippet(f"{len(same)} 章都叫「{same[0].title}」"),
+                    page=same[0].page_start,
+                    chapter_id=same[0].id,
+                    detail="repeated_title",
+                )
+            )
     # Body chapters under a back-matter title lose the reader whole chapters: those samples first.
     samples.sort(key=lambda sample: sample.detail != "body_under_back_matter_title")
     return _result("chapter_titles", sum(breakdown.values()), len(chapters), samples, dict(breakdown))

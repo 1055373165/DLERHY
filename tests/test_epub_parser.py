@@ -268,6 +268,29 @@ class EPUBParserTests(unittest.TestCase):
         self.assertEqual([block.block_type for block in chapter.blocks], ["heading", "paragraph", "quote"])
         self.assertEqual(chapter.blocks[0].anchor, "ch1")
 
+    def test_a_chapter_file_is_titled_by_its_first_toc_entry_and_title_debris_is_dropped(self) -> None:
+        # O'Reilly: one chapter file has "1. Introduction", its sections and last "Summary" in the TOC;
+        # every chapter of "An Illustrated Guide to AI Agents" was titled "Summary". Its dc:title also
+        # carried "(for . .)".
+        nav = NAV_XHTML.replace(
+            '<li><a href="chapter1.xhtml">Chapter One</a></li>',
+            '<li><a href="chapter1.xhtml">1. Introduction</a><ol>'
+            '<li><a href="chapter1.xhtml#s1">What Is an AI Agent?</a></li>'
+            '<li><a href="chapter1.xhtml#s2">Summary</a></li></ol></li>',
+        )
+        opf = CONTENT_OPF.replace("<dc:title>Test Book</dc:title>", "<dc:title>Test Book (for . .)</dc:title>")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            epub_path = Path(tmpdir) / "sample.epub"
+            with zipfile.ZipFile(epub_path, "w") as archive:
+                archive.writestr("mimetype", "application/epub+zip")
+                archive.writestr("META-INF/container.xml", CONTAINER_XML)
+                archive.writestr("OEBPS/content.opf", opf)
+                archive.writestr("OEBPS/nav.xhtml", nav)
+                archive.writestr("OEBPS/chapter1.xhtml", CHAPTER_XHTML)
+            parsed = EPUBParser().parse(epub_path)
+        self.assertEqual(parsed.chapters[0].title, "1. Introduction")
+        self.assertEqual(parsed.title, "Test Book")
+
     def test_parse_epub_with_named_html_entity(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             epub_path = Path(tmpdir) / "sample-entity.epub"
