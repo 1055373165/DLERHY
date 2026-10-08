@@ -8,6 +8,10 @@ any accepted rendering counts). The output guardrail rejects a worker
 answer with a violation before it is persisted; review turns the ones that
 survive into TERM_CONFLICT issues; the translation service reports them as
 ``glossary.violation`` events.
+
+A cited work's English title is not prose to translate: a term inside a quoted English title
+("Fully Autonomous AI Agents Should Not Be Developed.") or anywhere in a citation entry is not
+required (``domain.structure.citations``).
 """
 
 from __future__ import annotations
@@ -16,6 +20,7 @@ import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
+from book_agent.domain.structure.citations import is_citation_entry, title_spans
 from book_agent.domain.terminology.matching import (
     SourceTermIndex,
     inside_identifier,
@@ -75,6 +80,20 @@ def _literal_in(term: str, source_text: str) -> bool:
     return re.search(rf"(?<![\w@]){re.escape(term)}(?:e?s)?(?![\w])", source_text) is not None
 
 
+def _outside(spans: Sequence[tuple[int, int]], start: int, end: int) -> bool:
+    return not any(span_start <= start and end <= span_end for span_start, span_end in spans)
+
+
+def _literal_outside_titles(term: str, source_text: str, titles: Sequence[tuple[int, int]]) -> bool:
+    if not titles:
+        return _literal_in(term, source_text)
+    # The text with its titles blanked out, offsets kept.
+    blanked = list(source_text)
+    for start, end in titles:
+        blanked[start:end] = " " * (end - start)
+    return _literal_in(term, "".join(blanked))
+
+
 def find_term_violations(
     units: Iterable[tuple[str, str, str]],
     terms: Sequence[LockedTerm],
@@ -102,12 +121,18 @@ def find_term_violations(
         occurrences = index.find(source_text or "")
         if not occurrences:
             continue
+        if is_citation_entry(source_text or ""):
+            # A reference entry keeps its English title, authors and venue as the book has them.
+            continue
+        titles = title_spans(source_text or "")
         counts: dict[str, int] = {}
         # A translated term inside a code identifier (scratch_agents, tool_call_id) is not the term;
         # an identifier locked as-is ("@tool") is, so it keeps every occurrence.
         prose_counts: dict[str, int] = {}
         spans = token_spans(source_text or "")
         for occurrence in occurrences:
+            if titles and not _outside(titles, spans[occurrence.start_token][1], spans[occurrence.end_token - 1][2]):
+                continue
             counts[occurrence.key] = counts.get(occurrence.key, 0) + 1
             if not inside_identifier(source_text or "", spans, occurrence):
                 prose_counts[occurrence.key] = prose_counts.get(occurrence.key, 0) + 1
@@ -116,7 +141,7 @@ def find_term_violations(
             if key not in counts:
                 continue
             if _needs_literal_source(term):
-                if not _literal_in(term.source_term, source_text or ""):
+                if not _literal_outside_titles(term.source_term, source_text or "", titles):
                     continue
             elif key not in prose_counts:
                 continue

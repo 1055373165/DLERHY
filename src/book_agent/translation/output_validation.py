@@ -21,6 +21,10 @@ Checks, in error-code priority order:
   by one target segment. Each line is translated on its own, so the reading
   copy keeps the prompt's lines; every translation path (first translation,
   repair retranslation) goes through this check.
+- emphasis: a translation leaves an emphasis marker unpaired (``其*智能体程序（agent``)
+  that its source does not have; the reader would see the asterisk
+  (``domain.structure.inline_marks``). Persisting drops such markers anyway, so
+  this only gives the model the chance to place the pair itself.
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from book_agent.domain.structure.inline_marks import unbalanced_against
 from book_agent.domain.terminology.enforcement import LockedTerm, TermViolation, find_term_violations
 from book_agent.translation.contracts import TranslationWorkerOutput
 
@@ -39,6 +44,7 @@ TARGET_EMPTY = "output_target_empty"
 LENGTH_RATIO_ABNORMAL = "output_length_ratio_abnormal"
 LOCKED_TERM_VIOLATED = "output_locked_term_violation"
 LINES_MERGED = "output_callout_lines_merged"
+EMPHASIS_UNBALANCED = "output_emphasis_unbalanced"
 
 _WHITESPACE = re.compile(r"\s+")
 _LETTERS = re.compile(r"[A-Za-z一-鿿]")
@@ -71,6 +77,8 @@ class OutputValidationReport:
     term_violations: tuple[TermViolation, ...] = ()
     # Lines of a callout answered together, one tuple per merged group.
     merged_line_groups: tuple[tuple[str, ...], ...] = ()
+    # Aligned groups whose translation leaves an emphasis marker unpaired: (sentence ids, markers).
+    unbalanced_emphasis: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = ()
 
     @property
     def error_code(self) -> str | None:
@@ -93,6 +101,8 @@ class OutputValidationReport:
             codes.append(LENGTH_RATIO_ABNORMAL)
         if self.merged_line_groups:
             codes.append(LINES_MERGED)
+        if self.unbalanced_emphasis:
+            codes.append(EMPHASIS_UNBALANCED)
         return tuple(codes)
 
     @property
@@ -106,6 +116,7 @@ class OutputValidationReport:
             or self.term_violations
             or self.length_ratio_findings
             or self.merged_line_groups
+            or self.unbalanced_emphasis
         )
 
     def to_json(self) -> dict[str, Any]:
@@ -137,6 +148,9 @@ class OutputValidationReport:
                 for item in self.term_violations
             ],
             "merged_line_groups": [list(group) for group in self.merged_line_groups],
+            "unbalanced_emphasis": [
+                {"sentence_ids": list(ids), "markers": list(markers)} for ids, markers in self.unbalanced_emphasis
+            ],
         }
 
     def findings(self, alias_of: Mapping[str, str] | None = None) -> list[str]:
@@ -188,6 +202,14 @@ class OutputValidationReport:
                 + ", ".join(name(item) for item in group)
                 + ". Translate each line or cell as its own target segment, aligned 1:1; do not join them."
             )
+        for ids, markers in self.unbalanced_emphasis:
+            lines.append(
+                "The translation of "
+                + ", ".join(name(item) for item in ids)
+                + " leaves emphasis markers unpaired ("
+                + " ".join(f'"{marker}"' for marker in markers[:3])
+                + "). Wrap the same words the source emphasises in a closed *…* or **…** pair, and add no marker the source does not have."
+            )
         for finding in self.length_ratio_findings:
             lines.append(
                 "Implausible translation length for "
@@ -237,6 +259,7 @@ class OutputValidator:
     min_source_chars_for_ratio: int = 60
     check_echo: bool = True
     check_length_ratio: bool = True
+    check_emphasis: bool = True
     _ratio_exempt: tuple[str, ...] = field(default=("code", "equation", "table", "url"), repr=False)
 
     def validate(
@@ -264,6 +287,7 @@ class OutputValidator:
         unknown_targets: list[str] = []
         echoed: list[str] = []
         ratio_findings: list[LengthRatioFinding] = []
+        unbalanced: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
         term_units: list[tuple[str, str, str]] = []
         locked_lines = set(line_locked) & expected_set
         lines_by_target: dict[str, list[str]] = {}
@@ -299,6 +323,10 @@ class OutputValidator:
             source_text = " ".join(source_texts.get(sentence_id) or "" for sentence_id in known_sources)
             if self.check_echo and self._is_echo(source_text, target_text):
                 echoed.extend(known_sources)
+            if self.check_emphasis and "*" in target_text:
+                markers = unbalanced_against(target_text, [source_texts.get(sentence_id) or "" for sentence_id in known_sources])
+                if markers:
+                    unbalanced.append((tuple(known_sources), tuple(markers)))
             if locked_terms:
                 # Each sentence is checked against the translation of its aligned group.
                 term_units.extend((sentence_id, source_texts.get(sentence_id) or "", target_text) for sentence_id in known_sources)
@@ -321,6 +349,7 @@ class OutputValidator:
             length_ratio_findings=tuple(ratio_findings),
             term_violations=tuple(term_violations.values()),
             merged_line_groups=merged_groups,
+            unbalanced_emphasis=tuple(unbalanced),
         )
 
     def validate_task(

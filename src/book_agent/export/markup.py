@@ -14,6 +14,7 @@ from pathlib import PurePosixPath
 from book_agent.domain.enums import (
     BlockType,
 )
+from book_agent.domain.structure import inline_marks
 from book_agent.domain.structure.callouts import (
     CALLOUT_KIND_CODE,
     CALLOUT_KIND_KEY,
@@ -114,11 +115,11 @@ def render_callout_html(
         body = f"<pre><code>{format_preformatted_text(block.source_text, block=block)}</code></pre>"
     else:
         target = block.target_text or ""
-        body = f"<div class='zh'>{callout_lines_html(target or block.source_text, code_spans=bool(target))}</div>"
+        body = f"<div class='zh'>{callout_lines_html(target or block.source_text, code_spans=bool(target) or source_has_markup(block))}</div>"
         if include_source_toggle and target and block.source_text and target != block.source_text:
             body += (
                 f"<details open><summary>{html.escape(source_label)}</summary>"
-                f"<div class='source'>{callout_lines_html(block.source_text)}</div></details>"
+                f"<div class='source'>{callout_lines_html(block.source_text, code_spans=source_has_markup(block))}</div></details>"
             )
     return (
         f"<section class='block callout callout-{html.escape(kind)}'>"
@@ -611,7 +612,7 @@ def render_block_html(
             include_source_toggle=include_source_toggle,
         )
     notice_text = str(block.notice or "") if include_notice else ""
-    source_html = format_inline_text(block.source_text)
+    source_html = format_inline_text(block.source_text, code_spans=source_has_markup(block))
     target_html = format_inline_text(block.target_text or "", code_spans=True)
     if block.render_mode == "source_artifact_full_width":
         asset_src = ""
@@ -662,7 +663,7 @@ def render_block_html(
             # A listing: its title as the box's caption, the code as it is.
             caption_text = block.target_text or str(block.source_metadata.get("linked_caption_text") or "")
             caption = (
-                f"<div class='zh listing-caption'>{format_inline_text(caption_text, code_spans=bool(block.target_text))}</div>"
+                f"<div class='zh listing-caption'>{format_inline_text(caption_text, code_spans=bool(block.target_text) or source_has_markup(block))}</div>"
                 if caption_text
                 else ""
             )
@@ -775,7 +776,7 @@ def render_block_html(
         # The marker is drawn: a bullet glyph the translation put in front of a numbered item ("• 由路由…")
         # would show as a second marker.
         unmarked = _LEADING_BULLET_GLYPH.sub(r"\1", pattern.sub(r"\1", display_text, count=1), count=1)
-        display_html = format_inline_text(unmarked, code_spans=bool(block.target_text))
+        display_html = format_inline_text(unmarked, code_spans=bool(block.target_text) or source_has_markup(block))
         return (
             f"<section class='block {html.escape(block_class)}'>"
             f"<div class='zh' data-marker='{html.escape(marker)}'>{display_html}</div>"
@@ -799,7 +800,7 @@ def render_block_html(
         unbulleted = _LEADING_BULLET_GLYPH.sub(r"\1", display_text, count=1)
         if unbulleted != display_text:
             block_class = f"{block_class} bulleted"
-            display_html = format_inline_text(unbulleted, code_spans=bool(block.target_text))
+            display_html = format_inline_text(unbulleted, code_spans=bool(block.target_text) or source_has_markup(block))
         elif _LEADING_BULLET_GLYPH.sub(r"\1", block.source_text or "", count=1) != (block.source_text or ""):
             # The translation dropped the source's bullet: the item is still one of its list.
             block_class = f"{block_class} bulleted"
@@ -812,7 +813,7 @@ def render_block_html(
 
 
 # A Markdown code span: a run of backticks, content, the same run again ("`find_dotenv()`").
-_CODE_SPAN = re.compile(r"(?<!`)(`+)(?!`)(?P<code>.*?[^`\s].*?)(?<!`)\1(?!`)")
+_CODE_SPAN = inline_marks.CODE_SPAN_RE
 
 
 def _escape_inline(text: str) -> str:
@@ -823,22 +824,25 @@ def _escape_inline(text: str) -> str:
     )
 
 
+def _code_span_html(code: str) -> str:
+    return f"<code class='inline-token'>{html.escape(code)}</code>"
+
+
 def _escape_inline_with_code_spans(text: str) -> str:
-    parts: list[str] = []
-    position = 0
-    for match in _CODE_SPAN.finditer(text):
-        parts.append(_escape_inline(text[position : match.start()]))
-        parts.append(f"<code class='inline-token'>{html.escape(match.group('code').strip())}</code>")
-        position = match.end()
-    parts.append(_escape_inline(text[position:]))
-    return "".join(parts)
+    return inline_marks.render_html(text, _escape_inline, code_html=_code_span_html)
+
+
+def source_has_markup(block: MergedRenderBlock) -> bool:
+    """The source text carries the parser's inline markers (an EPUB's ``*em*``, ``**strong**``, ```code```)."""
+    return bool((block.source_metadata or {}).get("has_inline_formatting"))
 
 
 def format_inline_text(text: str, *, code_spans: bool = False) -> str:
-    """Text as HTML lines. With ``code_spans``, a backtick-delimited span is inline code.
+    """Text as HTML lines. With ``code_spans``, the text is marked up the Markdown way.
 
-    A translation marks inline code the Markdown way ("`find_dotenv()` 函数"); a
-    lone backtick stays as text.
+    A translation (and an EPUB's source) marks inline code with backticks ("`find_dotenv()`
+    函数"), emphasis with ``*``/``**`` ("其*智能体程序*"): code becomes inline code, a pair of
+    markers ``<em>``/``<strong>``. A lone backtick or star stays as text (``inline_marks``).
     """
     escape = _escape_inline_with_code_spans if code_spans else _escape_inline
     formatted_lines: list[str] = []
@@ -1081,7 +1085,7 @@ def render_block_rebuilt_epub_xhtml(
     block: MergedRenderBlock,
     asset_path_by_block_id: dict[str, str] | None = None,
 ) -> str:
-    source_html = format_inline_text(block.source_text)
+    source_html = format_inline_text(block.source_text, code_spans=source_has_markup(block))
     target_html = format_inline_text(block.target_text or "", code_spans=True)
     # Readers see only the book's text: labels like 图片原样保留 are notes for reviewers, not translation.
     notice = ""

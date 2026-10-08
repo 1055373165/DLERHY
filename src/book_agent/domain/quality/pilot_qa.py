@@ -24,12 +24,14 @@ L4     代码与格式  code translated, prose set as code, code comments as hea
 L5     术语        locked terms (``find_term_violations``), a glossary term rendered several ways or
                    sometimes left in English, "Listing/Figure/Table N" named two ways, a word the
                    translation sometimes keeps in English
+                   (a citation entry keeps its English title by the book's convention: not judged)
 L6     忠实度      the Reviewer Agent's open findings (the pilot's model review), sentences without a
                    translation, translations much shorter than their source, numbers that disappear,
                    negations and comparisons that disappear
 L7     排版与纯净  program notes leaked into the text ("图片锚点保留"), stray glyphs ("¡", U+FFFD),
                    English left where Chinese should be, CJK–Latin spacing against the book's own
-                   convention, half-width punctuation in Chinese, odd whitespace
+                   convention, half-width punctuation in Chinese, odd whitespace, emphasis markers
+                   shown as asterisks ("其*智能体程序*")
 =====  ==========  ==================================================================================
 
 The review ledger's open blocking issues in the pilot chapters (the review pass, the export gate,
@@ -57,7 +59,7 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from book_agent.domain.structure import parse_health
+from book_agent.domain.structure import citations, inline_marks, parse_health
 from book_agent.domain.structure.callouts import CALLOUT_KIND_CODE, LooseBlock, callout_lines, is_tiny_image, split_callouts
 from book_agent.domain.structure.parse_health import (
     BLOCKING,
@@ -174,6 +176,8 @@ _SPECS = (
     CheckSpec("L5.locked_term", MAJOR, "没有遵守锁定的术语", REPAIR_RETRANSLATE),
     CheckSpec("L5.term_variants", MAJOR, "同一术语用了几种译法", REPAIR_GLOSSARY),
     CheckSpec("L5.term_left_in_english", MAJOR, "术语有时翻译、有时留英文", REPAIR_GLOSSARY),
+    # A cited work's English title with a term rendering put inside it ("Fully Autonomous AI 智能体 …").
+    CheckSpec("L5.cited_title_altered", MAJOR, "引用的英文标题里被塞进了中文术语", REPAIR_RETRANSLATE),
     CheckSpec("L5.label_rendering", MAJOR, "图、表、代码清单的编号叫法前后不一", REPAIR_GLOSSARY),
     CheckSpec("L5.mixed_rendering", MINOR, "同一个词有时翻译、有时留英文", REPAIR_GLOSSARY),
     CheckSpec("L5.review_blocking", BLOCKING, "审校标记的术语阻断问题", REPAIR_REVIEW_RECHECK),
@@ -191,6 +195,9 @@ _SPECS = (
     CheckSpec("L7.halfwidth_punctuation", MAJOR, "中文里用了半角标点", REPAIR_RETRANSLATE),
     CheckSpec("L7.english_residue", MINOR, "译文里残留整句英文", REPAIR_RETRANSLATE),
     CheckSpec("L7.odd_whitespace", MINOR, "异常空白（全角空格、连续空格）", REPAIR_RETRANSLATE),
+    # A translation with an unpaired marker (segment edit), or a reading copy written before the
+    # export rendered the markers (written again).
+    CheckSpec("L7.emphasis_marker", MAJOR, "读者看到了强调标记的星号（*、**）", REPAIR_EXPORT_CODE),
     CheckSpec("L7.review_blocking", BLOCKING, "审校标记的导出阻断问题", REPAIR_REVIEW_RECHECK),
 )
 CHECKS: dict[str, CheckSpec] = {spec.check_id: spec for spec in _SPECS}
@@ -1738,7 +1745,9 @@ def check_locked_terms(inputs: PilotQaInputs) -> CheckRun:
     locked = [LockedTerm(source_term=term.source_term, renderings=term.renderings) for term in inputs.glossary if term.locked]
     if not locked:
         return run
-    sentences = {sentence.id: sentence for sentence in _translated_sentences(inputs)}
+    cited = citation_blocks(inputs)
+    # A reference entry keeps its English title (the enforcement skips titles; the entry is judged whole here).
+    sentences = {sentence.id: sentence for sentence in _translated_sentences(inputs) if sentence.block_id not in cited}
     violations = find_term_violations(
         ((sentence.id, sentence.source_text, sentence.target_text) for sentence in sentences.values()),
         locked,
@@ -1767,6 +1776,24 @@ def check_locked_terms(inputs: PilotQaInputs) -> CheckRun:
     return run
 
 
+def check_cited_titles(inputs: PilotQaInputs) -> CheckRun:
+    """A quoted English title the translation keeps in English but changed inside: the book keeps
+    cited titles as they are, so the source's title goes back (a segment edit, no model call)."""
+    run = CheckRun("L5.cited_title_altered")
+    for sentence in _translated_sentences(inputs):
+        for title, shown in citations.altered_titles(sentence.source_text, sentence.target_text):
+            run.findings.append(
+                _sentence_finding(
+                    "L5.cited_title_altered",
+                    sentence,
+                    f"引用的标题应保留英文原文：{_snippet(shown, 60)}",
+                    title=title,
+                    shown=shown,
+                )
+            )
+    return run
+
+
 def _renderings_used(target: str, renderings: Sequence[str]) -> list[str]:
     """Which renderings a translation uses; a longer rendering owns the characters it covers ("代码清单" is not also "清单")."""
     text = normalize_target(target)
@@ -1779,8 +1806,16 @@ def _renderings_used(target: str, renderings: Sequence[str]) -> list[str]:
     return used
 
 
+def without_titles(text: str) -> str:
+    """The text with its quoted English titles blanked: a cited work's title is kept in English."""
+    text = text or ""
+    for start, end in reversed(citations.title_spans(text)):
+        text = text[:start] + " " + text[end:]
+    return text
+
+
 def _english_kept(target: str, source_term: str) -> bool:
-    plain = _CODE_SPAN_RE.sub(" ", target)
+    plain = _CODE_SPAN_RE.sub(" ", without_titles(target))
     return bool(re.search(rf"(?<![A-Za-z]){re.escape(source_term)}(?:e?s)?(?![A-Za-z])", plain, re.IGNORECASE))
 
 
@@ -1797,7 +1832,11 @@ def check_term_consistency(inputs: PilotQaInputs) -> list[CheckRun]:
     index = SourceTermIndex(term.source_term for term in terms)
     uses: dict[str, dict[str, list[QaSentence]]] = defaultdict(lambda: defaultdict(list))
     english: dict[str, list[QaSentence]] = defaultdict(list)
+    cited = citation_blocks(inputs)
     for sentence in _translated_sentences(inputs):
+        if sentence.block_id in cited:
+            # A reference entry keeps its English title by the book's convention.
+            continue
         keys = {occurrence.key for occurrence in index.find(sentence.source_text)}
         for key in keys:
             entries = by_key.get(key) or []
@@ -2184,8 +2223,8 @@ def check_review_blockers(inputs: PilotQaInputs) -> list[CheckRun]:
 SHORT_RATIO = 0.2
 SHORT_MIN_SOURCE_CHARS = 80
 _NUMBER_RE = re.compile(r"(?<![A-Za-z0-9_.])(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)*)(%?)(?![A-Za-z0-9_]|\.\d)")
-# "405 billion" is 4050 亿 in Chinese: a number with a scale word is written another way.
-_SCALED_RE = re.compile(r"^\s*(?:thousand|million|billion|trillion)\b", re.IGNORECASE)
+# "405 billion" ("12-billion-parameter") is 4050 亿 in Chinese: a number with a scale word is written another way.
+_SCALED_RE = re.compile(r"^[\s-]*(?:thousand|million|billion|trillion)\b", re.IGNORECASE)
 _NEGATION_EN_RE = re.compile(
     r"\b(?:not|no|never|none|nothing|neither|nor|cannot|without|n't|unable|fail(?:s|ed)? to|lack(?:s|ing)?)\b|n't\b",
     re.IGNORECASE,
@@ -2198,7 +2237,10 @@ _COMPARATIVE_EN_RE = re.compile(
     r"(?!\s+(?:\d|one\b|just\b|simply\b|merely\b|a\s+few\b|ever\b))",
     re.IGNORECASE,
 )
-_COMPARATIVE_ZH_RE = re.compile(r"比|更|较|不如|超过|少于|多于|优于|胜过|相比|高于|低于|大于|小于|快于|慢于|不及|甚于|不止|不只|远非")
+# "more than text" is 不仅, "nothing more than" 不过是 / 只是, "look at more than the words" 不能只看.
+_COMPARATIVE_ZH_RE = re.compile(
+    r"比|更|较|不如|超过|少于|多于|优于|胜过|相比|高于|低于|大于|小于|快于|慢于|不及|甚于|不止|不只|远非|不仅|仅仅|不过|只是|只看"
+)
 
 
 def _weighted_length(text: str) -> int:
@@ -2207,8 +2249,25 @@ def _weighted_length(text: str) -> int:
     return len("".join((text or "").split())) + cjk
 
 
-def _numbers(text: str) -> set[str]:
+# "30 万颗", "4050 亿": Chinese writes a large number with 万 (10^4) or 亿 (10^8).
+_ZH_SCALED_RE = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)\s*(万亿|万|亿)")
+_ZH_SCALE = {"万": 10**4, "亿": 10**8, "万亿": 10**12}
+
+
+def _zh_scaled_numbers(text: str) -> set[str]:
     values = set()
+    for match in _ZH_SCALED_RE.finditer(text or ""):
+        whole, _, fraction = match.group(1).partition(".")
+        scale = _ZH_SCALE[match.group(2)]
+        # Exact arithmetic: "1.5 万" is 15000.
+        value = int(whole + fraction) * scale // 10 ** len(fraction)
+        if (int(whole + fraction) * scale) % 10 ** len(fraction) == 0:
+            values.add(str(value))
+    return values
+
+
+def _numbers(text: str) -> set[str]:
+    values = _zh_scaled_numbers(text)
     text = _URL_RE.sub(" ", text or "")
     for match in _NUMBER_RE.finditer(text):
         if _SCALED_RE.match(text[match.end() :]):
@@ -2226,6 +2285,7 @@ def check_faithfulness(inputs: PilotQaInputs) -> list[CheckRun]:
     numbers = CheckRun("L6.number_mismatch")
     negation = CheckRun("L6.negation_lost")
     comparative = CheckRun("L6.comparative_lost")
+    cited = citation_blocks(inputs)
     sentences_by_block: dict[str, list[QaSentence]] = defaultdict(list)
     for sentence in inputs.sentences:
         sentences_by_block[sentence.block_id].append(sentence)
@@ -2237,11 +2297,13 @@ def check_faithfulness(inputs: PilotQaInputs) -> list[CheckRun]:
             )
             continue
         target = sentence.target_text
-        if not target.strip():
+        if not target.strip() or sentence.block_id in cited:
+            # A reference entry's "Not" is in a paper's title, which stays in English.
             continue
-        if _NEGATION_EN_RE.search(_CODE_LITERAL_RE.sub(" ", _without_code_and_urls(sentence.source_text))) and not _NEGATION_ZH_RE.search(target):
+        source = without_titles(sentence.source_text)
+        if _NEGATION_EN_RE.search(_CODE_LITERAL_RE.sub(" ", _without_code_and_urls(source))) and not _NEGATION_ZH_RE.search(target):
             negation.findings.append(_sentence_finding("L6.negation_lost", sentence, "原文是否定的，译文里找不到否定"))
-        if _COMPARATIVE_EN_RE.search(sentence.source_text) and not _COMPARATIVE_ZH_RE.search(target):
+        if _COMPARATIVE_EN_RE.search(source) and not _COMPARATIVE_ZH_RE.search(target):
             comparative.findings.append(_sentence_finding("L6.comparative_lost", sentence, "原文有比较（more … than），译文里没有"))
     for block in inputs.blocks:
         if not _is_prose_block(block) or not block.target_text.strip():
@@ -2301,6 +2363,62 @@ def _reader_text(block: QaBlock) -> str:
     return visible_text(block.html) if block.html else (block.target_text or block.source_text)
 
 
+_CODE_ELEMENT_RE = re.compile(r"<(pre|code)\b[^>]*>.*?</\1>", re.DOTALL)
+
+
+def shown_markers(fragment: str) -> list[str]:
+    """Emphasis markers a reader sees as asterisks in an HTML fragment (code shows its own stars)."""
+    return inline_marks.literal_markers(visible_text(_CODE_ELEMENT_RE.sub(" ", fragment or "")))
+
+
+def citation_blocks(inputs: PilotQaInputs) -> set[str]:
+    """Blocks that are citation or reference entries: their English titles stay by convention."""
+    return {block.block_id for block in inputs.blocks if citations.is_citation_entry(block.source_text)}
+
+
+def check_emphasis_markers(inputs: PilotQaInputs) -> CheckRun:
+    """Asterisks of an emphasis marker the reader sees ("其*智能体程序（agent", "*arXiv, *2502").
+
+    Per block, the reading copy as the export renders it now: a marker its source does not show
+    is an unpaired one in the translation (a segment edit drops it). Per chapter, the exported
+    file: more markers there than the export renders now means the copy was written before the
+    markers were rendered (written again).
+    """
+    run = CheckRun("L7.emphasis_marker")
+    rendered: Counter[str] = Counter()
+    for block in inputs.blocks:
+        if _is_code(block) or not block.html:
+            continue
+        shown = shown_markers(block.html)
+        rendered[block.chapter_id] += len(shown)
+        if shown and len(shown) > len(inline_marks.stray_markers(block.source_text)):
+            run.findings.append(
+                _block_finding(
+                    "L7.emphasis_marker",
+                    block,
+                    f"读者看到了星号「{shown[0]}」：译文里的强调标记没有成对",
+                    markers=shown[:5],
+                    cause="translation",
+                )
+            )
+    for section in inputs.exported or ():
+        if not section.chapter_id or not section.html:
+            continue
+        in_file = len(shown_markers(section.html))
+        if in_file > rendered[section.chapter_id]:
+            run.findings.append(
+                Finding(
+                    "L7.emphasis_marker",
+                    CHECKS["L7.emphasis_marker"].severity,
+                    {"kind": "chapter", "id": section.chapter_id},
+                    Location(chapter_id=section.chapter_id),
+                    "阅读版这一章里露着强调标记的星号（现在的导出会把它们排成斜体或粗体）：要重新导出阅读版",
+                    {"cause": "stale_export", "reexport": True, "in_file": in_file, "rendered": rendered[section.chapter_id]},
+                )
+            )
+    return run
+
+
 def check_purity(inputs: PilotQaInputs) -> list[CheckRun]:
     leaked = CheckRun("L7.leaked_marker")
     glyphs = CheckRun("L7.stray_glyph")
@@ -2310,6 +2428,8 @@ def check_purity(inputs: PilotQaInputs) -> list[CheckRun]:
     odd = CheckRun("L7.odd_whitespace")
     # Blocks with a sentence that has no translation: L6.untranslated_sentence reports those.
     missing_translation = {sentence.block_id for sentence in inputs.sentences if not (sentence.target_text or "").strip()}
+    # A reference entry keeps its English title, authors and venue: mostly English by convention.
+    cited = citation_blocks(inputs)
     for block in inputs.blocks:
         reader = _reader_text(block)
         target = block.target_text or ""
@@ -2337,6 +2457,7 @@ def check_purity(inputs: PilotQaInputs) -> list[CheckRun]:
         if (
             _is_prose_block(block)
             and block.block_id not in missing_translation
+            and block.block_id not in cited
             and len(english_words(reader)) >= 6
             and not cjk_count(reader)
         ):
@@ -2354,12 +2475,13 @@ def check_purity(inputs: PilotQaInputs) -> list[CheckRun]:
             continue
         if not _is_prose_block(block) or not target.strip():
             continue
-        plain = _without_code_and_urls(target)
+        # A quoted English title stays in English by the book's convention: not untranslated words.
+        plain = _without_code_and_urls(without_titles(target))
         words = english_words(plain)
-        if len(words) >= 6 and cjk_count(plain) * 4 < len(" ".join(words)):
+        if block.block_id not in cited and len(words) >= 6 and cjk_count(plain) * 4 < len(" ".join(words)):
             english.findings.append(_block_finding("L7.untranslated_prose", block, "这段的“译文”还是英文"))
             continue
-        run = _ENGLISH_RUN_RE.search(plain.replace("“", " ").replace("”", " "))
+        run = None if block.block_id in cited else _ENGLISH_RUN_RE.search(plain.replace("“", " ").replace("”", " "))
         if run and not re.search(r"[\"“”'‘’]", target[max(0, target.find(run.group(0)[:10]) - 2) : max(0, target.find(run.group(0)[:10])) + 1]):
             residue.findings.append(
                 _block_finding("L7.english_residue", block, f"译文里留着整句英文：「{_snippet(run.group(0), 60)}」")
@@ -2371,7 +2493,7 @@ def check_purity(inputs: PilotQaInputs) -> list[CheckRun]:
             )
         if _ODD_SPACE_RE.search(target):
             odd.findings.append(_block_finding("L7.odd_whitespace", block, "译文里有全角空格或连续空格"))
-    return [leaked, glyphs, english, residue, halfwidth, odd, check_spacing(inputs)]
+    return [leaked, glyphs, english, residue, halfwidth, odd, check_spacing(inputs), check_emphasis_markers(inputs)]
 
 
 # The share of blocks that keep the book's convention; below it the book mixes both ways and a block is a minor matter.
@@ -2453,6 +2575,7 @@ def run_layers(inputs: PilotQaInputs, extra_checks: Sequence[ExtraCheck] = ()) -
         *check_tables(inputs),
         *check_code_and_format(inputs),
         check_locked_terms(inputs),
+        check_cited_titles(inputs),
         *check_term_consistency(inputs),
         check_label_rendering(inputs),
         check_mixed_rendering(inputs),
