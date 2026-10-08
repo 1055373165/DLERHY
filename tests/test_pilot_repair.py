@@ -262,6 +262,23 @@ class InjectedIssuesAreRepairedTests(PilotRepairBenchCase):
 
             self.assertIn("中英文之间加一个空格", book_prompt_guidance(session, self.bench.document_id))
 
+    def test_an_unpaired_emphasis_marker_is_dropped_without_a_model(self) -> None:
+        self.translate()
+        with self.bench.session_factory() as session:
+            (sentence,) = sentence_ids(session, self.bench.document_id, "The first technique reads")
+            edit_translation(session, sentence, lambda text: "其*" + text)
+            session.commit()
+        self.assertTrue(_findings(self.qa(), "L7.emphasis_marker"))
+
+        payload, final = self.repair()
+
+        kept = {(a["tool"], a["path"]) for a in self.attempts(payload, "kept")}
+        self.assertIn(("segment_edit", "balance_emphasis_markers"), kept)
+        self.assertFalse(any(call["retranslation"] for call in self.worker.calls))
+        self.assertEqual(_findings(final, "L7.emphasis_marker"), [])
+        with self.bench.session_factory() as session:
+            self.assertNotIn("*", active_target_texts(session, [sentence])[sentence])
+
     def test_an_untranslated_sentence_retranslates_only_its_packet(self) -> None:
         with self.bench.session_factory() as session:
             (omitted,) = sentence_ids(session, self.bench.document_id, "Teams track the score")

@@ -1029,5 +1029,149 @@ class ReadingStructureTests(unittest.TestCase):
         self.assertEqual(self.hits([*clean_blocks(), linked], "L2.listing_caption_unlinked"), [])
 
 
+# The Illustrated Guide's chapter-end notes (EPUB footnotes, parsed as paragraphs): the book keeps the
+# English paper titles there.
+REFERENCES = (
+    (
+        "1 Russell, Stuart and Peter Norvig, *Artificial Intelligence: A Modern Approach*, 4th ed. (Pearson, 2020).",
+        "1 Russell, Stuart 和 Peter Norvig，*Artificial Intelligence: A Modern Approach*，第 4 版（Pearson，2020）。",
+    ),
+    (
+        "3 Mitchell, Margaret et al. 2025. “Fully Autonomous AI Agents Should Not Be Developed.” *arXiv, *2502.02649.",
+        "3 Mitchell, Margaret 等，2025。“Fully Autonomous AI Agents Should Not Be Developed.” *arXiv,* 2502.02649。",
+    ),
+    (
+        "4 Gabriel, Iason et al. 2024. “The Ethics of Advanced AI Assistants.” *arXiv,*2404.16244.",
+        "4 Gabriel, Iason 等，2024。“The Ethics of Advanced AI Assistants.” *arXiv,* 2404.16244。",
+    ),
+    (
+        "7 Shazeer, Noam et al. 2017. “Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer,” "
+        "*International Conference on Learning Representations*, poster.",
+        "7 Shazeer, Noam 等，2017。“Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer”，"
+        "*International Conference on Learning Representations*，海报。",
+    ),
+)
+
+
+def _by_check(inputs: PilotQaInputs) -> dict[str, list[dict[str, Any]]]:
+    by_check: dict[str, list[dict[str, Any]]] = {}
+    for finding in findings(inputs):
+        by_check.setdefault(finding["check_id"], []).append(finding)
+    return by_check
+
+
+class CitationEntryTests(unittest.TestCase):
+    """Reference entries keep their English titles by the book's convention: not untranslated prose,
+    a lost negation, a locked term or a term left in English."""
+
+    def test_reference_entries_are_not_findings(self) -> None:
+        notes = [
+            rendered(f"b-ref{index}", C2, "paragraph", source, target, page=39, metadata={"has_inline_formatting": True})
+            for index, (source, target) in enumerate(REFERENCES)
+        ]
+        # The book translates "mixture of experts" and "agent" elsewhere; the titles keep the English.
+        moe = rendered("b-moe", C2, "paragraph", "A mixture-of-experts layer routes each token.", "混合专家层为每个词元选择路由。", page=33)
+        glossary = [
+            GlossaryTerm("agent", ("智能体",), locked=True),
+            GlossaryTerm("tool", ("工具",)),
+            GlossaryTerm("mixture-of-experts", ("混合专家",)),
+        ]
+        hits = _by_check(build([*clean_blocks(), moe, *notes], glossary=glossary))
+        for check_id in (
+            "L7.untranslated_prose",
+            "L7.english_residue",
+            "L6.negation_lost",
+            "L5.locked_term",
+            "L5.term_left_in_english",
+            "L7.emphasis_marker",
+        ):
+            self.assertNotIn(check_id, hits, check_id)
+
+    def test_a_negation_inside_a_quoted_title_in_prose_is_not_one(self) -> None:
+        prose = rendered(
+            "b-quote",
+            C2,
+            "paragraph",
+            "The paper “Fully Autonomous AI Agents Should Not Be Developed” argues for oversight.",
+            "论文“Fully Autonomous AI Agents Should Not Be Developed”主张保留人的监督。",
+            page=33,
+        )
+        hits = _by_check(build([*clean_blocks(), prose]))
+        self.assertNotIn("L6.negation_lost", hits)
+        self.assertNotIn("L7.untranslated_prose", hits)
+        self.assertNotIn("L5.locked_term", hits)
+
+    def test_english_prose_left_untranslated_is_still_found(self) -> None:
+        text = "Gabriel et al. (2024) showed that agents in production need careful oversight and evaluation."
+        prose = rendered("b-en", C2, "paragraph", text, text, page=33)
+        self.assertIn("L7.untranslated_prose", _by_check(build([*clean_blocks(), prose])))
+
+
+class LargeNumberTests(unittest.TestCase):
+    def test_a_number_written_with_wan_or_yi_is_the_same_number(self) -> None:
+        stars = rendered(
+            "b-stars",
+            C2,
+            "paragraph",
+            "OpenClaw gained an astonishing 300,000 stars on GitHub, and Gemma 3 has a 12-billion-parameter model.",
+            "OpenClaw 在 GitHub 上收获了惊人的 30 万颗星，Gemma 3 有一个 120 亿参数的模型。",
+            page=33,
+        )
+        self.assertNotIn("L6.number_mismatch", _by_check(build([*clean_blocks(), stars])))
+
+    def test_a_wrong_wan_rendering_is_still_a_mismatch(self) -> None:
+        stars = rendered("b-stars", C2, "paragraph", "It gained 300,000 stars on GitHub.", "它在 GitHub 上收获了 3 万颗星。", page=33)
+        hits = _by_check(build([*clean_blocks(), stars])).get("L6.number_mismatch", [])
+        self.assertEqual([finding["evidence"]["numbers"] for finding in hits], [["300000"]])
+
+    def test_wan_and_yi_values(self) -> None:
+        self.assertEqual(
+            pilot_qa._zh_scaled_numbers("30 万颗、1.5 万、4050 亿、2 万亿"),
+            {"300000", "15000", "405000000000", "2000000000000"},
+        )
+
+
+class EmphasisMarkerTests(unittest.TestCase):
+    def test_an_unpaired_marker_in_a_translation_is_found(self) -> None:
+        block = rendered(
+            "b-em",
+            C2,
+            "paragraph",
+            "In practice, its *agent program* is a reasoning LLM.",
+            "在实践中，其*智能体程序（agent program）是一个推理 LLM。",
+            page=33,
+            metadata={"has_inline_formatting": True},
+        )
+        hits = _by_check(build([*clean_blocks(), block])).get("L7.emphasis_marker", [])
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["severity"], MAJOR)
+        self.assertEqual(hits[0]["target"], {"kind": "block", "id": "b-em"})
+        self.assertEqual(hits[0]["evidence"]["cause"], "translation")
+
+    def test_paired_markers_and_text_stars_are_not(self) -> None:
+        blocks = [
+            rendered(
+                "b-em", C2, "paragraph", "its *agent program*", "其*智能体程序*（agent program）",
+                page=33, metadata={"has_inline_formatting": True},
+            ),
+            rendered("b-args", C2, "paragraph", "Call f(*args, **kwargs) with 2*3.", "用 2*3 调用 f(*args, **kwargs)。", page=33),
+        ]
+        self.assertNotIn("L7.emphasis_marker", _by_check(build([*clean_blocks(), *blocks])))
+
+    def test_a_reading_copy_written_before_markers_were_rendered_is_written_again(self) -> None:
+        from book_agent.domain.quality.pilot_repair import needs_reexport
+
+        block = rendered("b-em", C2, "paragraph", "its *agent program*", "其*智能体程序*（agent program）", page=33)
+        stale = "<section class='block paragraph'><div class='zh'>其*智能体程序*（agent program）</div></section>"
+        exported = [ExportedChapter(C1, "第 1 章 为什么需要智能体", ""), ExportedChapter(C2, "第 2 章 循环", stale)]
+        inputs = build([*clean_blocks(), block], exported=exported)
+        hits = _by_check(inputs).get("L7.emphasis_marker", [])
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["target"], {"kind": "chapter", "id": C2})
+        self.assertTrue(hits[0]["evidence"]["reexport"])
+        self.assertTrue(needs_reexport(pilot_qa.run_layers(inputs)))
+        self.assertFalse(needs_reexport(pilot_qa.run_layers(build([*clean_blocks(), block]))))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -61,6 +61,7 @@ from book_agent.domain.quality.pilot_repair import (
     escalation_question,
     findings_of,
     judge,
+    needs_reexport,
     repairable_findings,
     plan_work,
     self_inflicted_packets,
@@ -306,8 +307,12 @@ class PilotRepairService:
                 stop_reason = "max_rounds"
 
             final_report = before_report
-            if kept_any:
-                self._persist_chapter_scope(run, ctx.chapter_ids, chapter_ids)
+            # A reading copy written before a fix to the export (literal emphasis markers): writing
+            # it again is a repair even when nothing else was kept.
+            stale_copy = before_report is not None and needs_reexport(before_report.layers_json or [])
+            if kept_any or stale_copy:
+                if kept_any:
+                    self._persist_chapter_scope(run, ctx.chapter_ids, chapter_ids)
                 self.session.commit()
                 self._reexport(ctx)
                 self._begin_write()

@@ -73,6 +73,7 @@ from book_agent.domain.quality import pilot_qa
 from book_agent.domain.quality import zh_text_fixes as fixes
 from book_agent.domain.quality.pilot_repair import WorkItem
 from book_agent.domain.structure import parse_health
+from book_agent.domain.structure.inline_marks import drop_stray_markers
 from book_agent.domain.structure.callouts import (
     CALLOUT_KIND_CODE,
     CALLOUT_KIND_PROSE,
@@ -595,8 +596,13 @@ class PilotRepairToolbox:
             return
         editor = SegmentEditService(self.session)
 
-        def transform(text: str, _ids: list[str]) -> str:
-            fixed = fixes.fix_halfwidth_punctuation(fixes.fix_odd_whitespace(fixes.strip_markdown_emphasis(text)))
+        def transform(text: str, sentence_ids: list[str]) -> str:
+            # An EPUB's own *em* / **strong** pairs stay (the reading copy renders them); markers the
+            # source has no pair of go.
+            sources = list(
+                self.session.scalars(select(Sentence.source_text).where(Sentence.id.in_(sentence_ids))).all()
+            ) if sentence_ids else []
+            fixed = fixes.fix_halfwidth_punctuation(fixes.fix_odd_whitespace(drop_stray_markers(text, [s or "" for s in sources])))
             return fixes.fix_cjk_latin_spacing(fixed, convention) if convention in {"spaced", "unspaced"} else fixed
 
         for packet_id in packet_ids:
@@ -703,6 +709,23 @@ class PilotRepairToolbox:
 
         changed = self._rewrite(packets, transform, "去掉译文里的程序提示")
         return ToolResult(params={"markers": markers}, edited_packet_ids=changed)
+
+    def _segment_edit__balance_emphasis_markers(self, item: WorkItem) -> ToolResult:
+        """Emphasis markers left unpaired in a translation ("其*智能体程序（agent"): the ones its
+        source has no such marker for are dropped; the pairs the source has stay (the reading copy
+        renders them)."""
+        packets = self._block_packets([finding for finding in item.findings if (finding.get("evidence") or {}).get("cause") != "stale_export"])
+        if not packets:
+            raise NotApplicable("the findings name no translated block")
+
+        def transform(text: str, sentence_ids: list[str]) -> str:
+            sources = (
+                self.session.scalars(select(Sentence.source_text).where(Sentence.id.in_(sentence_ids))).all() if sentence_ids else []
+            )
+            return drop_stray_markers(text, [source or "" for source in sources])
+
+        changed = self._rewrite(packets, transform, "去掉译文里没有成对的强调标记")
+        return ToolResult(params={"packet_count": len(packets)}, edited_packet_ids=changed)
 
     def _segment_edit__cjk_latin_spacing(self, item: WorkItem) -> ToolResult:
         conventions = Counter(str((finding.get("evidence") or {}).get("convention") or "") for finding in item.findings)
