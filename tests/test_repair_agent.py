@@ -297,9 +297,20 @@ class RepairAgentRunTests(unittest.TestCase):
             time.sleep(0.2)
         self.fail(f"run {run_id} did not finish")
 
-    def test_without_the_agent_the_run_fails_on_the_blockers(self) -> None:
-        payload, _ = self._run("off")
-        self.assertEqual(payload["status"], "failed")
+    def test_without_the_agent_the_blockers_stay_open_for_the_book_qa(self) -> None:
+        # A whole-book run ends with book_qa/book_repair, so the rule review hands its blockers on
+        # instead of failing the run; without the Repair Agent they are still open afterwards.
+        payload, document_id = self._run("off")
+        self.assertEqual(payload["status"], "succeeded", payload.get("stop_reason"))
+        with self.session_factory() as session:
+            open_blockers = session.scalars(
+                select(ReviewIssue).where(
+                    ReviewIssue.document_id == document_id,
+                    ReviewIssue.blocking.is_(True),
+                    ReviewIssue.status.in_([IssueStatus.OPEN, IssueStatus.TRIAGED]),
+                )
+            ).all()
+            self.assertTrue(open_blockers)
 
     def test_the_agent_edits_the_conflicts_and_the_run_exports(self) -> None:
         payload, document_id = self._run("on")
