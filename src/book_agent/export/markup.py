@@ -330,13 +330,21 @@ def render_block_markdown(
         elif list_metadata.get("list_kind") == "number":
             # "1. " from the source's number; never a bullet glyph next to it.
             number = _LEADING_NUMBER_MARKER.match(source_text or "")
-            body = _LEADING_BULLET_GLYPH.sub(r"\1", _LEADING_NUMBER_MARKER.sub(r"\1", list_text, count=1), count=1)
-            list_text = f"{number.group(2)}. {body.strip()}" if number else body
+            list_number = list_metadata.get("list_number")
+            if number is None and list_number:
+                # An EPUB's <ol> item: the list numbers it, its text has no number.
+                list_text = f"{list_number}. {_LEADING_BULLET_GLYPH.sub(r'\1', list_text, count=1).strip()}"
+            else:
+                body = _LEADING_BULLET_GLYPH.sub(r"\1", _LEADING_NUMBER_MARKER.sub(r"\1", list_text, count=1), count=1)
+                list_text = f"{number.group(2)}. {body.strip()}" if number else body
         marker = "" if re.match(r"^\s*(?:[-*+]\s+|\d+\.\s+)", list_text) else "- "
-        indent = "  " if list_metadata.get("list_level") == 2 else ""
+        indent = "  " * (_list_level(list_metadata) - 1)
         parts = [f"{indent}{marker}{list_text}".rstrip()]
     elif block.block_type == BlockType.CAPTION.value:
         parts = [f"*{target_text or source_text}*"]
+    elif (block.source_metadata or {}).get("definition_term") or (block.source_metadata or {}).get("sidebar_title"):
+        # A definition list's term, a note's or sidebar's title: set off in bold.
+        parts = [f"**{(target_text or source_text).strip()}**"]
     else:
         parts = [list_markdown or (target_text or source_text)]
 
@@ -578,6 +586,11 @@ def should_inline_join_target_text(
     }
 
 
+def _list_level(metadata: dict[str, object]) -> int:
+    level = metadata.get("list_level")
+    return level if isinstance(level, int) and level >= 1 else 1
+
+
 def render_blocks_html(blocks: list[MergedRenderBlock], render_one) -> str:
     """Blocks as HTML, the blocks of one sidebar inside one ``<aside class='book-sidebar'>`` box."""
     parts: list[str] = []
@@ -588,7 +601,9 @@ def render_blocks_html(blocks: list[MergedRenderBlock], render_one) -> str:
             if open_sidebar:
                 parts.append("</aside>")
             if sidebar_id:
-                parts.append("<aside class='book-sidebar'>")
+                kind = str((block.source_metadata or {}).get("sidebar_kind") or "")
+                kind_class = f" book-{kind}" if re.fullmatch(r"[a-z]+", kind) and kind != "sidebar" else ""
+                parts.append(f"<aside class='book-sidebar{kind_class}'>")
             open_sidebar = sidebar_id
         parts.append(render_one(block))
     if open_sidebar:
@@ -769,13 +784,19 @@ def render_block_html(
         kind = str(list_metadata["list_kind"])
         pattern = _LEADING_DASH_MARKER if kind == "dash" else _LEADING_NUMBER_MARKER
         number = _LEADING_NUMBER_MARKER.match(block.source_text or "") if kind == "number" else None
-        marker = f"{number.group(2)}." if number else "–" if kind == "dash" else ""
+        # An EPUB's <ol> item has no number in its text: the list gives it (``list_number``).
+        list_number = list_metadata.get("list_number") if kind == "number" and number is None else None
+        marker = f"{number.group(2)}." if number else f"{list_number}." if list_number else "–" if kind == "dash" else ""
         block_class = f"{block_class} {'dashed' if kind == 'dash' else 'numbered'}"
-        if list_metadata.get("list_level") == 2:
+        if _list_level(list_metadata) >= 2:
             block_class = f"{block_class} sub-item"
         # The marker is drawn: a bullet glyph the translation put in front of a numbered item ("• 由路由…")
-        # would show as a second marker.
-        unmarked = _LEADING_BULLET_GLYPH.sub(r"\1", pattern.sub(r"\1", display_text, count=1), count=1)
+        # would show as a second marker. The text's own leading number is the marker only when the
+        # source typed it.
+        typed_marker = kind == "dash" or number is not None
+        unmarked = _LEADING_BULLET_GLYPH.sub(
+            r"\1", pattern.sub(r"\1", display_text, count=1) if typed_marker else display_text, count=1
+        )
         display_html = format_inline_text(unmarked, code_spans=bool(block.target_text) or source_has_markup(block))
         return (
             f"<section class='block {html.escape(block_class)}'>"
@@ -788,11 +809,15 @@ def render_block_html(
         return ""
     if list_metadata.get("sidebar_title"):
         block_class = f"{block_class} sidebar-title"
+    if list_metadata.get("definition_term"):
+        block_class = f"{block_class} definition-term"
+    elif list_metadata.get("definition_description"):
+        block_class = f"{block_class} definition-description"
     if block.block_type == BlockType.PARAGRAPH.value and list_metadata.get("list_continuation"):
         # Text the page sets inside a list ("Cost considerations:"): indented with the items' text.
         block_class = f"{block_class} list-continuation"
     if block.block_type == BlockType.LIST_ITEM.value:
-        if list_metadata.get("list_level") == 2:
+        if _list_level(list_metadata) >= 2:
             block_class = f"{block_class} sub-item"
         # PDF list items carry their bullet glyph in the text; draw it as a
         # hanging marker instead so wrapped item lines align.
@@ -803,6 +828,9 @@ def render_block_html(
             display_html = format_inline_text(unbulleted, code_spans=bool(block.target_text) or source_has_markup(block))
         elif _LEADING_BULLET_GLYPH.sub(r"\1", block.source_text or "", count=1) != (block.source_text or ""):
             # The translation dropped the source's bullet: the item is still one of its list.
+            block_class = f"{block_class} bulleted"
+        elif list_metadata.get("list_kind") == "bullet":
+            # An EPUB's <ul> item: no glyph in its text, the list draws the bullet.
             block_class = f"{block_class} bulleted"
     return (
         f"<section class='block {html.escape(block_class)}'>"

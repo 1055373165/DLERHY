@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import html
 import logging
 import posixpath
@@ -28,12 +29,22 @@ _BLOCK_TAGS = {
     "blockquote": "quote",
     "pre": "code",
     "li": "list_item",
+    # A definition list's term and (when it holds no paragraphs) its description.
+    "dt": "paragraph",
+    "dd": "paragraph",
     "figcaption": "caption",
     "table": "table",
     "math": "code",
     "svg": "code",
 }
 _HEADING_TAGS = {f"h{i}" for i in range(1, 7)}
+# Raised when the parser keeps more of the book's structure, so an already parsed book can tell
+# that a structure refresh would change it (pilot QA ``L1.epub_structure_outdated``).
+# 2: list kind/level/number, definition terms, note/tip/warning/sidebar boxes.
+EPUB_STRUCTURE_VERSION = 2
+# O'Reilly (HTMLBook) boxes: data-type / epub:type of the element that holds the box.
+_BOX_KINDS = ("note", "tip", "warning", "caution", "important", "sidebar")
+_BLOCK_CHILD_TAGS = {"p", "div", "ul", "ol", "dl", "pre", "table", "blockquote", "figure", "section", "aside", *[f"h{i}" for i in range(1, 7)]}
 _KNOWN_HTML_TAGS = {
     "html",
     "head",
@@ -103,6 +114,37 @@ _GENERIC_SPINE_NAV_TITLES = {
 }
 _PAGE_LABEL_PATTERN = re.compile(r"^(?:\d+|[ivxlcdm]+)$", re.IGNORECASE)
 _EPUB_TYPE_ATTR = "{http://www.idpf.org/2007/ops}type"
+
+
+def _box_kind(element: ET.Element, local_name: str) -> str | None:
+    """The kind of an O'Reilly box (``<div data-type="note">``, ``<aside data-type="sidebar">``)."""
+    if local_name not in {"div", "aside", "section"}:
+        return None
+    declared = (
+        element.attrib.get("data-type", "")
+        + " "
+        + element.attrib.get("{http://www.idpf.org/2007/ops}type", "")
+    ).lower().split()
+    return next((kind for kind in _BOX_KINDS if kind in declared), None)
+
+
+def _nested_lists(item: ET.Element) -> list[ET.Element]:
+    """The lists inside a list item (directly or in its paragraphs), not those of deeper items."""
+    found: list[ET.Element] = []
+
+    def walk(element: ET.Element) -> None:
+        for child in list(element):
+            if _local_name(child.tag) in {"ul", "ol"}:
+                found.append(child)
+            else:
+                walk(child)
+
+    walk(item)
+    return found
+
+
+def _has_block_child(element: ET.Element) -> bool:
+    return any(_local_name(child.tag) in _BLOCK_CHILD_TAGS for child in element.iter() if child is not element)
 
 
 def _local_name(tag: str) -> str:
@@ -894,30 +936,115 @@ class EPUBParser:
         return all(text.casefold() == normalized_book_title or len(text.split()) <= 4 for text in meaningful_texts)
 
     def _extract_blocks(self, body: ET.Element, href: str) -> list[ParsedBlock]:
+        """The chapter's blocks in reading order, with the structure around them in their metadata.
+
+        Besides the block itself (``_block_type_for_element``), three O'Reilly-style structures are
+        kept (``epub_structure_version`` 2):
+
+        * lists: each ``<li>`` is a ``list_item`` with ``list_kind`` ("bullet" for ``<ul>``,
+          "number" for ``<ol>``), ``list_level`` and, numbered, ``list_number``; a nested list is
+          its own items one level down, not text folded into its parent item;
+        * definition lists: a ``<dt>`` is a block of its own (it used to be dropped) marked
+          ``definition_term``; the blocks of its ``<dd>`` are ``definition_description``;
+        * boxes (``data-type`` note, tip, warning, caution, important, sidebar): every block
+          inside carries the box's ``sidebar_id`` and ``sidebar_kind``; the box's heading ("Note",
+          "What We Built") is its title (``sidebar_title``, a paragraph, not a section heading).
+        """
         blocks: list[ParsedBlock] = []
 
-        def visit(element: ET.Element, inherited_anchor: str | None = None) -> None:
+        def emit(block_type: str, text: str, metadata: dict[str, object], anchor: str | None, context: dict[str, object]) -> None:
+            metadata = {**metadata, "epub_structure_version": EPUB_STRUCTURE_VERSION}
+            box = context.get("box")
+            if isinstance(box, dict):
+                metadata["sidebar_id"] = box["id"]
+                metadata["sidebar_kind"] = box["kind"]
+                if block_type == "heading" and not box["titled"] and not box["has_body"]:
+                    # The box's own heading: its title, not a heading of the chapter's outline.
+                    block_type = "paragraph"
+                    metadata["sidebar_title"] = True
+                    metadata["box_heading_tag"] = metadata.pop("tag", None)
+                    metadata["tag"] = "p"
+                    metadata.pop("heading_level", None)
+                    box["titled"] = True
+                else:
+                    box["has_body"] = True
+            definition = context.get("definition")
+            if isinstance(definition, dict):
+                metadata["definition_list_id"] = definition["id"]
+                metadata[definition["role"]] = True
+            listing = context.get("list")
+            if block_type == "list_item" and isinstance(listing, dict):
+                metadata["list_kind"] = listing["kind"]
+                metadata["list_level"] = listing["level"]
+                if listing["kind"] == "number":
+                    metadata["list_number"] = listing["next"]
+                listing["next"] = int(listing["next"]) + 1
+            blocks.append(
+                ParsedBlock(
+                    block_type=block_type,
+                    text=text,
+                    source_path=href,
+                    ordinal=len(blocks) + 1,
+                    anchor=anchor,
+                    metadata=metadata,
+                    translatability=derive_translatability(block_type, metadata),
+                )
+            )
+
+        def visit(element: ET.Element, inherited_anchor: str | None = None, context: dict[str, object] | None = None) -> None:
+            context = context or {}
             local = _local_name(element.tag)
             class_tokens = _element_class_tokens(element)
             current_anchor = _normalize_text(element.attrib.get("id")) or inherited_anchor
             if _figure_like_container(local, class_tokens, element):
-                blocks.extend(self._figure_blocks(element, href, starting_ordinal=len(blocks) + 1))
+                figures = self._figure_blocks(element, href, starting_ordinal=len(blocks) + 1)
+                box = context.get("box")
+                for figure in figures:
+                    figure.metadata["epub_structure_version"] = EPUB_STRUCTURE_VERSION
+                    if isinstance(box, dict):
+                        figure.metadata["sidebar_id"] = box["id"]
+                        figure.metadata["sidebar_kind"] = box["kind"]
+                        box["has_body"] = True
+                blocks.extend(figures)
                 return
+            kind = _box_kind(element, local)
+            if kind and "box" not in context:
+                # Its own id (not the section's it inherits): two boxes of one section stay two.
+                own_id = _normalize_text(element.attrib.get("id"))
+                box_id = f"{href}#{own_id or f'{kind}-{len(blocks) + 1}'}"
+                context = {**context, "box": {"id": box_id, "kind": kind, "titled": False, "has_body": False}}
+            if local in {"ul", "ol"}:
+                parent = context.get("list")
+                level = int(parent["level"]) + 1 if isinstance(parent, dict) else 1
+                try:
+                    first = int(element.attrib.get("start", "1"))
+                except ValueError:
+                    first = 1
+                context = {**context, "list": {"kind": "number" if local == "ol" else "bullet", "level": level, "next": first}}
+            if local == "dl":
+                own_id = _normalize_text(element.attrib.get("id"))
+                context = {**context, "definition_list": f"{href}#{own_id or f'dl-{len(blocks) + 1}'}"}
+            if local in {"dt", "dd"} and context.get("definition_list"):
+                role = "definition_term" if local == "dt" else "definition_description"
+                context = {**context, "definition": {"id": context["definition_list"], "role": role}}
             block_type = self._block_type_for_element(element, local)
+            if local == "dd" and _has_block_child(element):
+                block_type = None
             if block_type:
-                text, metadata = self._block_text_and_metadata(element, local, href)
+                nested_lists = _nested_lists(element) if local == "li" else []
+                own = element
+                if nested_lists:
+                    # The item's own words; its nested list follows as items one level down.
+                    own = copy.deepcopy(element)
+                    for parent in list(own.iter()):
+                        for child in list(parent):
+                            if _local_name(child.tag) in {"ul", "ol"}:
+                                parent.remove(child)
+                text, metadata = self._block_text_and_metadata(own, local, href)
                 if text or metadata.get("image_src"):
-                    blocks.append(
-                        ParsedBlock(
-                            block_type=block_type,
-                            text=text,
-                            source_path=href,
-                            ordinal=len(blocks) + 1,
-                            anchor=current_anchor,
-                            metadata=metadata,
-                            translatability=derive_translatability(block_type, metadata),
-                        )
-                    )
+                    emit(block_type, text, metadata, current_anchor, context)
+                    for nested in nested_lists:
+                        visit(nested, current_anchor, context)
                     return
 
             # Standalone <img> outside any recognised block container —
@@ -933,21 +1060,11 @@ class EPUBParser:
                         img_metadata["image_alt"] = alt
                     _mark_image_only_metadata_nontranslatable(img_metadata)
                     img_metadata["image_caption_generated"] = "alt" if alt else "placeholder"
-                    blocks.append(
-                        ParsedBlock(
-                            block_type="paragraph",
-                            text=alt or "[Image]",
-                            source_path=href,
-                            ordinal=len(blocks) + 1,
-                            anchor=current_anchor,
-                            metadata=img_metadata,
-                            translatability=derive_translatability("paragraph", img_metadata),
-                        )
-                    )
+                    emit("paragraph", alt or "[Image]", img_metadata, current_anchor, context)
                 return
 
             for child in list(element):
-                visit(child, current_anchor)
+                visit(child, current_anchor, context)
 
         for child in list(body):
             visit(child)

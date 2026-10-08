@@ -1,16 +1,51 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from typing import Any
 from datetime import datetime, timezone
 from pathlib import Path
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from book_agent.core.ids import stable_id
 from book_agent.domain.enums import ArtifactStatus, SourceType
 from book_agent.domain.models import Block, Document
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
 from book_agent.services.bootstrap import ParseService
+
+
+# Blocks of a chapter: the parser's ordinals stay below the parked split-offs of structure edits;
+# blocks a refresh retires go above both, out of the way of every later renumbering.
+_PARKED_ORDINAL_BASE = 1_000_000
+_SHIFT_OFFSET = 2_000_000
+_RETIRED_ORDINAL_BASE = 4_000_000
+
+
+def _text_key(block: Block) -> str:
+    return " ".join(str(block.source_text or "").split()).casefold()
+
+
+def align_blocks(existing: list[Block], refreshed: list[Block]) -> list[tuple[Block | None, Block | None]]:
+    """Existing and refreshed blocks paired by their text, in reading order.
+
+    Blocks with the same text pair up wherever they are; a run of changed blocks pairs position by
+    position (the old ordinal match, where nothing moved); what is left over is new or gone. A
+    parser that now finds a block it used to drop (a definition term) adds that block instead of
+    shifting the text of every block after it onto its neighbour.
+    """
+    pairs: list[tuple[Block | None, Block | None]] = []
+    matcher = SequenceMatcher(None, [_text_key(b) for b in existing], [_text_key(b) for b in refreshed], autojunk=False)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        old, new = existing[i1:i2], refreshed[j1:j2]
+        if tag in {"equal", "replace"}:
+            common = min(len(old), len(new))
+            pairs.extend(zip(old[:common], new[:common]))
+            old, new = old[common:], new[common:]
+        pairs.extend((block, None) for block in old)
+        pairs.extend((None, block) for block in new)
+    return pairs
 
 
 def _utcnow() -> datetime:
@@ -138,12 +173,14 @@ class EpubStructureRefreshService:
 
             existing_blocks = existing_blocks_by_chapter_id.get(existing_chapter.id, [])
             refreshed_blocks = refreshed_blocks_by_chapter_id.get(refreshed_chapter.id, [])
-            existing_by_ordinal = {block.ordinal: block for block in existing_blocks}
-            refreshed_by_ordinal = {block.ordinal: block for block in refreshed_blocks}
-            for ordinal in sorted(set(existing_by_ordinal) | set(refreshed_by_ordinal)):
-                existing_block = existing_by_ordinal.get(ordinal)
-                refreshed_block = refreshed_by_ordinal.get(ordinal)
+            pairs = align_blocks(existing_blocks, refreshed_blocks)
+            retired_ordinal = self._make_room(existing_chapter.id, existing_blocks)
+            taken_ids = {block.id for block in existing_blocks}
+            for existing_block, refreshed_block in pairs:
                 if existing_block is not None and refreshed_block is not None:
+                    # Matched by text: a block the parser now finds before it (a definition term it
+                    # used to drop) moves it down instead of shifting every later block's text.
+                    existing_block.ordinal = refreshed_block.ordinal
                     existing_block.block_type = refreshed_block.block_type
                     existing_block.source_text = refreshed_block.source_text
                     existing_block.normalized_text = refreshed_block.normalized_text
@@ -160,6 +197,10 @@ class EpubStructureRefreshService:
                     refreshed_block_ids.append(existing_block.id)
                     continue
                 if existing_block is None and refreshed_block is not None:
+                    if refreshed_block.id in taken_ids:
+                        # Ids derive from the ordinal: a new block may land on an existing block's id.
+                        refreshed_block.id = stable_id("block", refreshed_block.id, "refresh", refreshed_block.source_text or "")
+                    taken_ids.add(refreshed_block.id)
                     refreshed_block.status = ArtifactStatus.ACTIVE
                     refreshed_block.created_at = now
                     refreshed_block.updated_at = now
@@ -167,6 +208,8 @@ class EpubStructureRefreshService:
                     created_block_ids.append(refreshed_block.id)
                     continue
                 if existing_block is not None and refreshed_block is None:
+                    retired_ordinal += 1
+                    existing_block.ordinal = retired_ordinal
                     existing_block.status = ArtifactStatus.INVALIDATED
                     existing_block.source_span_json = {
                         **dict(existing_block.source_span_json or {}),
@@ -214,6 +257,33 @@ class EpubStructureRefreshService:
             skipped_chapter_count=skipped_chapter_count,
             skipped_block_count=skipped_block_count,
         )
+
+    def _make_room(self, chapter_id: str, existing_blocks: list[Block]) -> int:
+        """Move the chapter's blocks out of the parser's ordinal range so they can be renumbered
+        without tripping the (chapter, ordinal) unique constraint; retired blocks still in that range
+        go to the retired range. Returns the highest retired ordinal (the next retirement goes above)."""
+        in_range = list(
+            self.session.scalars(
+                select(Block).where(Block.chapter_id == chapter_id, Block.ordinal < _PARKED_ORDINAL_BASE)
+            ).all()
+        )
+        for block in in_range:
+            block.ordinal = block.ordinal + _SHIFT_OFFSET
+        self.session.flush()
+        active_ids = {block.id for block in existing_blocks}
+        retired = int(
+            self.session.scalar(
+                select(func.coalesce(func.max(Block.ordinal), _RETIRED_ORDINAL_BASE)).where(
+                    Block.chapter_id == chapter_id, Block.ordinal >= _RETIRED_ORDINAL_BASE
+                )
+            )
+        )
+        for block in in_range:
+            if block.id not in active_ids:
+                retired += 1
+                block.ordinal = retired
+        self.session.flush()
+        return retired
 
     def _merge_preserved_block_metadata(
         self,

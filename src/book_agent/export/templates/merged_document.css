@@ -37,6 +37,7 @@ a{color:var(--accent);text-decoration:none;}a:hover{text-decoration:underline;}
 .book-sidebar .block{margin:12px 0;}.book-sidebar .block:first-child{margin-top:0;}.book-sidebar .block:last-child{margin-bottom:0;}
 .book-sidebar .zh{font-family:var(--font-ui);font-size:17px;}
 .book-sidebar .sidebar-title .zh{font-family:var(--font-display);font-size:20px;font-weight:600;color:#17313a;}
+.definition-term{margin-bottom:4px;}.definition-term .zh{font-weight:600;}.definition-description{margin-top:4px;margin-left:1.6em;}.book-sidebar.book-note,.book-sidebar.book-tip,.book-sidebar.book-important{background:#eef5f6;border-color:rgba(15,108,122,.28);border-left:4px solid #0f6c7a;}.book-sidebar.book-warning,.book-sidebar.book-caution{background:#fbf1ea;border-color:rgba(176,96,40,.3);border-left:4px solid #b06028;}.book-sidebar.book-note .sidebar-title .zh,.book-sidebar.book-tip .sidebar-title .zh,.book-sidebar.book-important .sidebar-title .zh,.book-sidebar.book-warning .sidebar-title .zh,.book-sidebar.book-caution .sidebar-title .zh{font-size:15px;letter-spacing:.08em;}
 .block details{margin-top:10px;border-top:1px dashed rgba(163,143,116,.45);padding-top:10px;color:var(--muted);}
 .block details summary{cursor:pointer;font-size:12px;font-family:var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);}
 .block .source{margin-top:8px;color:var(--muted);font-family:var(--font-ui);font-size:14px;white-space:pre-wrap;}
