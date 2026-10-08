@@ -117,6 +117,47 @@ class HealTests(RepairAlignmentTests):
         self.assertFalse(self._evidence().has_anomalies)
 
 
+class CollapseWindowedPacketsTests(unittest.TestCase):
+    """A long block is split into 20-sentence windows sharing its block range. Collapsing them as
+    duplicates orphaned 32 sentences of a 52-line prompt in the Agent book's chapter 10."""
+
+    def setUp(self) -> None:
+        self.bench = PilotBench(FakeZhWorker())
+        self.addCleanup(self.bench.close)
+        self.bench.translate_pilot()
+
+    def test_windows_of_one_block_are_not_duplicates_but_overlapping_packets_are(self) -> None:
+        from book_agent.domain.enums import PacketSentenceRole
+        from book_agent.domain.models.translation import PacketSentenceMap, TranslationPacket
+
+        with self.bench.session_factory() as session:
+            first = session.scalars(select(TranslationPacket).order_by(TranslationPacket.id)).first()
+            second = session.scalars(
+                select(TranslationPacket)
+                .where(TranslationPacket.chapter_id == first.chapter_id, TranslationPacket.id != first.id)
+                .order_by(TranslationPacket.id)
+            ).first()
+            # Same block range, different sentences: two windows of one block.
+            second.block_start_id, second.block_end_id = first.block_start_id, first.block_end_id
+            session.flush()
+            fork = ParseRevisionForkService(session)
+            self.assertEqual(fork.collapse_duplicate_packets([first.id, second.id]), [])
+
+            # Now they claim a sentence in common: duplicates, one goes.
+            shared = session.scalars(
+                select(PacketSentenceMap.sentence_id).where(
+                    PacketSentenceMap.packet_id == first.id, PacketSentenceMap.role == PacketSentenceRole.CURRENT
+                )
+            ).first()
+            existing = session.get(PacketSentenceMap, (second.id, shared))
+            if existing is not None:
+                existing.role = PacketSentenceRole.CURRENT  # it was the window's context
+            else:
+                session.add(PacketSentenceMap(packet_id=second.id, sentence_id=shared, role=PacketSentenceRole.CURRENT))
+            session.flush()
+            self.assertEqual(len(fork.collapse_duplicate_packets([first.id, second.id])), 1)
+
+
 class RepairVerificationTests(unittest.TestCase):
     def test_an_attempt_that_leaves_an_orphan_segment_is_reverted(self) -> None:
         from unittest.mock import patch

@@ -381,7 +381,7 @@ class ParseRevisionForkService:
         return {chapter_id: sorted(ids) for chapter_id, ids in grouped.items()}
 
     def collapse_duplicate_packets(self, packet_ids: list[str], *, now: datetime | None = None) -> list[str]:
-        """Packets with the same block range: one stays, the others are invalidated; returns those.
+        """Packets over the same blocks that claim the same sentences: one stays, the others are invalidated.
 
         The one that stays is the one translated last (its translation is the one the reader saw
         last); the others' segments are superseded and their sentence maps dropped, so no sentence is
@@ -395,9 +395,40 @@ class ParseRevisionForkService:
                 continue
             groups.setdefault((packet.chapter_id, packet.block_start_id, packet.block_end_id or packet.block_start_id), []).append(packet)
         invalidated: list[str] = []
-        for group in groups.values():
-            if len(group) < 2:
-                continue
+        for same_range in groups.values():
+            for group in self._overlapping(same_range):
+                invalidated.extend(self._collapse_group(group, now))
+        self.session.flush()
+        return invalidated
+
+    def _overlapping(self, packets: list[TranslationPacket]) -> list[list[TranslationPacket]]:
+        """Packets over the same blocks that claim the same sentences. A long block is split into
+        windows (20 sentences each) that share its block range but not their sentences: those are not
+        duplicates. Collapsing them orphaned 32 sentences of a 52-line prompt in the Agent book."""
+        if len(packets) < 2:
+            return []
+        current = {
+            packet.id: set(
+                self.session.scalars(
+                    select(PacketSentenceMap.sentence_id).where(
+                        PacketSentenceMap.packet_id == packet.id, PacketSentenceMap.role == PacketSentenceRole.CURRENT
+                    )
+                ).all()
+            )
+            for packet in packets
+        }
+        clusters: list[tuple[set[str], list[TranslationPacket]]] = []
+        for packet in packets:
+            sentences = current[packet.id]
+            joined = [cluster for cluster in clusters if cluster[0] & sentences]
+            merged_sentences = set(sentences).union(*(cluster[0] for cluster in joined))
+            merged_packets = [packet] + [member for cluster in joined for member in cluster[1]]
+            clusters = [cluster for cluster in clusters if cluster not in joined] + [(merged_sentences, merged_packets)]
+        return [members for _sentences, members in clusters if len(members) > 1]
+
+    def _collapse_group(self, group: list[TranslationPacket], now: datetime) -> list[str]:
+        invalidated: list[str] = []
+        if len(group) > 1:
 
             def last_translated(packet: TranslationPacket) -> tuple[int, str, str]:
                 run = self._latest_run(packet.id)
@@ -421,7 +452,6 @@ class ParseRevisionForkService:
                 packet.status = PacketStatus.INVALIDATED
                 packet.updated_at = now
                 invalidated.append(packet.id)
-        self.session.flush()
         return invalidated
 
     def collapse_document_duplicates(self, document_id: str) -> list[str]:
