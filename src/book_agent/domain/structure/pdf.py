@@ -8,6 +8,7 @@ from pathlib import Path
 from statistics import median
 from typing import TYPE_CHECKING, Any
 
+from book_agent.domain.structure.parse_health import set_wholly_in_code_face
 from book_agent.domain.structure import recovery_skills as recovery_skill_registry
 
 if TYPE_CHECKING:
@@ -2693,6 +2694,11 @@ class PdfStructureRecoveryService:
         block: _RecoveredBlock,
     ) -> list[_RecoveredBlock]:
         if block.role not in {"body", "code_like"} or block.block_type not in {BlockType.PARAGRAPH, BlockType.CODE}:
+            return [block]
+        if set_wholly_in_code_face(block.metadata.get("pdf_font_names")):
+            # The book sets every line in its code face: what follows the code is program output
+            # or the rest of a string literal ("The output shows ...", "Total tokens: 37312"),
+            # printed as code, not prose to translate.
             return [block]
         raw_lines = _expanded_code_candidate_lines(block.text)
         if len(raw_lines) < 2:

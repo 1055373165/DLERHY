@@ -220,6 +220,27 @@ def _within_render_model_scope(method):
     return wrapper
 
 
+
+def _drop_refresh_fragments_parsed_as_blocks(
+    bundle: ChapterExportBundle, render_blocks: list[MergedRenderBlock]
+) -> list[MergedRenderBlock]:
+    """Drop the stale prose fragments an earlier structure refresh stored on a block
+    (``refresh_split_render_fragments``) when the parse now has that text as a block of its own:
+    drawn from both, the reader saw it twice, once untranslated."""
+    parsed = {
+        _normalize_signature_text(block.source_text)
+        for block in bundle.blocks
+        if _normalize_signature_text(block.source_text)
+    }
+    return [
+        block
+        for block in render_blocks
+        if not (
+            "export_refresh_split_render_fragment" in list(block.source_metadata.get("recovery_flags") or [])
+            and _normalize_signature_text(block.source_text) in parsed
+        )
+    ]
+
 class ExportService:
     def __init__(
         self,
@@ -2135,6 +2156,7 @@ class ExportService:
         repaired_blocks: list[MergedRenderBlock] = []
         for index, block in enumerate(render_blocks):
             repaired_blocks.extend(self._repair_book_pdf_render_blocks(bundle, index, block))
+        repaired_blocks = _drop_refresh_fragments_parsed_as_blocks(bundle, repaired_blocks)
 
         normalized: list[MergedRenderBlock] = []
         index = 0

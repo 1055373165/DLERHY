@@ -16,7 +16,7 @@ from book_agent.domain.enums import (
 )
 from book_agent.domain.structure.callouts import is_callout_metadata
 from book_agent.domain.structure.geometry import horizontal_overlap_ratio
-from book_agent.domain.structure.parse_health import is_monospace_font
+from book_agent.domain.structure.parse_health import is_monospace_font, set_wholly_in_code_face
 from book_agent.domain.structure.table_cells import table_grid
 from book_agent.export import code_text
 from book_agent.export.common import (
@@ -71,6 +71,9 @@ def normalize_pdf_body_render_texts(
     source_metadata: dict[str, object],
 ) -> tuple[str, list[str], str | None]:
     if not _is_pdf_document(document) or render_mode != "zh_primary_with_optional_source":
+        return source_text, target_ids, None
+    if is_code_face_prose_split(block_type, source_metadata):
+        # Drawn as code (``should_promote_book_block_to_code``): its lines stay as the page sets them.
         return source_text, target_ids, None
     if block_type == BlockType.HEADING:
         normalized_source_text = join_sentence_source_texts(block_sentences) or source_text
@@ -155,6 +158,10 @@ def split_mixed_book_code_prose_render_block(
     block: MergedRenderBlock,
 ) -> list[MergedRenderBlock]:
     if block.render_mode != "source_artifact_full_width" or block.artifact_kind != "code":
+        return [block]
+    if set_wholly_in_code_face(block.source_metadata.get("pdf_font_names")):
+        # Every line is in the book's code face: the lines around the code are program output or
+        # a string literal's text, printed as code.
         return [block]
     raw_lines = _expanded_code_candidate_lines(block.source_text or "")
     if len(raw_lines) < 2:
@@ -686,11 +693,24 @@ def split_inline_list_target_lines(text: str, *, preserve_leading_ws: bool = Fal
     return [line.strip() for line in prepared.splitlines() if line.strip()]
 
 
+def is_code_face_prose_split(block_type: object, metadata: dict[str, object]) -> bool:
+    """A paragraph an older parse split off the end of a listing although the page sets it in the
+    code face (program output, the rest of a string literal): it is code."""
+    value = getattr(block_type, "value", block_type)
+    return (
+        value == BlockType.PARAGRAPH.value
+        and str(metadata.get("pdf_mixed_code_prose_split") or "") == "trailing_prose_suffix"
+        and set_wholly_in_code_face(metadata.get("pdf_font_names"))  # type: ignore[arg-type]
+    )
+
+
 def should_promote_book_block_to_code(block: MergedRenderBlock) -> bool:
     if block.render_mode == "source_artifact_full_width" and block.artifact_kind == "code":
         return False
     if block.block_type not in {BlockType.HEADING.value, BlockType.PARAGRAPH.value, BlockType.TABLE.value}:
         return False
+    if is_code_face_prose_split(block.block_type, block.source_metadata or {}):
+        return True
     page_family = str(block.source_metadata.get("pdf_page_family") or "body").strip().casefold()
     if page_family == "references":
         return False
@@ -1634,6 +1654,15 @@ def is_code_like_block(
         return False
     if str(source_metadata.get("pdf_block_role") or "").strip().casefold() == "code_like":
         return True
+    fonts = [str(name) for name in source_metadata.get("pdf_font_names") or () if name]
+    if (
+        effective_block_type == BlockType.PARAGRAPH
+        and any(not is_monospace_font(name) for name in fonts)
+        and code_text.looks_like_prose_artifact_text(" ".join(effective_source_text.split()), academic_paper=academic_paper)
+    ):
+        # Body text with identifiers in the code face ("the stop condition (stop_condition)"): the
+        # parser read it as a paragraph in the body face, and it reads as prose. It is translated.
+        return False
     return code_text.looks_like_code_artifact_text(effective_source_text, academic_paper=academic_paper)
 
 
