@@ -239,6 +239,9 @@ class TranslationTask:
     # prompt replays the rejected answer and the findings after the packet
     # message, so the cached prefix is untouched.
     correction: OutputCorrection | None = None
+    # Sentences that must each get their own target (a rebuilt table's cells translated on their own);
+    # a callout's lines always must (``output_validation.callout_line_sentence_ids``).
+    line_locked_sentence_ids: tuple[str, ...] = ()
 
 
 class TranslationWorker(Protocol):

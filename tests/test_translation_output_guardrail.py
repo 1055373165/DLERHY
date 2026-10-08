@@ -146,6 +146,27 @@ class OutputGuardrailTests(unittest.TestCase):
         self.assertTrue(texts)
         self.assertTrue(all(text.startswith("译::") for text in texts), texts)
 
+    def test_translating_some_sentences_holds_the_model_to_one_target_each(self) -> None:
+        def joined(task: TranslationTask) -> TranslationWorkerOutput:
+            # A table row answered as one markdown row for all its cells.
+            ids = [sentence.id for sentence in task.current_sentences]
+            return TranslationWorkerOutput(
+                packet_id=task.context_packet.packet_id,
+                target_segments=[
+                    TranslationTargetSegment(temp_id="t1", text_zh="| 甲 | 乙 |", segment_type="sentence", source_sentence_ids=ids, confidence=0.9)
+                ],
+                alignment_suggestions=[AlignmentSuggestion(source_sentence_ids=ids, target_temp_ids=["t1"], relation_type="n:1")],
+            )
+
+        worker = ScriptedWorker([joined, lambda task: _segments(task)])
+        with self.session_factory() as session:
+            bundle = TranslationRepository(session).load_packet_bundle(self.packet_id)
+            wanted = [sentence.id for sentence in bundle.current_sentences][:2]
+            texts = self._service(session, worker, repairs=1).translate_sentences(self.packet_id, wanted)
+        self.assertEqual(len(worker.tasks), 2)
+        self.assertEqual(worker.tasks[0].line_locked_sentence_ids, tuple(wanted))
+        self.assertEqual(sorted(texts), sorted(wanted))
+
     def test_exhausted_repair_budget_persists_the_last_answer_with_its_error_code(self) -> None:
         worker = ScriptedWorker([lambda task: _segments(task, echo=True), lambda task: _segments(task, echo=True)])
         with self.session_factory() as session:

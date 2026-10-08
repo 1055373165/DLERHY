@@ -184,9 +184,9 @@ class OutputValidationReport:
             )
         for group in self.merged_line_groups:
             lines.append(
-                "These sentences are separate lines of a prompt set line by line: "
+                "These sentences are separate lines (of a prompt) or cells (of a table): "
                 + ", ".join(name(item) for item in group)
-                + ". Translate each line as its own target segment, aligned 1:1 to its line; do not join lines."
+                + ". Translate each line or cell as its own target segment, aligned 1:1; do not join them."
             )
         for finding in self.length_ratio_findings:
             lines.append(
@@ -333,7 +333,7 @@ class OutputValidator:
             output,
             source_texts={sentence.id: (sentence.source_text or "") for sentence in sentences},
             locked_terms=locked_terms,
-            line_locked=callout_line_sentence_ids(sentences),
+            line_locked=[*callout_line_sentence_ids(sentences), *getattr(task, "line_locked_sentence_ids", ())],
         )
 
     def _is_echo(self, source_text: str, target_text: str) -> bool:

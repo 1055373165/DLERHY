@@ -349,7 +349,12 @@ class TranslationService:
         current = [sentence for sentence in prepared.task.current_sentences if sentence.id in set(wanted)]
         if len(current) != len(wanted):
             return None
-        prepared = replace(prepared, task=replace(prepared.task, current_sentences=current))
+        # Each sentence its own target: the guardrail sends a joined answer (a table's cells as one
+        # markdown row) back to the model.
+        prepared = replace(
+            prepared,
+            task=replace(prepared.task, current_sentences=current, line_locked_sentence_ids=tuple(sentence.id for sentence in current)),
+        )
         try:
             worker_result = self.call_worker(prepared)
         except Exception as exc:

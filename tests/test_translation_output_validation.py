@@ -144,7 +144,7 @@ class OutputValidatorTests(unittest.TestCase):
         self.assertFalse(report.ok)
         self.assertEqual(report.error_code, LINES_MERGED)
         self.assertEqual(report.merged_line_groups, (("s1", "s2"),))
-        self.assertIn("Translate each line as its own target segment", " ".join(report.findings()))
+        self.assertIn("Translate each line or cell as its own target segment", " ".join(report.findings()))
         # One target per line passes; sentences that are not callout lines may still share one.
         apart = _output(alignments=[(["s1"], ["t1"]), (["s2"], ["t2"])], segments=("t1", "t2"))
         self.assertTrue(OutputValidator().validate(["s1", "s2"], apart, line_locked=["s1", "s2"]).ok)
