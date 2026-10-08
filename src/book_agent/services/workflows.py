@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Collection
 from pathlib import Path
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from book_agent.application.document_queries import DocumentQueryService
@@ -421,6 +422,22 @@ class DocumentWorkflowService:
             document_id
         )
 
+    def _book_qa_owns_blockers(self, document_id: str) -> bool:
+        """Once the whole-book layered QA has judged the book, its blocking findings are listed for
+        the reader (and asked about), as a whole-book run's own exports do; a later export from the
+        API or the CLI is not stopped by the rule review's gate either. The Agent book's bilingual
+        and EPUB exports were refused over three layout-risk flags the book QA had already escalated."""
+        from book_agent.domain.models.review import PilotQualityReport
+
+        return (
+            self.session.scalar(
+                select(PilotQualityReport.id)
+                .where(PilotQualityReport.document_id == document_id, PilotQualityReport.scope == "book")
+                .limit(1)
+            )
+            is not None
+        )
+
     def export_document(
         self,
         document_id: str,
@@ -431,6 +448,8 @@ class DocumentWorkflowService:
         chapter_ids: Collection[str] | None = None,
         despite_gate: bool = False,
     ) -> DocumentExportResult:
+        if not despite_gate and chapter_ids is None:
+            despite_gate = self._book_qa_owns_blockers(document_id)
         return self.exports.export_document(
             document_id,
             export_type,
