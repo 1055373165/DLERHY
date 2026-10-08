@@ -444,6 +444,25 @@ class KnownIssueTests(unittest.TestCase):
         )
         self.assertFound(build(blocks), "L4.code_translated", BLOCKING, target_id="b-code")
 
+    def test_a_listing_title_on_the_code_box_is_not_translated_code(self) -> None:
+        # The Agent book's whole-book QA reported 186 listings as translated code: their Chinese
+        # titles (代码清单 3.1 …) are drawn as the code box's caption.
+        blocks = replace_block(
+            clean_blocks(),
+            "b-code",
+            html=(
+                "<section class='block artifact code'><div class='zh listing-caption'>代码清单 2.1 加载环境变量</div>"
+                "<pre><code>import os\nprint(os.getenv('OPENAI_API_KEY'))</code></pre></section>"
+            ),
+        )
+        self.assertNotIn("L4.code_translated", [finding["check_id"] for finding in findings(build(blocks))])
+
+    def test_python_none_is_not_a_negation(self) -> None:
+        from book_agent.domain.quality.pilot_qa import _CODE_LITERAL_RE, _NEGATION_EN_RE
+
+        self.assertIsNone(_NEGATION_EN_RE.search(_CODE_LITERAL_RE.sub(" ", "If the callback returns None, the tool executes.")))
+        self.assertIsNotNone(_NEGATION_EN_RE.search(_CODE_LITERAL_RE.sub(" ", "None of these tools are needed.")))
+
     def test_a_code_comment_outside_its_code_block(self) -> None:
         # The RAG book: bold "# comments" in listings came out as headings between code blocks.
         blocks = clean_blocks()

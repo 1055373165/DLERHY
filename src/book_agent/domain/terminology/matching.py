@@ -169,6 +169,25 @@ def _inside_hyphenated_word(text: str, spans: Sequence[tuple[str, int, int]], oc
     return joined_before or joined_after
 
 
+def inside_identifier(text: str, spans: Sequence[tuple[str, int, int]], occurrence: TermOccurrence) -> bool:
+    """True when the match is part of a code identifier: "agents" in scratch_agents, "tool call" in
+    tool_call_id, "model context protocol" in @modelcontextprotocol/inspector, "agent" in agent.run().
+    The Agent book's whole-book QA flagged these as term misses. CamelCase is left alone: product
+    names (LangChain, OpenAI) are terms too."""
+    start = spans[occurrence.start_token][1]
+    end = spans[occurrence.end_token - 1][2]
+    before = text[start - 1 : start]
+    after = text[end : end + 1]
+    if before in {"_", "@", "/"} or after in {"_", "("}:
+        return True
+    if before == "." and text[start - 2 : start - 1].isalnum():
+        return True
+    if after == "." and text[end + 1 : end + 2].isalpha() and text[end + 1 : end + 2].islower():
+        return True
+    # Inside the tokens: "tool_call" is two tokens joined by an underscore.
+    return "_" in text[start:end]
+
+
 def normalize_target(text: str) -> str:
     """Chinese text for rendering lookup: no whitespace or punctuation, Latin case folded."""
     return "".join(
