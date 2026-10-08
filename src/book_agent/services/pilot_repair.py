@@ -245,6 +245,10 @@ class PilotRepairService:
         qa = PilotQualityService(self.session)
         try:
             layers, _source = qa.evaluate(document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope)
+            # The reading copy on disk, judged now (the before report may predate a check): a copy the
+            # export would write differently (literal emphasis markers) is written again at the end.
+            file_layers, file_source = qa.evaluate(document_id, ctx.chapter_ids, use_export_file=True, scope=self.scope)
+            stale_copy = file_source == "file" and needs_reexport(file_layers)
             initial = repairable_findings(layers)
             classes = self._classes(initial)
             self.session.commit()
@@ -307,9 +311,7 @@ class PilotRepairService:
                 stop_reason = "max_rounds"
 
             final_report = before_report
-            # A reading copy written before a fix to the export (literal emphasis markers): writing
-            # it again is a repair even when nothing else was kept.
-            stale_copy = before_report is not None and needs_reexport(before_report.layers_json or [])
+            # A stale reading copy: writing it again is a repair even when nothing else was kept.
             if kept_any or stale_copy:
                 if kept_any:
                     self._persist_chapter_scope(run, ctx.chapter_ids, chapter_ids)

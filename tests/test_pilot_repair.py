@@ -279,6 +279,26 @@ class InjectedIssuesAreRepairedTests(PilotRepairBenchCase):
         with self.bench.session_factory() as session:
             self.assertNotIn("*", active_target_texts(session, [sentence])[sentence])
 
+    def test_a_reading_copy_that_shows_emphasis_markers_is_written_again(self) -> None:
+        from book_agent.services.pilot_quality import _latest_reading_copy
+
+        self.translate()
+        with self.bench.session_factory() as session:
+            path = _latest_reading_copy(session, self.bench.document_id)
+        # As the export wrote it before it rendered markers: the asterisks are in the file.
+        marker = "<section class='block paragraph'><div class='zh'>"
+        original = path.read_text(encoding="utf-8")
+        self.assertIn(marker, original)
+        path.write_text(original.replace(marker, marker + "其*智能体程序*", 1), encoding="utf-8")
+
+        payload, final = self.repair()
+
+        self.assertEqual(payload["attempts"], [])
+        with self.bench.session_factory() as session:
+            rewritten = _latest_reading_copy(session, self.bench.document_id).read_text(encoding="utf-8")
+        self.assertNotIn("*智能体程序*", rewritten)
+        self.assertEqual(_findings(final, "L7.emphasis_marker"), [])
+
     def test_an_untranslated_sentence_retranslates_only_its_packet(self) -> None:
         with self.bench.session_factory() as session:
             (omitted,) = sentence_ids(session, self.bench.document_id, "Teams track the score")
