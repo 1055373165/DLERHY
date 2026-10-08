@@ -474,6 +474,12 @@ def is_monospace_font(name: str) -> bool:
     return bool(_MONOSPACE_FONT_RE.search(name or ""))
 
 
+def set_wholly_in_code_face(font_names: Iterable[object] | None) -> bool:
+    """Every font of a block is a monospace face: the book prints it as code (or program output)."""
+    names = [str(name) for name in font_names or () if name]
+    return bool(names) and all(is_monospace_font(name) for name in names)
+
+
 def check_pseudo_headings(blocks: Sequence[HealthBlock]) -> CheckResult:
     headings = [block for block in blocks if block.block_type == "heading"]
     samples: list[Sample] = []

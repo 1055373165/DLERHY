@@ -96,6 +96,20 @@ def unify_label(text: str, numbers: Sequence[str], wanted: str, others: Sequence
 MARKDOWN_EMPHASIS_RE = re.compile(r"\*\*(?=\S)(.+?)(?<=\S)\*\*", re.DOTALL)
 
 
+_LEADING_BULLET_RE = re.compile(r"^\s*[\u2022\u25cf\u25e6\u25aa\u2023\u2219\u25a0]\s*")
+
+
+def strip_unsourced_bullet(text: str, sources: Sequence[str]) -> str:
+    """"• 由路由智能体接收…" for "1 A router agent receives…": a bullet glyph the source does not have.
+
+    The model sometimes opens a numbered item's translation with a bullet; the reading copy draws
+    the item's number, so the reader saw "1. •". A source that starts with a bullet keeps it.
+    """
+    if not _LEADING_BULLET_RE.match(text or "") or any(_LEADING_BULLET_RE.match(source or "") for source in sources):
+        return text
+    return _LEADING_BULLET_RE.sub("", text, count=1)
+
+
 def strip_markdown_emphasis(text: str) -> str:
     """"**核心要点**" -> "核心要点" (outside inline code)."""
     if "**" not in (text or ""):

@@ -8,6 +8,7 @@ from pathlib import Path
 from statistics import median
 from typing import TYPE_CHECKING, Any
 
+from book_agent.domain.structure.parse_health import set_wholly_in_code_face
 from book_agent.domain.structure import recovery_skills as recovery_skill_registry
 
 if TYPE_CHECKING:
@@ -1531,6 +1532,9 @@ class PdfStructureRecoveryService:
             ):
                 # Two bold lines set at different sizes are two headings ("Summary" over "Data loading").
                 return False
+            if current.font_size_avg > 0 and previous.font_size_avg >= current.font_size_avg * _DISPLAY_OVER_BODY_SIZE_RATIO:
+                # A display line (a part page's title at 30pt) over body text is not the text's start.
+                return False
             prev_bottom = previous.bbox_regions[-1]["bbox"][3]
             curr_top = current.bbox_regions[0]["bbox"][1]
             gap = curr_top - prev_bottom
@@ -1738,14 +1742,28 @@ class PdfStructureRecoveryService:
             previous_index = len(merged) - 1
             while previous_index >= 0 and merged[previous_index].role in {"header", "footer"}:
                 previous_index -= 1
-            if previous_index >= 0 and current.role == "heading":
+            if previous_index >= 0 and current.role in {"heading", "body"}:
                 previous = merged[previous_index]
                 page_titles = titles_by_page.get(current.page_start, [])
                 joined_tokens = _title_tokens(f"{previous.text} {current.text}")
+                # The rest of a title the body classifier took for a paragraph ("Part 1" over "Building
+                # your first LLM agent" on a part page): set at the heading's size, it spells the whole title.
+                display_rest = (
+                    current.block_type == BlockType.PARAGRAPH
+                    and current.font_size_avg >= previous.font_size_avg * 0.8
+                    and len(_normalize_text(current.text)) <= 100
+                )
+                # The name under a bare "Part 2" label, set at the label's size, even where the
+                # outline names the part differently.
+                part_name = display_rest and bool(_BARE_PART_LABEL_RE.match(_normalize_text(previous.text)))
+                title_rest = current.role == "heading" or (display_rest and any(joined_tokens == title for title in page_titles))
                 if (
                     previous.role == "heading"
                     and previous.page_end == current.page_start == current.page_end
-                    and any(_is_token_run(joined_tokens, title) for title in page_titles)
+                    and (
+                        part_name
+                        or (title_rest and any(_is_token_run(joined_tokens, title) for title in page_titles))
+                    )
                 ):
                     combined = self._merge_heading_blocks(previous, current)
                     combined.text = " ".join(combined.text.split())
@@ -2693,6 +2711,11 @@ class PdfStructureRecoveryService:
         block: _RecoveredBlock,
     ) -> list[_RecoveredBlock]:
         if block.role not in {"body", "code_like"} or block.block_type not in {BlockType.PARAGRAPH, BlockType.CODE}:
+            return [block]
+        if set_wholly_in_code_face(block.metadata.get("pdf_font_names")):
+            # The book sets every line in its code face: what follows the code is program output
+            # or the rest of a string literal ("The output shows ...", "Total tokens: 37312"),
+            # printed as code, not prose to translate.
             return [block]
         raw_lines = _expanded_code_candidate_lines(block.text)
         if len(raw_lines) < 2:
@@ -5110,6 +5133,9 @@ _NUMBERED_SECTION_HEADING_PATTERN = re.compile(r"^(\d{1,2}(?:\.\d{1,2}){1,3})\.?
 # A word, then the end of a sentence and the start of the next ("... protections. The semaphore").
 _PROSE_SENTENCE_END_PATTERN = re.compile(r"[a-z]{2,}[.!?]\s+[A-Z]")
 # How far (pt) a heading's size may be from a level's size and still be set in that level's style.
+# Text set this many times larger than the block after it is a display line, not that block's start.
+_BARE_PART_LABEL_RE = re.compile(r"^part\s+(?:\d{1,2}|[ivx]{1,4}|one|two|three|four|five|six|seven|eight|nine|ten)$", re.IGNORECASE)
+_DISPLAY_OVER_BODY_SIZE_RATIO = 1.8
 _HEADING_STYLE_SIZE_TOLERANCE = 0.6
 
 

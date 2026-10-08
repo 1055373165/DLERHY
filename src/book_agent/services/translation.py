@@ -33,7 +33,7 @@ from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemor
 from book_agent.infra.repositories.events import emit_event
 from book_agent.infra.repositories.translation import TranslationPacketBundle, TranslationRepository
 from book_agent.services.context_compile import ChapterContextCompileOptions, ChapterContextCompiler
-from book_agent.domain.quality.zh_text_fixes import strip_markdown_emphasis
+from book_agent.domain.quality.zh_text_fixes import strip_markdown_emphasis, strip_unsourced_bullet
 from book_agent.domain.terminology.enforcement import LockedTerm, find_term_violations
 from book_agent.services.glossary_service import GlossaryService
 from book_agent.services.memory_service import MemoryService
@@ -46,7 +46,12 @@ from book_agent.translation.contracts import (
     TranslationWorkerResult,
 )
 from book_agent.translation.heuristics import DEFAULT_HEURISTICS
-from book_agent.translation.output_validation import OutputCorrection, OutputRejection, OutputValidator
+from book_agent.translation.output_validation import (
+    OutputCorrection,
+    OutputRejection,
+    OutputValidator,
+    callout_line_sentence_ids,
+)
 from book_agent.workers.failures import classify_failure
 from book_agent.workers.translator import (
     EchoTranslationWorker,
@@ -324,6 +329,82 @@ class TranslationService:
             auto_commit_memory=auto_commit_memory,
         )
 
+    def translate_sentences(
+        self,
+        packet_id: str,
+        sentence_ids: list[str],
+        *,
+        rerun_hints: tuple[str, ...] = (),
+        run_id: str | None = None,
+    ) -> dict[str, str] | None:
+        """Translate only these sentences of a packet (the rest keeps its translation): sentence id -> Chinese.
+
+        A structure edit that rebuilt one table of a packet leaves only that table's cells without a
+        translation; the model sees the packet as context and answers just those sentences. The call is
+        metered like a packet's. Returns None when the answer does not give each sentence its own
+        translation (the caller then retranslates the packet).
+        """
+        wanted = list(dict.fromkeys(sentence_ids))
+        prepared = self.prepare_packet(packet_id, rerun_hints=rerun_hints, run_id=run_id)
+        current = [sentence for sentence in prepared.task.current_sentences if sentence.id in set(wanted)]
+        if len(current) != len(wanted):
+            return None
+        # Each sentence its own target: the guardrail sends a joined answer (a table's cells as one
+        # markdown row) back to the model.
+        prepared = replace(
+            prepared,
+            task=replace(prepared.task, current_sentences=current, line_locked_sentence_ids=tuple(sentence.id for sentence in current)),
+        )
+        try:
+            worker_result = self.call_worker(prepared)
+        except Exception as exc:
+            self.record_worker_failure(prepared, exc)
+            raise
+        usage = worker_result.usage
+        emit_event(
+            self.repository.session,
+            kind=LLM_CALL_COMPLETED,
+            run_id=prepared.run_id,
+            chapter_id=prepared.chapter_id,
+            packet_id=prepared.packet_id,
+            actor_kind="agent",
+            actor_id=f"worker.{prepared.worker_metadata.worker_name}",
+            correlation_id=prepared.correlation_id,
+            payload={
+                "call_id": prepared.call_id,
+                "call_kind": "translate_sentences",
+                "backend": prepared.worker_metadata.worker_name,
+                "model": prepared.worker_metadata.model_name,
+                "sentence_count": len(current),
+                "token_in": int(usage.token_in or 0),
+                "token_out": int(usage.token_out or 0),
+                "total_tokens": int(usage.total_tokens or 0),
+                "cost_usd": float(usage.cost_usd) if usage.cost_usd is not None else None,
+                "latency_ms": int(usage.latency_ms or 0),
+                "provider_request_id": usage.provider_request_id,
+            },
+        )
+        output = worker_result.output
+        source_by_id = {sentence.id: sentence.source_text or "" for sentence in current}
+        sources_by_temp_id: dict[str, list[str]] = {}
+        for suggestion in output.alignment_suggestions:
+            for temp_id in suggestion.target_temp_ids:
+                sources_by_temp_id.setdefault(temp_id, []).extend(suggestion.source_sentence_ids)
+        texts: dict[str, str] = {}
+        for segment in output.target_segments:
+            sources = [
+                sentence_id
+                for sentence_id in dict.fromkeys([*segment.source_sentence_ids, *sources_by_temp_id.get(segment.temp_id, [])])
+                if sentence_id in source_by_id
+            ]
+            if len(sources) != 1 or sources[0] in texts:
+                return None
+            text = strip_unsourced_bullet(strip_markdown_emphasis(segment.text_zh or "").strip(), [source_by_id[sources[0]]])
+            if not text:
+                return None
+            texts[sources[0]] = text
+        return texts if set(texts) == set(source_by_id) else None
+
     def prepare_packet(
         self,
         packet_id: str,
@@ -563,6 +644,7 @@ class TranslationService:
             worker_result.output,
             source_texts={sentence.id: sentence.source_text or "" for sentence in bundle.current_sentences},
             locked_terms=prepared.locked_terms,
+            line_locked=callout_line_sentence_ids(bundle.current_sentences),
         )
         artifacts = self._build_artifacts(bundle, worker_result, compiled_context_packet, worker_metadata)
         artifacts.translation_run.error_code = validation.error_code
@@ -741,16 +823,30 @@ class TranslationService:
         valid_sentence_ids = {sentence.id for sentence in bundle.current_sentences}
         # The model sometimes sets a heading or phrase in markdown bold; a reader would see "**".
         source_has_markdown = any("**" in (sentence.source_text or "") for sentence in bundle.current_sentences)
+        source_by_id = {sentence.id: sentence.source_text or "" for sentence in bundle.current_sentences}
+        sources_by_temp_id: dict[str, list[str]] = {}
+        for suggestion in output.alignment_suggestions:
+            for temp_id in suggestion.target_temp_ids:
+                sources_by_temp_id.setdefault(temp_id, []).extend(suggestion.source_sentence_ids)
         for ordinal, segment in enumerate(output.target_segments, start=1):
             target_id = stable_id("target-segment", translation_run.id, ordinal)
             temp_to_target_id[segment.temp_id] = target_id
+            text_zh = segment.text_zh if source_has_markdown else strip_markdown_emphasis(segment.text_zh)
+            # A numbered item's translation opened with "• ": the reader would see two markers.
+            segment_sources = [
+                source_by_id[sentence_id]
+                for sentence_id in dict.fromkeys([*segment.source_sentence_ids, *sources_by_temp_id.get(segment.temp_id, [])])
+                if sentence_id in source_by_id
+            ]
+            if segment_sources:
+                text_zh = strip_unsourced_bullet(text_zh, segment_sources)
             target_segments.append(
                 TargetSegment(
                     id=target_id,
                     chapter_id=bundle.packet.chapter_id,
                     translation_run_id=translation_run.id,
                     ordinal=ordinal,
-                    text_zh=segment.text_zh if source_has_markdown else strip_markdown_emphasis(segment.text_zh),
+                    text_zh=text_zh,
                     segment_type=_normalize_segment_type(segment.segment_type),
                     confidence=segment.confidence,
                     final_status=TargetSegmentStatus.DRAFT,

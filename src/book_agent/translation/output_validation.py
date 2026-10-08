@@ -16,7 +16,11 @@ Checks, in error-code priority order:
   a translation without any accepted rendering (the same matcher review
   uses for TERM_CONFLICT, ``domain.terminology.enforcement``);
 - length ratio: the translated length of an aligned group is implausible
-  for the amount of source text (truncation or runaway generation).
+  for the amount of source text (truncation or runaway generation);
+- line-locked: two lines of a callout (a prompt set line by line) answered
+  by one target segment. Each line is translated on its own, so the reading
+  copy keeps the prompt's lines; every translation path (first translation,
+  repair retranslation) goes through this check.
 """
 
 from __future__ import annotations
@@ -34,6 +38,7 @@ SOURCE_ECHOED = "output_source_echoed"
 TARGET_EMPTY = "output_target_empty"
 LENGTH_RATIO_ABNORMAL = "output_length_ratio_abnormal"
 LOCKED_TERM_VIOLATED = "output_locked_term_violation"
+LINES_MERGED = "output_callout_lines_merged"
 
 _WHITESPACE = re.compile(r"\s+")
 _LETTERS = re.compile(r"[A-Za-z一-鿿]")
@@ -64,6 +69,8 @@ class OutputValidationReport:
     empty_target_temp_ids: tuple[str, ...] = ()
     length_ratio_findings: tuple[LengthRatioFinding, ...] = ()
     term_violations: tuple[TermViolation, ...] = ()
+    # Lines of a callout answered together, one tuple per merged group.
+    merged_line_groups: tuple[tuple[str, ...], ...] = ()
 
     @property
     def error_code(self) -> str | None:
@@ -84,6 +91,8 @@ class OutputValidationReport:
             codes.append(LOCKED_TERM_VIOLATED)
         if self.length_ratio_findings:
             codes.append(LENGTH_RATIO_ABNORMAL)
+        if self.merged_line_groups:
+            codes.append(LINES_MERGED)
         return tuple(codes)
 
     @property
@@ -96,6 +105,7 @@ class OutputValidationReport:
             or self.empty_target_temp_ids
             or self.term_violations
             or self.length_ratio_findings
+            or self.merged_line_groups
         )
 
     def to_json(self) -> dict[str, Any]:
@@ -126,6 +136,7 @@ class OutputValidationReport:
                 }
                 for item in self.term_violations
             ],
+            "merged_line_groups": [list(group) for group in self.merged_line_groups],
         }
 
     def findings(self, alias_of: Mapping[str, str] | None = None) -> list[str]:
@@ -171,6 +182,12 @@ class OutputValidationReport:
                 f'{name(violation.unit_id)} contains the locked term "{violation.source_term}", '
                 f"which must be translated as one of: {accepted}. Use the locked rendering."
             )
+        for group in self.merged_line_groups:
+            lines.append(
+                "These sentences are separate lines (of a prompt) or cells (of a table): "
+                + ", ".join(name(item) for item in group)
+                + ". Translate each line or cell as its own target segment, aligned 1:1; do not join them."
+            )
         for finding in self.length_ratio_findings:
             lines.append(
                 "Implausible translation length for "
@@ -179,6 +196,15 @@ class OutputValidationReport:
                 + ("Check for truncation or dropped content." if finding.ratio < 1 else "Check for runaway or duplicated output.")
             )
         return lines
+
+
+def callout_line_sentence_ids(sentences: Iterable[Any]) -> list[str]:
+    """Sentences that are lines of a prose callout (bootstrap marks them ``callout_line``)."""
+    return [
+        str(sentence.id)
+        for sentence in sentences
+        if isinstance(getattr(sentence, "source_span_json", None), dict) and sentence.source_span_json.get("callout_line")
+    ]
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,8 +246,11 @@ class OutputValidator:
         *,
         source_texts: Mapping[str, str] | None = None,
         locked_terms: Sequence[LockedTerm] = (),
+        line_locked: Iterable[str] = (),
     ) -> OutputValidationReport:
         """A sentence is covered when an alignment links it to a target segment the worker returned.
+
+        ``line_locked`` are sentences that are lines of a callout: no target may answer two of them.
 
         ``source_texts`` (sentence id -> source text) enables the echo,
         locked-term and length-ratio checks; without it only coverage is
@@ -236,6 +265,23 @@ class OutputValidator:
         echoed: list[str] = []
         ratio_findings: list[LengthRatioFinding] = []
         term_units: list[tuple[str, str, str]] = []
+        locked_lines = set(line_locked) & expected_set
+        lines_by_target: dict[str, list[str]] = {}
+        for suggestion in output.alignment_suggestions:
+            for temp_id in suggestion.target_temp_ids:
+                if temp_id in segments_by_temp_id:
+                    lines_by_target.setdefault(temp_id, []).extend(
+                        sentence_id for sentence_id in suggestion.source_sentence_ids if sentence_id in locked_lines
+                    )
+        for segment in output.target_segments:
+            lines_by_target.setdefault(segment.temp_id, []).extend(
+                sentence_id for sentence_id in segment.source_sentence_ids if sentence_id in locked_lines
+            )
+        merged_groups = tuple(
+            dict.fromkeys(
+                tuple(dict.fromkeys(group)) for group in lines_by_target.values() if len(set(group)) > 1
+            )
+        )
         for suggestion in output.alignment_suggestions:
             valid_targets = [temp_id for temp_id in suggestion.target_temp_ids if temp_id in segments_by_temp_id]
             unknown_targets.extend(temp_id for temp_id in suggestion.target_temp_ids if temp_id not in segments_by_temp_id)
@@ -274,6 +320,7 @@ class OutputValidator:
             empty_target_temp_ids=empty_targets,
             length_ratio_findings=tuple(ratio_findings),
             term_violations=tuple(term_violations.values()),
+            merged_line_groups=merged_groups,
         )
 
     def validate_task(
@@ -286,6 +333,7 @@ class OutputValidator:
             output,
             source_texts={sentence.id: (sentence.source_text or "") for sentence in sentences},
             locked_terms=locked_terms,
+            line_locked=[*callout_line_sentence_ids(sentences), *getattr(task, "line_locked_sentence_ids", ())],
         )
 
     def _is_echo(self, source_text: str, target_text: str) -> bool:

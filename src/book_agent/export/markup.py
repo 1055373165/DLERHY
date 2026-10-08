@@ -127,6 +127,7 @@ def render_callout_html(
 
 
 # After the end of a Chinese sentence (closing quotes stay with it).
+_ZH_LINE_BREAK = re.compile(r"\n+")
 _ZH_SENTENCE_END = re.compile(r"(?<=[。！？!?])(?![”’」』）)])")
 # Before a labelled line ("行动：…" "响应：…"): prompt lines often start with a short label.
 _ZH_LABEL_START = re.compile(r"\s+(?=[一-鿿]{1,6}\s?\d*\s?[：:])")
@@ -158,7 +159,8 @@ def callout_target_text(
             continue
         pieces = [text]
         if len(sentence_ids) > 1:
-            for boundary in (_ZH_SENTENCE_END, _ZH_LABEL_START):
+            # The model's own line breaks first: one line per source line when it kept them.
+            for boundary in (_ZH_LINE_BREAK, _ZH_SENTENCE_END, _ZH_LABEL_START):
                 pieces = [piece.strip() for piece in boundary.split(text) if piece.strip()]
                 if len(pieces) == len(sentence_ids):
                     break
@@ -184,11 +186,14 @@ def callout_target_text(
             # Its translation is in an earlier line's (the model joined the lines).
             continue
         translated = True
-        line = render_repair.inline_join_target_text(texts).replace("\n", " ").strip()
-        if _LEADING_BULLET_GLYPH.match(source_line) and not _LEADING_BULLET_GLYPH.match(line):
+        # A translation that kept the prompt's line breaks but could not be split line by line keeps
+        # them: the reader sees the prompt's lines, not one run-on line.
+        joined = render_repair.inline_join_target_text(texts)
+        own_lines = [part.strip() for part in joined.split("\n") if part.strip()] or [""]
+        if _LEADING_BULLET_GLYPH.match(source_line) and not _LEADING_BULLET_GLYPH.match(own_lines[0]):
             # The translation dropped the line's bullet: it is still an item of the callout's list.
-            line = f"• {line}"
-        lines.append(line)
+            own_lines[0] = f"• {own_lines[0]}"
+        lines.extend(own_lines)
     return "\n".join(lines) if translated else ""
 
 
@@ -321,6 +326,11 @@ def render_block_markdown(
         list_metadata = block.source_metadata or {}
         if list_metadata.get("list_kind") == "dash":
             list_text = _LEADING_DASH_MARKER.sub(r"\1", list_text, count=1)
+        elif list_metadata.get("list_kind") == "number":
+            # "1. " from the source's number; never a bullet glyph next to it.
+            number = _LEADING_NUMBER_MARKER.match(source_text or "")
+            body = _LEADING_BULLET_GLYPH.sub(r"\1", _LEADING_NUMBER_MARKER.sub(r"\1", list_text, count=1), count=1)
+            list_text = f"{number.group(2)}. {body.strip()}" if number else body
         marker = "" if re.match(r"^\s*(?:[-*+]\s+|\d+\.\s+)", list_text) else "- "
         indent = "  " if list_metadata.get("list_level") == 2 else ""
         parts = [f"{indent}{marker}{list_text}".rstrip()]
@@ -762,7 +772,10 @@ def render_block_html(
         block_class = f"{block_class} {'dashed' if kind == 'dash' else 'numbered'}"
         if list_metadata.get("list_level") == 2:
             block_class = f"{block_class} sub-item"
-        display_html = format_inline_text(pattern.sub(r"\1", display_text, count=1), code_spans=bool(block.target_text))
+        # The marker is drawn: a bullet glyph the translation put in front of a numbered item ("• 由路由…")
+        # would show as a second marker.
+        unmarked = _LEADING_BULLET_GLYPH.sub(r"\1", pattern.sub(r"\1", display_text, count=1), count=1)
+        display_html = format_inline_text(unmarked, code_spans=bool(block.target_text))
         return (
             f"<section class='block {html.escape(block_class)}'>"
             f"<div class='zh' data-marker='{html.escape(marker)}'>{display_html}</div>"

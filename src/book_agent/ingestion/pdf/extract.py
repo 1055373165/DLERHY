@@ -7,6 +7,7 @@ import ctypes
 import re
 import sys
 import zlib
+from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Protocol
@@ -694,6 +695,148 @@ def _table_cell_text(cell: Any) -> str:
     return " ".join(text.split()).replace("|", "/")
 
 
+# Between two text lines of one table cell the leading is about nothing; between two rows the book
+# sets extra space. A gap above this share of the line height (and this many points) starts a row.
+_ROW_GAP_LINE_SHARE = 0.25
+_ROW_GAP_MIN_POINTS = 2.0
+# Lines whose tops lie this close are one line across the row's cells.
+_ROW_LINE_TOP_TOLERANCE = 1.5
+
+
+def _text_lines_in(lines: Sequence[tuple[float, float, float, float, str]], rect: Sequence[float]) -> list[tuple[float, float, str]]:
+    """(top, bottom, text) of the page lines whose centre lies in ``rect``, top to bottom."""
+    x0, y0, x1, y1 = (float(value) for value in rect)
+    found = [
+        (top, bottom, text)
+        for left, top, right, bottom, text in lines
+        if x0 - 1 <= (left + right) / 2 <= x1 + 1 and y0 - 1 <= (top + bottom) / 2 <= y1 + 1
+    ]
+    return sorted(found)
+
+
+def split_merged_table_row(
+    lines: Sequence[tuple[float, float, float, float, str]],
+    cells: Sequence[Sequence[float] | None],
+) -> list[list[str]] | None:
+    """The visual rows of one ruled-table row whose body rows share a cell box (no rule between them).
+
+    Booktabs-style tables draw rules only under the header and at the bottom, so ``find_tables``
+    returns the whole body as one row and each cell holds every body row's text. The rows show in
+    the line geometry: lines wrapped inside a cell touch, while the next row starts after a visible
+    gap. ``lines`` are the page's text lines as (x0, y0, x1, y1, text). Returns None when the row
+    is one visual row.
+    """
+    boxes = [cell for cell in cells if cell is not None]
+    if len(boxes) < 2:
+        return None
+    per_cell = [_text_lines_in(lines, cell) if cell is not None else [] for cell in cells]
+    if max((len(found) for found in per_cell), default=0) < 2:
+        return None
+    every = sorted((top, bottom) for found in per_cell for top, bottom, _text in found)
+    heights = sorted(bottom - top for top, bottom in every if bottom > top)
+    if not heights:
+        return None
+    line_height = heights[len(heights) // 2]
+    threshold = max(_ROW_GAP_MIN_POINTS, line_height * _ROW_GAP_LINE_SHARE)
+    # Row starts: a line top that clears every line above it by more than the threshold.
+    starts = [every[0][0]]
+    lowest = every[0][1]
+    for top, bottom in every[1:]:
+        if top - lowest > threshold:
+            starts.append(top)
+        lowest = max(lowest, bottom)
+    if len(starts) < 2:
+        return None
+
+    def band(top: float) -> int:
+        return max(index for index, start in enumerate(starts) if top >= start - _ROW_LINE_TOP_TOLERANCE)
+
+    rows: list[list[list[str]]] = [[[] for _ in cells] for _ in starts]
+    for column, found in enumerate(per_cell):
+        for top, _bottom, text in found:
+            rows[band(top)][column].append(text)
+    split = [[_table_cell_text("\n".join(parts)) for parts in row] for row in rows]
+    # Every visual row reads as a row: its first cell, or at least two cells, carry text.
+    if any(not row[0] and sum(1 for cell in row if cell) < 2 for row in split):
+        return None
+    return split
+
+
+def _own_lines_of_clip(raw_text: str, block_lines: Sequence[str], other_lines: Sequence[str] = ()) -> str:
+    """The clipped text of a code block without the lines of other blocks the clip cut into.
+
+    A clip keeps every character inside the block's box, so an annotation set beside a listing
+    whose box reaches into the listing's comes back cut at the box edge ("Move back by the ov").
+    A clipped line that is not the block's own text but the cut-short start of another block's line
+    on the page is dropped; every other line stays as the clip read it (with its indentation).
+    """
+    own = _normalize_text(" ".join(block_lines))
+    others = [line for line in other_lines if line]
+
+    def foreign(line: str) -> bool:
+        text = _normalize_text(line)
+        # Cut short at the box edge: a strict start of another block's line, never a whole line.
+        return bool(text) and text not in own and any(other.startswith(text) and other != text for other in others)
+
+    return "\n".join(line for line in raw_text.split("\n") if not foreign(line))
+
+
+def table_page_lines(page: Any) -> list[tuple[float, float, float, float, str]]:
+    """The page's text lines as (x0, y0, x1, y1, text), for ``split_merged_table_row``."""
+    lines: list[tuple[float, float, float, float, str]] = []
+    for block in page.get_text("dict").get("blocks", []):
+        for line in block.get("lines", []):
+            text = "".join(span.get("text", "") for span in line.get("spans", []))
+            if text.strip():
+                x0, y0, x1, y1 = (float(value) for value in line.get("bbox", (0, 0, 0, 0)))
+                lines.append((x0, y0, x1, y1, text))
+    return lines
+
+
+def table_rows(table: Any, page_lines: Sequence[tuple[float, float, float, float, str]]) -> list[list[str]]:
+    """A ``find_tables`` table's rows of cell text, body rows that share one cell box split apart."""
+    extracted = table.extract()
+    rows: list[list[str]] = []
+    for index, row in enumerate(extracted):
+        cells = getattr(table.rows[index], "cells", None) if index < len(table.rows) else None
+        split = split_merged_table_row(page_lines, cells) if cells else None
+        rows.extend(split if split else [[_table_cell_text(cell) for cell in row]])
+    return [row for row in rows if any(row)]
+
+
+def ruled_table_rows_at(page: Any, bbox: Sequence[float]) -> list[list[str]] | None:
+    """The rows of the ruled data table set at ``bbox`` on ``page``, as the parser reads them now.
+
+    For a book parsed before rows that share one cell box were split: the QA compares the row count
+    with the parsed table's, and the repair rebuilds the table from these rows. None when no data
+    table lies there.
+    """
+    try:
+        tables = page.find_tables().tables
+    except Exception:
+        return None
+    x0, y0, x1, y1 = (float(value) for value in bbox)
+    area = max((x1 - x0) * (y1 - y0), 1.0)
+
+    def overlap(table: Any) -> float:
+        tx0, ty0, tx1, ty1 = (float(value) for value in table.bbox)
+        width = max(0.0, min(x1, tx1) - max(x0, tx0))
+        height = max(0.0, min(y1, ty1) - max(y0, ty0))
+        return width * height / min(area, max((tx1 - tx0) * (ty1 - ty0), 1.0))
+
+    candidates = [table for table in tables if overlap(table) >= 0.5]
+    if not candidates:
+        return None
+    table = max(candidates, key=overlap)
+    try:
+        unsplit = [row for row in ([_table_cell_text(cell) for cell in row] for row in table.extract()) if any(row)]
+        if not _looks_like_data_table(unsplit):
+            return None
+        return table_rows(table, table_page_lines(page))
+    except Exception:
+        return None
+
+
 def _looks_like_data_table(rows: list[list[str]]) -> bool:
     if len(rows) < 2 or max((len(row) for row in rows), default=0) < 2:
         return False
@@ -846,7 +989,13 @@ class PyMuPDFTextExtractor:
                             clip_rect = _fitz.Rect(*block_bbox)
                             raw_text = page.get_text("text", clip=clip_rect)
                             if raw_text:
-                                raw_text = raw_text.rstrip()
+                                other_lines = [
+                                    _normalize_text("".join(span.get("text", "") for span in line.get("spans", [])))
+                                    for other in text_dict.get("blocks", [])
+                                    if other is not block
+                                    for line in other.get("lines", [])
+                                ]
+                                raw_text = _own_lines_of_clip(raw_text, lines, other_lines).rstrip()
                         except Exception:
                             raw_text = None
 
@@ -1036,13 +1185,16 @@ class PyMuPDFTextExtractor:
             tables = page.find_tables().tables
         except Exception:
             return blocks
+        page_lines = table_page_lines(page)
         for table in tables:
             try:
-                rows = [[_table_cell_text(cell) for cell in row] for row in table.extract()]
+                # Whether it is a data table is decided on the rows as find_tables reads them; only
+                # then are body rows that share one cell box split apart.
+                unsplit = [row for row in ([_table_cell_text(cell) for cell in row] for row in table.extract()) if any(row)]
+                if not _looks_like_data_table(unsplit):
+                    continue
+                rows = table_rows(table, page_lines)
             except Exception:
-                continue
-            rows = [row for row in rows if any(row)]
-            if not _looks_like_data_table(rows):
                 continue
             x0, y0, x1, y1 = (float(value) for value in table.bbox)
             members = [

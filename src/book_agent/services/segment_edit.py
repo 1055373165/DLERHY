@@ -422,8 +422,13 @@ class SegmentEditService:
         actor_id: str,
         actor_type: ActorType = ActorType.MODEL,
         run_id: str | None = None,
+        replace: bool = False,
     ) -> PacketRewriteResult | None:
         """Give sentences of a packet that have no translation yet a known one, as one new attempt.
+
+        ``replace``: these sentences may have a translation already; a segment that translates only
+        these sentences is dropped for the new ones (a table's cells an old answer gave as one markdown
+        grid). A segment shared with other sentences stays, without its links to these.
 
         The translation memory's write: the packet's latest attempt is copied and one segment is added
         per sentence (``texts``: sentence id -> Chinese), in reading order. Nothing else changes, so a
@@ -457,6 +462,13 @@ class SegmentEditService:
                 select(Sentence).where(Sentence.id.in_(list(texts) + [edge.sentence_id for edge in edges]))
             ).all()
         }
+        if replace:
+            edges = [edge for edge in edges if edge.sentence_id not in texts]
+            linked = {edge.target_segment_id for edge in edges}
+            dropped = [segment for segment in segments if segment.id not in linked]
+            for segment in dropped:
+                segment.final_status = TargetSegmentStatus.SUPERSEDED
+            segments = [segment for segment in segments if segment.id in linked]
         for sentence_id, text in texts.items():
             sentence = sentences.get(sentence_id)
             if sentence is None:

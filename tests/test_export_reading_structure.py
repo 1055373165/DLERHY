@@ -74,6 +74,22 @@ class NestedListItemHtmlTest(unittest.TestCase):
         self.assertIn("<section class='block list_item numbered'>", html)
         self.assertIn("<div class='zh' data-marker='1.'>数据层——工具与平台</div>", html)
 
+    def test_a_numbered_item_never_shows_a_bullet_next_to_its_number(self) -> None:
+        # Build an AI Agent 9.5.3: the translation of "1 A router agent receives..." opened with "• ".
+        for target in ("• 由路由智能体接收用户请求。", "1. • 由路由智能体接收用户请求。"):
+            html = render_block_html(
+                _list_item("1 A router agent receives the user’s request.", target, {"list_kind": "number", "list_level": 1})
+            )
+            self.assertIn("<div class='zh' data-marker='1.'>由路由智能体接收用户请求。</div>", html)
+
+    def test_a_numbered_item_in_markdown_has_its_number_and_no_bullet(self) -> None:
+        from book_agent.export.markup import render_block_markdown
+
+        markdown = render_block_markdown(
+            _list_item("2 It examines its sub-agents.", "• 它检查已注册的子智能体。", {"list_kind": "number", "list_level": 1})
+        )
+        self.assertEqual(markdown.strip(), "2. 它检查已注册的子智能体。")
+
     def test_text_set_inside_a_list_is_indented_with_it(self) -> None:
         html = render_block_html(
             _list_item("Cost considerations:", "成本考量：", {"list_level": 1, "list_continuation": True}, block_type="paragraph")

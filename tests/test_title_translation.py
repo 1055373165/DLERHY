@@ -80,12 +80,33 @@ class TitleTranslationTests(unittest.TestCase):
 
 class ChapterLabelTests(unittest.TestCase):
     def test_english_chapter_labels_in_translated_headings_become_chinese(self) -> None:
-        self.assertEqual(localize_chapter_label("CHAPTER 11：额外技巧"), "第11章：额外技巧")
-        self.assertEqual(localize_chapter_label("Chapter 3 - 计算方法"), "第3章：计算方法")
-        self.assertEqual(localize_chapter_label("CHAPTER 7"), "第7章")
-        # Untranslated headings keep their English label; Chinese ones are untouched.
+        self.assertEqual(localize_chapter_label("CHAPTER 11：额外技巧"), "第 11 章 额外技巧")
+        self.assertEqual(localize_chapter_label("Chapter 3 - 计算方法"), "第 3 章 计算方法")
+        self.assertEqual(localize_chapter_label("CHAPTER 7"), "第 7 章")
+        # Untranslated headings keep their English label; Chinese ones take the one form.
         self.assertEqual(localize_chapter_label("CHAPTER 2: BIRTH OF RSI"), "CHAPTER 2: BIRTH OF RSI")
-        self.assertEqual(localize_chapter_label("第1章：挑战"), "第1章：挑战")
+        self.assertEqual(localize_chapter_label("第1章：挑战"), "第 1 章 挑战")
+
+    def test_numbered_titles_take_one_form(self) -> None:
+        from book_agent.export.titles import normalize_numbered_title
+
+        # Build an AI Agent: four forms of the same kind of title in one reading copy.
+        cases = [
+            ("1 什么是 AI 智能体？", "1 What is an AI agent?", "第 1 章 什么是 AI 智能体？"),
+            ("第 3 章 使能行动：工具使用", "3 Enabling actions: Tool use", "第 3 章 使能行动：工具使用"),
+            ("第 5 章\u3000使用 RAG 构建知识库", "5 Building knowledge bases with RAG", "第 5 章 使用 RAG 构建知识库"),
+            ("6 为你的智能体添加记忆", "6 Adding memory to your agent", "第 6 章 为你的智能体添加记忆"),
+            ("第十章 评估智能体", None, "第 10 章 评估智能体"),
+            ("第二部分：进阶", None, "第 2 部分 进阶"),
+            ("附录\nOpenAI API 密钥", "appendix OpenAI API Key", "附录 OpenAI API 密钥"),
+            # Section numbers, untranslated titles and front matter keep their form.
+            ("1.2 为什么需要智能体", "1.2 Why agents", "1.2 为什么需要智能体"),
+            ("Part 1 Building your first LLM agent", "Part 1 Building your first LLM agent", "Part 1 Building your first LLM agent"),
+            ("前言", "preface", "前言"),
+        ]
+        for title, source, expected in cases:
+            with self.subTest(title=title):
+                self.assertEqual(normalize_numbered_title(title, source_title=source), expected)
 
     def test_numbered_chapters_whose_title_starts_with_a_digit_are_chapters(self) -> None:
         from book_agent.export.titles import extract_main_chapter_number, looks_like_frontmatter_title

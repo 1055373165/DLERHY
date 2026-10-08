@@ -90,7 +90,7 @@ from book_agent.infra.repositories.review import active_target_texts
 from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.services.glossary_service import GlossaryService
 from book_agent.services.segment_edit import SegmentEditService
-from book_agent.services.structure_edits import StructureEditService
+from book_agent.services.structure_edits import StructureEditRejected, StructureEditService
 
 logger = logging.getLogger(__name__)
 
@@ -356,6 +356,79 @@ class PilotRepairToolbox:
         self._normalize(done)
         return done
 
+    def _charge_since(self, watermark: int) -> None:
+        self.ctx.budget.charge(
+            float(
+                self.session.scalar(
+                    select(func.coalesce(func.sum(Event.payload["cost_usd"].as_float()), 0.0)).where(
+                        Event.id > watermark, Event.kind == LLM_CALL_COMPLETED
+                    )
+                )
+                or 0.0
+            )
+        )
+
+    def translate_block_sentences(
+        self, packet_ids: Sequence[str], block_ids: Sequence[str], hints: Sequence[str], *, redo_all: bool = False
+    ) -> tuple[list[str], list[str]]:
+        """Translate only the untranslated sentences of these blocks in each packet; the rest keeps its text.
+
+        A rebuilt table leaves its new cells without a translation in a packet whose other sentences
+        are translated; those cells alone go to the model (the packet is the context) and are added
+        to the packet's translation as one new attempt. A packet with other missing sentences, or an
+        answer that does not give each cell its own translation, is retranslated whole.
+        Returns (packets completed this way, packets retranslated).
+        """
+        wanted_blocks = set(block_ids)
+        filled: list[str] = []
+        whole: list[str] = []
+        translation = self.ctx.workflow().translation_service
+        for packet_id in dict.fromkeys(packet_ids):
+            packet = self.session.get(TranslationPacket, packet_id)
+            if packet is None:
+                continue
+            run, missing = self._uncovered_sentences(packet_id)
+            if redo_all and run is not None:
+                # Every translatable sentence of the blocks: the translations the fork carried over may be
+                # an old answer that gave the whole table in one cell. Other sentences the packet still
+                # lacks go along, one target each, rather than retranslating the packet.
+                own = [sentence for sentence in self._current_sentences(packet_id) if sentence.block_id in wanted_blocks]
+                missing = [*own, *(sentence for sentence in missing if sentence.block_id not in wanted_blocks)]
+            if not missing:
+                continue
+            if run is None or (not redo_all and any(sentence.block_id not in wanted_blocks for sentence in missing)):
+                whole.append(packet_id)
+                continue
+            if not self.ctx.budget.allow_packet():
+                raise BudgetExhausted(
+                    f"translating the cells of packet {packet_id} would exceed the repair budget "
+                    f"(${self.ctx.budget.spent_usd:.4f} of ${self.ctx.budget.budget_usd or 0:.4f})"
+                )
+            watermark = int(self.session.scalar(select(func.coalesce(func.max(Event.id), 0))) or 0)
+            texts = translation.translate_sentences(
+                packet_id, [sentence.id for sentence in missing], rerun_hints=tuple(hint for hint in hints if hint)[:8], run_id=self.ctx.run_id
+            )
+            self.ctx.budget.packets += 1
+            self._charge_since(watermark)
+            if not texts:
+                whole.append(packet_id)
+                continue
+            try:
+                with self.session.begin_nested():
+                    SegmentEditService(self.session).fill_sentences(
+                        packet_id, texts, reason="只翻译重建后的表格单元格", actor_id=ACTOR_ID, run_id=self.ctx.run_id, replace=redo_all
+                    )
+            except Exception:  # a guard refused the cells: the packet is retranslated as before
+                logger.debug("filling the cells of packet %s refused", packet_id, exc_info=True)
+                whole.append(packet_id)
+                continue
+            packet.status = PacketStatus.TRANSLATED
+            self.session.flush()
+            filled.append(packet_id)
+        retranslated = self.retranslate(whole, hints) if whole else []
+        self._normalize(filled)
+        return filled, retranslated
+
     # --- translation memory and settled terms ---------------------------------------------------
 
     def _uncovered_sentences(self, packet_id: str) -> tuple[TranslationRun | None, list[Sentence]]:
@@ -388,6 +461,20 @@ class PilotRepairToolbox:
             ).all()
         )
         return run, [sentence for sentence in current if sentence.id not in covered]
+
+    def _current_sentences(self, packet_id: str) -> list[Sentence]:
+        return list(
+            self.session.scalars(
+                select(Sentence)
+                .join(PacketSentenceMap, PacketSentenceMap.sentence_id == Sentence.id)
+                .where(
+                    PacketSentenceMap.packet_id == packet_id,
+                    PacketSentenceMap.role == PacketSentenceRole.CURRENT,
+                    Sentence.translatable.is_(True),
+                    Sentence.retired_by_revision_id.is_(None),
+                )
+            ).all()
+        )
 
     def remembered_translation(self, sentence: Sentence) -> str | None:
         """The book's translation of this exact source sentence elsewhere (the most used one), if any."""
@@ -565,7 +652,36 @@ class PilotRepairToolbox:
         done = self.retranslate(packets, self._hints(item.findings))
         return ToolResult(params={"packet_ids": packets, "checks": sorted({f["check_id"] for f in item.findings})}, packet_ids=done)
 
+    def _retranslate_packets__callout_line_by_line(self, item: WorkItem) -> ToolResult:
+        """A callout whose lines a retranslation joined: its packets again, each line on its own."""
+        packets = list(dict.fromkeys(packet for finding in item.findings for packet in self._finding_packets(finding)))
+        if not packets:
+            raise NotApplicable("the findings name no packet")
+        done = self.retranslate(
+            packets,
+            [
+                "这是书中的一段示例提示词（放在带图标的提示框里）：每一行单独翻译成中文，一行对应一个译文，"
+                "保持原来的分行和列表符号，不要把几行并成一段；{query} 这类占位符、代码标识符、JSON 键名原样保留。"
+            ],
+        )
+        return ToolResult(params={"packet_ids": packets}, packet_ids=done)
+
     # --- segment_edit ---------------------------------------------------------------------
+
+    def _segment_edit__strip_doubled_list_marker(self, item: WorkItem) -> ToolResult:
+        packets = self._block_packets(item.findings)
+        sources: dict[str, str] = {}
+
+        def transform(text: str, ids: list[str]) -> str:
+            missing = [sentence_id for sentence_id in ids if sentence_id not in sources]
+            if missing:
+                for sentence in self.session.scalars(select(Sentence).where(Sentence.id.in_(missing))).all():
+                    sources[sentence.id] = sentence.source_text or ""
+            return fixes.strip_unsourced_bullet(text, [sources.get(sentence_id, "") for sentence_id in ids])
+
+        changed = self._rewrite(packets, transform, "编号列表项译文开头多出的圆点去掉")
+        return ToolResult(params={"packet_count": len(packets)}, edited_packet_ids=changed)
+
 
     def _block_packets(self, findings: Sequence[dict[str, Any]]) -> list[str]:
         packets: list[str] = []
@@ -1615,6 +1731,178 @@ class PilotRepairToolbox:
             self.ctx.document_id, block.id, {"table_markdown": markdown}, actor_id=ACTOR_ID, reason="按原文的竖线重建表格单元格"
         )
         return ToolResult(params={"block_id": block.id, "rows": len(rows), "columns": width}, block_ids=[block.id])
+
+    def _pdf(self) -> Any:
+        """The book's PDF, opened (None without it); the caller closes it."""
+        document = self.session.get(Document, self.ctx.document_id)
+        source = getattr(document, "source_path", None)
+        if not source or not Path(source).is_file() or not str(source).lower().endswith(".pdf"):
+            return None
+        try:
+            import fitz
+
+            return fitz.open(source)
+        except Exception:  # pragma: no cover - an unreadable file only loses the PDF's evidence
+            logger.warning("pilot repair: cannot open %s", source, exc_info=True)
+            return None
+
+    def _structure_edit__reextract_table(self, item: WorkItem) -> ToolResult:
+        """The table read again from its page with the current extractor (rows that share one cell box
+        split apart) replaces the block's text; only its cells are translated again."""
+        from book_agent.ingestion.pdf.extract import ruled_table_rows_at
+        from book_agent.ingestion.pdf.hyphenation import inline_word_counts, rejoin_line_break_hyphens
+
+        block = self._finding_block(item.findings[0])
+        if block.block_type != BlockType.TABLE:
+            raise NotApplicable(f"a {block.block_type.value} block is not a table")
+        regions = self._regions(block)
+        if not regions:
+            raise NotApplicable("the table has no region on its page")
+        page_number, bbox = regions[0]
+        pdf = self._pdf()
+        if pdf is None:
+            raise NotApplicable("no PDF to read the table from")
+        try:
+            if not 1 <= page_number <= pdf.page_count:
+                raise NotApplicable("the table's page is not in the PDF")
+            rows = ruled_table_rows_at(pdf[page_number - 1], bbox)
+            # A cell's line-break hyphen ("evalu-ation") is removed on the book's own evidence, as the parser does.
+            counts = inline_word_counts(line for page in pdf for line in page.get_text("text").splitlines()) if rows else None
+        finally:
+            pdf.close()
+        if not rows or len(rows) < 2:
+            raise NotApplicable("no ruled data table at the table's place on its page")
+        cells = [[rejoin_line_break_hyphens(cell, counts) if counts else cell for cell in row] for row in rows]
+        table_text = "\n".join("| " + " | ".join(row) + " |" for row in cells)
+        try:
+            outcome = self.structure.rebuild_table(
+                self.ctx.document_id, block.id, table_text, actor_id=ACTOR_ID, reason=f"按原书第 {page_number} 页重新读取表格的 {len(rows)} 行"
+            )
+        except StructureEditRejected as exc:
+            raise NotApplicable(str(exc)) from exc
+        fork_packets = list(getattr(outcome.fork, "retranslate_packet_ids", []) or []) if outcome.fork else []
+        packets = list(dict.fromkeys([*fork_packets, *self._packets_of_blocks([block.id])]))
+        filled, retranslated = self.translate_block_sentences(
+            packets, [block.id], ["这是一张表格的单元格：每个单元格单独译成简短的中文，数字、代码标识符、模型名原样保留。"], redo_all=True
+        )
+        return ToolResult(
+            params={"block_id": block.id, "page": page_number, "rows": len(rows), "columns": max(len(row) for row in rows), "cells_only_packets": filled},
+            block_ids=[block.id],
+            packet_ids=list(dict.fromkeys([*filled, *retranslated])),
+        )
+
+    def _structure_edit__hide_clipped_copy(self, item: WorkItem) -> ToolResult:
+        """A block that repeats the block beside it cut short at a box edge leaves the reading copy."""
+        finding = item.findings[0]
+        block = self._finding_block(finding)
+        original = self._block(str((finding.get("evidence") or {}).get("copy_of") or ""))
+        if not pilot_qa._clipped_lines((block.source_text or "").split("\n"), (original.source_text or "").split("\n")):
+            raise NotApplicable("the block is not a cut-short copy of its neighbour")
+        self._hide(block, "旁边一段文字被裁掉一截的副本")
+        return ToolResult(params={"block_id": block.id, "copy_of": original.id}, block_ids=[block.id])
+
+    def _structure_edit__relabel_code_face_as_code(self, item: WorkItem) -> ToolResult:
+        """A paragraph set wholly in the code face (program output, the end of a listing) becomes code."""
+        block = self._finding_block(item.findings[0])
+        if block.block_type not in {BlockType.PARAGRAPH, BlockType.LIST_ITEM, BlockType.QUOTE}:
+            raise NotApplicable(f"a {block.block_type.value} block is not prose")
+        if not parse_health.set_wholly_in_code_face((block.source_span_json or {}).get("pdf_font_names")):
+            raise NotApplicable("the block is not set in the code face")
+        return self._structure_edit__relabel_as_code(item)
+
+    def _structure_edit__split_part_name(self, item: WorkItem) -> ToolResult:
+        """"Part 1" whose name ran into the part's introduction: the name, read from the part's page,
+        is split off the introduction and set as a heading after the label."""
+        finding = item.findings[0]
+        chapter_id = str((finding.get("location") or {}).get("chapter_id") or (finding.get("target") or {}).get("id") or "")
+        blocks = [block for block in self._chapter_blocks(chapter_id) if (block.source_text or "").strip()]
+        label = next((block for block in blocks if block.block_type == BlockType.HEADING), None)
+        if label is None or not re.fullmatch(r"\s*part\s+\w+\s*", label.source_text or "", re.IGNORECASE):
+            raise NotApplicable("the part has no bare 'Part N' heading")
+        following = blocks[blocks.index(label) + 1 :]
+        intro = following[0] if following else None
+        if intro is None or intro.block_type != BlockType.PARAGRAPH:
+            raise NotApplicable("no introduction paragraph after the part's label")
+        page = (label.source_span_json or {}).get("source_page_start")
+        name = self._part_name_on_page(int(page)) if isinstance(page, int) else None
+        if not name:
+            raise NotApplicable("the part's page sets no name in display type")
+        text = intro.source_text or ""
+        pattern = re.compile(r"\s*" + r"\s+".join(re.escape(word) for word in name.split()) + r"\s+")
+        match = pattern.match(text)
+        if match is None:
+            raise NotApplicable("the introduction does not start with the part's name")
+        rest = text[match.end():]
+        marker = " ".join(rest.split()[:6])
+        if marker not in text:
+            marker = rest.split("\n", 1)[0].strip()
+        try:
+            split = self.structure.split_block(
+                self.ctx.document_id, intro.id, marker, actor_id=ACTOR_ID, reason="部分的名称并进了正文第一段"
+            )
+            level = (label.source_span_json or {}).get("heading_level")
+            relabel = self.structure.relabel_block(
+                self.ctx.document_id,
+                intro.id,
+                BlockType.HEADING.value,
+                heading_level=level if isinstance(level, int) else None,
+                actor_id=ACTOR_ID,
+                reason="部分的名称",
+            )
+        except StructureEditRejected as exc:
+            raise NotApplicable(str(exc)) from exc
+        # The part's running footer ("2 building your first llm agent"), read as a footnote: it repeats
+        # the name, now a heading, and leaves the reading copy.
+        footers = []
+        name_key = _norm(name)
+        for block in blocks:
+            if block.block_type not in {BlockType.FOOTNOTE, BlockType.PARAGRAPH} or block.id == intro.id:
+                continue
+            number = re.match(r"\s*\d{1,4}\s+(.+)$", " ".join((block.source_text or "").split()))
+            if number and _norm(number.group(1)) == name_key:
+                self._hide(block, "部分的页脚（页码 + 部分名称）")
+                footers.append(block.id)
+        packets: list[str] = []
+        for outcome in (split, relabel):
+            packets.extend(getattr(outcome.fork, "retranslate_packet_ids", []) or [] if outcome.fork else [])
+        done = self.retranslate(
+            list(dict.fromkeys([*packets, *self._packets_of_blocks(split.block_ids)])),
+            [f"「{name}」是这一部分（Part）的名称，单独译成简短的标题；后面的段落是这一部分的导言。"],
+        )
+        return ToolResult(
+            params={"label_block_id": label.id, "name": name, "page": page, "hidden_footers": footers},
+            block_ids=[*split.block_ids, *footers],
+            packet_ids=done,
+        )
+
+    def _part_name_on_page(self, page_number: int) -> str | None:
+        """The display-size lines of a part page other than its "Part N" label, joined."""
+        pdf = self._pdf()
+        if pdf is None:
+            return None
+        try:
+            if not 1 <= page_number <= pdf.page_count:
+                return None
+            lines: list[tuple[float, str]] = []
+            weights: Counter[float] = Counter()
+            for block in pdf[page_number - 1].get_text("dict").get("blocks", []):
+                for line in block.get("lines", []):
+                    sizes: Counter[float] = Counter()
+                    for span in line.get("spans", []):
+                        sizes[round(float(span.get("size", 0.0)), 1)] += len((span.get("text") or "").strip())
+                    text = " ".join("".join(span.get("text", "") for span in line.get("spans", [])).split())
+                    if text and sizes:
+                        size = sizes.most_common(1)[0][0]
+                        lines.append((size, text))
+                        weights[size] += len(text)
+        finally:
+            pdf.close()
+        if not weights:
+            return None
+        body = weights.most_common(1)[0][0]
+        display = [text for size, text in lines if size >= body * 1.8 and not re.fullmatch(r"part\s+\w+", text, re.IGNORECASE)]
+        name = " ".join(display).strip()
+        return name or None
 
     def _structure_edit__agent_proposal(self, item: WorkItem) -> ToolResult:
         if self.ctx.judge is None:

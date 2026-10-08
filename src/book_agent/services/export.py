@@ -220,6 +220,27 @@ def _within_render_model_scope(method):
     return wrapper
 
 
+
+def _drop_refresh_fragments_parsed_as_blocks(
+    bundle: ChapterExportBundle, render_blocks: list[MergedRenderBlock]
+) -> list[MergedRenderBlock]:
+    """Drop the stale prose fragments an earlier structure refresh stored on a block
+    (``refresh_split_render_fragments``) when the parse now has that text as a block of its own:
+    drawn from both, the reader saw it twice, once untranslated."""
+    parsed = {
+        _normalize_signature_text(block.source_text)
+        for block in bundle.blocks
+        if _normalize_signature_text(block.source_text)
+    }
+    return [
+        block
+        for block in render_blocks
+        if not (
+            "export_refresh_split_render_fragment" in list(block.source_metadata.get("recovery_flags") or [])
+            and _normalize_signature_text(block.source_text) in parsed
+        )
+    ]
+
 class ExportService:
     def __init__(
         self,
@@ -1509,16 +1530,23 @@ class ExportService:
         normalized_title = _normalize_render_text(chapter_title) if chapter_title else ""
         body: list[MergedRenderBlock] = []
         dropped_title_heading = not normalized_title
+        # The title may be spread over two headings ("Part 1" and the part's name): what is left of it.
+        remaining_title = normalized_title
         for block in render_blocks:
             if (
                 not dropped_title_heading
                 and block.block_type == BlockType.HEADING.value
             ):
+                text = block.target_text or block.source_text or ""
                 candidate = _normalize_render_text(
-                    block.target_text or block.source_text or ""
+                    titles.normalize_numbered_title(text, source_title=block.source_text) or text
                 )
-                if candidate and candidate == normalized_title:
+                if candidate and candidate == remaining_title:
                     dropped_title_heading = True
+                    continue
+                if candidate and remaining_title == normalized_title and remaining_title.startswith(f"{candidate} "):
+                    # The title's first heading; its next heading carries the rest.
+                    remaining_title = remaining_title[len(candidate) :].strip()
                     continue
             if self._is_code_language_label_block(block):
                 continue
@@ -2135,6 +2163,7 @@ class ExportService:
         repaired_blocks: list[MergedRenderBlock] = []
         for index, block in enumerate(render_blocks):
             repaired_blocks.extend(self._repair_book_pdf_render_blocks(bundle, index, block))
+        repaired_blocks = _drop_refresh_fragments_parsed_as_blocks(bundle, repaired_blocks)
 
         normalized: list[MergedRenderBlock] = []
         index = 0

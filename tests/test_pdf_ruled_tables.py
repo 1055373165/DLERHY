@@ -83,6 +83,69 @@ class RuledTableRecoveryTest(unittest.TestCase):
         self.assertFalse(any(text.strip() in {"56.25", "Hourly"} for text in paragraphs))
 
 
+def _write_shared_body_cell_pdf(path: Path) -> None:
+    """A table ruled only above, under the header and at the bottom (booktabs style): its two body
+    rows share one cell box, set apart by vertical space; one cell wraps onto a second line."""
+    document = fitz.open()
+    document.new_page().insert_text((72, 200), "Search Notes", fontname="hebo", fontsize=24)
+    page = document.new_page()
+    page.insert_text((72, 100), "The comparison below shows what the search tool is worth on these questions.")
+    top, header_bottom, bottom = 130.0, 148.0, 210.0
+    for y in (top, header_bottom, bottom):
+        page.draw_line((_COLUMN_X[0], y), (_COLUMN_X[-1], y))
+    for x in _COLUMN_X:
+        page.draw_line((x, top), (x, bottom))
+    for column, text in enumerate(["Condition", "Correct", "Total cost"]):
+        page.insert_text((_COLUMN_X[column] + 4, top + 13), text, fontsize=9)
+    first, second = header_bottom + 13, header_bottom + 13 + 26
+    for column, text in enumerate(["With web search", "7/10", "$1.89"]):
+        page.insert_text((_COLUMN_X[column] + 4, first), text, fontsize=9)
+    page.insert_text((_COLUMN_X[0] + 4, first + 10), "and browsing", fontsize=9)
+    for column, text in enumerate(["Without web search", "2/10", "$0.26"]):
+        page.insert_text((_COLUMN_X[column] + 4, second), text, fontsize=9)
+    page.insert_text((72, bottom + 30), "Searching the web lifted the score by fifty points at a modest cost.")
+    document.save(path)
+
+
+class SharedBodyCellTableTest(unittest.TestCase):
+    def test_body_rows_sharing_one_cell_box_are_split_by_their_line_gaps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "booktabs.pdf"
+            _write_shared_body_cell_pdf(pdf_path)
+            parsed = PDFParser(image_output_dir=Path(tmpdir) / "images").parse(pdf_path)
+
+        tables = [block.text for chapter in parsed.chapters for block in chapter.blocks if block.block_type == BlockType.TABLE.value]
+        self.assertEqual(
+            tables,
+            [
+                "| Condition | Correct | Total cost |\n"
+                "| With web search and browsing | 7/10 | $1.89 |\n"
+                "| Without web search | 2/10 | $0.26 |"
+            ],
+        )
+
+    def test_split_needs_a_gap_wrapped_lines_stay_in_their_row(self) -> None:
+        from book_agent.ingestion.pdf.extract import split_merged_table_row
+
+        cells = [(90.0, 530.0, 150.0, 600.0), (150.0, 530.0, 250.0, 600.0)]
+        wrapped_only = [
+            (92.0, 534.8, 140.0, 545.0, "Benchmark"),
+            (152.0, 534.8, 240.0, 545.0, "Standardized public evalu-"),
+            (152.0, 544.8, 240.0, 555.0, "ation sets"),
+        ]
+        self.assertIsNone(split_merged_table_row(wrapped_only, cells))
+        two_rows = [
+            *wrapped_only,
+            (92.0, 570.4, 140.0, 580.6, "Custom"),
+            (152.0, 570.4, 240.0, 580.6, "Internally constructed"),
+            (152.0, 580.4, 240.0, 590.6, "evaluation sets"),
+        ]
+        self.assertEqual(
+            split_merged_table_row(two_rows, cells),
+            [["Benchmark", "Standardized public evalu-ation sets"], ["Custom", "Internally constructed evaluation sets"]],
+        )
+
+
 class PipeTableParsingTest(unittest.TestCase):
     def test_delimited_rows_keep_empty_cells_in_their_columns(self) -> None:
         self.assertEqual(

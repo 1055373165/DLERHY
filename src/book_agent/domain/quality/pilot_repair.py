@@ -97,6 +97,10 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L1.heading_as_text": (RepairPath(TOOL_STRUCTURE, "relabel_as_heading"),),
     # The icon and its lines become one callout block; its packets are retranslated line by line.
     "L1.icon_callout_split": (RepairPath(TOOL_STRUCTURE, "merge_icon_callout", costs_model=True),),
+    # A cut-short copy of the block beside it (an older parse clipped a listing's box into an annotation).
+    "L1.clipped_text_copy": (RepairPath(TOOL_STRUCTURE, "hide_clipped_copy"),),
+    # The part's name read again from its page, split out of the introduction and set as a heading.
+    "L1.part_title_unnamed": (RepairPath(TOOL_STRUCTURE, "split_part_name", costs_model=True),),
     "L1.review_blocking": (_RECHECK,),
     # Structure the reading copy draws (lists, sidebars, split paragraphs, listing captions): the parser
     # side's QA rules name these paths in their repair hints; the findings carry the block ids.
@@ -126,7 +130,13 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L2.figure_without_image": (_RECHECK,),
     "L2.review_blocking": (_RECHECK,),
     # L3 表格
-    "L3.table_garbled": (RepairPath(TOOL_STRUCTURE, "rebuild_table_cells"),),
+    # The table read again from its page (rows that share one cell box split apart); only its cells
+    # are translated again. Cells set from the "|" text is the fallback without the PDF.
+    "L3.table_garbled": (
+        RepairPath(TOOL_STRUCTURE, "reextract_table", costs_model=True),
+        RepairPath(TOOL_STRUCTURE, "rebuild_table_cells"),
+    ),
+    "L3.table_rows_merged": (RepairPath(TOOL_STRUCTURE, "reextract_table", costs_model=True),),
     "L3.table_flattened": (RepairPath(TOOL_STRUCTURE, "rebuild_table_cells"),),
     "L3.table_untranslated": (_RETRANSLATE,),
     # The block becomes code (what the reading copy already shows) and the export gate checks it again.
@@ -141,6 +151,9 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L4.code_comment_as_text": (RepairPath(TOOL_STRUCTURE, "relabel_as_code"),),
     "L4.inline_code_lost": (_RETRANSLATE,),
     "L4.list_marker_lost": (_RETRANSLATE,),
+    "L4.list_marker_doubled": (RepairPath(TOOL_SEGMENT_EDIT, "strip_doubled_list_marker", SCOPE_CHECK), _RETRANSLATE),
+    # Each line of the callout translated on its own (the output guardrail holds the model to it).
+    "L4.callout_lines_collapsed": (RepairPath(TOOL_RETRANSLATE, "callout_line_by_line", costs_model=True),),
     "L4.footnote_marker_lost": (_RETRANSLATE,),
     "L4.equation_altered": (_RETRANSLATE,),
     "L4.review_blocking": (_RECHECK,),
@@ -168,7 +181,8 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     # L7 排版与纯净: deterministic text fixes over every finding of the check; the book's convention
     # goes into BOOK.md so the whole-book run writes it that way from the start.
     "L7.leaked_marker": (RepairPath(TOOL_SEGMENT_EDIT, "strip_leaked_markers", SCOPE_CHECK), _RETRANSLATE),
-    "L7.untranslated_prose": (_RETRANSLATE,),
+    # Set wholly in the code face (program output, code parsed as prose): code, not translated.
+    "L7.untranslated_prose": (RepairPath(TOOL_STRUCTURE, "relabel_code_face_as_code"), _RETRANSLATE),
     "L7.cjk_latin_spacing": (RepairPath(TOOL_SEGMENT_EDIT, "cjk_latin_spacing", SCOPE_CHECK),),
     "L7.halfwidth_punctuation": (RepairPath(TOOL_SEGMENT_EDIT, "fullwidth_punctuation", SCOPE_CHECK),),
     "L7.review_blocking": (_RECHECK,),
@@ -246,6 +260,16 @@ GENERIC_CAUSES: tuple[GenericCause, ...] = (
     GenericCause("L2.duplicated_labels", "L2.duplicated_labels", "parser", "图中的文字标注又被当成正文段落保留"),
     GenericCause("L3.table_garbled", "L3.table_garbled", "parser", "表格的行列没有拆开，单元格里还是整行原文（带竖线）"),
     GenericCause("L3.table_flattened", "L3.table_flattened", "parser", "表格被识别成了正文段落"),
+    GenericCause(
+        "L3.table_rows_merged",
+        "L3.table_rows_merged",
+        "parser",
+        "只有表头和底部有横线的表格，几行正文挤在一个单元格框里，没有按行距拆开",
+    ),
+    GenericCause("L1.clipped_text_copy", "L1.clipped_text_copy", "parser", "代码框的裁剪把旁边注释的半截文字也读了进来，成了一段"),
+    GenericCause("L1.part_title_unnamed", "L1.part_title_unnamed", "parser", "部分页的大字号名称并进了下面的正文段落"),
+    GenericCause("L4.list_marker_doubled", "L4.list_marker_doubled", "translation", "编号列表项的译文开头多了圆点"),
+    GenericCause("L4.callout_lines_collapsed", "L4.callout_lines_collapsed", "translation", "重译时几行提示词被合成一个译文，分行丢了"),
     GenericCause("L4.pseudo_headings", "L4.pseudo_headings", "parser", "等宽字体或 # 开头的代码注释被识别成了标题"),
     GenericCause("L4.code_comment_as_text", "L4.code_comment_as_text", "parser", "代码注释被拆到了代码块外面"),
     GenericCause("L4.inline_code_markup", "L4.inline_code_markup", "export", "行内代码的反引号没有渲染成代码样式"),
@@ -570,6 +594,7 @@ def escalation_question(check_id: str, findings: Sequence[Mapping[str, Any]]) ->
         "L2.caption_swallows_body": f"{lead}图注里混进了正文，自动拆分没有成功。要把图注只保留「图 N.N」开头的第一句、其余作为正文吗？",
         "L2.caption_folds": f"{lead}正文被并进了图注，自动拆分没有成功。要把这些段落移回正文吗？",
         "L3.table_garbled": f"{lead}的表格没能拆成单元格。要先把这张表按原书的样子截图保留吗？",
+        "L3.table_rows_merged": f"{lead}的表格有几行挤在一行里，按原书重新读取没有成功。要先把这张表按原书的样子截图保留吗？",
         "L3.table_flattened": f"{lead}的表格被排成了文字，自动重建没有成功。要先把这张表按原书的样子截图保留吗？",
         "L1.chapters_vs_outline": f"{lead}章节切分和书签不一致，自动按书签拆分没有成功。要以书签为准重新切分章节吗？",
         "L1.chapter_folded": f"「{sample}」应当是单独的一章，自动拆分没有成功。要按书签把它拆成单独一章吗？",

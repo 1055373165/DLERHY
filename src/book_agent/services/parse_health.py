@@ -100,6 +100,14 @@ class _PdfPages:
     def page_sizes(self) -> dict[int, tuple[float, float]]:
         return {index + 1: (float(page.rect.width), float(page.rect.height)) for index, page in enumerate(self.document)}
 
+    def table_rows(self, page_number: int, bbox: Sequence[float]) -> list[list[str]] | None:
+        """The ruled table at ``bbox`` read again with the current extractor (None: no data table there)."""
+        from book_agent.ingestion.pdf.extract import ruled_table_rows_at
+
+        if not 1 <= page_number <= self.document.page_count:
+            return None
+        return ruled_table_rows_at(self.document[page_number - 1], bbox)
+
     def figure_problems(self, page_number: int, bbox: Sequence[float], furniture: list[Sequence[float]]) -> list[Any]:
         from book_agent.ingestion.pdf.figure_extent import figure_region_problems
 

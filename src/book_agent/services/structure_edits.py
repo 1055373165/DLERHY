@@ -57,6 +57,8 @@ MIN_SPLIT_MARKER = 3
 LINK_CAPTION = "link_caption"
 OVERRIDE_METADATA = "override_metadata"
 MERGE_CALLOUT = "merge_callout"
+# A ruled table read again from the PDF page: its rows replace the block's text (one row per line).
+REBUILD_TABLE = "rebuild_table"
 # Block metadata an override may set: what the reading copy shows of a block, not what the parser read.
 # repair_hidden_from_export hides a block (a running header, a figure's own label kept as text);
 # source_bbox_json / figure_region set a figure's crop by hand; table_markdown gives a table its cells;
@@ -327,6 +329,47 @@ class StructureEditService:
         )
         return EditOutcome(edit_id=edit.id, kind=MERGE_CALLOUT, block_ids=block_ids, fork=fork)
 
+    def rebuild_table(
+        self,
+        document_id: str,
+        block_id: str,
+        table_text: str,
+        *,
+        actor_id: str,
+        reason: str,
+        turn_id: str | None = None,
+    ) -> EditOutcome:
+        """A table's rows as the page sets them (``| cell | cell |`` lines) replace the block's text.
+
+        An older parse kept body rows that share one cell box as one row, each cell holding every
+        row's text. The block keeps its id, type and caption; its cell sentences are segmented again
+        by the fork, so only this table's cells need a translation.
+        """
+        block = self._active_block(document_id, block_id)
+        if block.block_type != BlockType.TABLE:
+            raise StructureEditRejected(f"only a table can be rebuilt, not a {block.block_type.value}")
+        rows = [line.strip() for line in (table_text or "").splitlines() if line.strip()]
+        if len(rows) < 2 or not all(row.startswith("|") and row.endswith("|") for row in rows):
+            raise StructureEditRejected("the table text must be at least two '| cell | cell |' rows")
+        table_text = "\n".join(rows)
+        if _fingerprint(table_text) == _fingerprint(block.source_text):
+            raise StructureEditRejected("the table already has these rows")
+        snapshot = [_snapshot(block)]
+        text_before = block.source_text
+        self._apply_table_text(block, table_text)
+        fork = self._fork(document_id, [block.id], reason=f"structure edit: rebuild table {block.id}", actor_id=actor_id)
+        edit = self._log(
+            document_id,
+            REBUILD_TABLE,
+            {"block_id": block.id, "table_text": table_text, "text_before": text_before},
+            snapshot,
+            fork=fork,
+            actor_id=actor_id,
+            reason=reason,
+            turn_id=turn_id,
+        )
+        return EditOutcome(edit_id=edit.id, kind=REBUILD_TABLE, block_ids=[block.id], fork=fork)
+
     def link_caption(
         self,
         document_id: str,
@@ -535,6 +578,15 @@ class StructureEditService:
                 return "stale", []
             self._apply_callout(icon, lines, args.get("line_texts"))
             return "reapplied", [line.id for line in lines] + [icon.id]
+        if edit.kind == REBUILD_TABLE:
+            block = blocks[args["block_id"]]
+            if block.status == ArtifactStatus.ACTIVE and _fingerprint(block.source_text) == _fingerprint(args.get("table_text")):
+                return None
+            if block.status != ArtifactStatus.ACTIVE or _fingerprint(block.source_text) != before[block.id]["text_sha1"]:
+                # The parser reads the table differently now (a fixed parser splits the rows itself).
+                return "stale", []
+            self._apply_table_text(block, str(args.get("table_text") or ""))
+            return "reapplied", [block.id]
         if edit.kind == LINK_CAPTION:
             caption, artifact = blocks[args["caption_block_id"]], blocks[args["artifact_block_id"]]
             if (artifact.source_span_json or {}).get("linked_caption_block_id") == caption.id and (
@@ -966,6 +1018,16 @@ class StructureEditService:
         caption.source_span_json = {**(caption.source_span_json or {}), "caption_for_block_id": artifact.id}
         artifact.updated_at = now
         caption.updated_at = now
+        self.session.flush()
+
+    def _apply_table_text(self, block: Block, table_text: str) -> None:
+        block.source_text = table_text
+        span = dict(block.source_span_json or {})
+        # Cells set by hand for the old text no longer apply.
+        span.pop("table_markdown", None)
+        span["recovery_flags"] = list(dict.fromkeys([*(span.get("recovery_flags") or []), "table_rows_reextracted"]))
+        block.source_span_json = span
+        block.updated_at = _utcnow()
         self.session.flush()
 
     def _apply_metadata(self, block: Block, updates: dict[str, Any]) -> None:

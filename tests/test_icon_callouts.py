@@ -282,6 +282,26 @@ class CalloutRenderTests(unittest.TestCase):
         whole = {"t1": SimpleNamespace(text_zh="意图明确时直接执行，不明确时才提问。")}
         self.assertEqual(markup.callout_target_text(sentences, joined, whole), "意图明确时直接执行，不明确时才提问。")
 
+    def test_a_joined_translation_keeps_the_line_breaks_the_model_kept(self) -> None:
+        # Build an AI Agent 10.x: a repair retranslation wrote one segment for the prompt's nine lines,
+        # its lines set apart by blank lines; the reading copy showed one run-on line.
+        sources = ["You are evaluating an AI-generated answer.", "User request:", "Summarize the key findings."]
+        sentences = [
+            SimpleNamespace(id=f"s{index}", ordinal_in_block=index, source_text=text, translatable=True)
+            for index, text in enumerate(sources, start=1)
+        ]
+        joined = {sentence.id: ["t1"] for sentence in sentences}
+        target = {"t1": SimpleNamespace(text_zh="你正在评估一个由 AI 生成的回答。\n\n用户请求：\n总结关键发现。")}
+        self.assertEqual(
+            markup.callout_target_text(sentences, joined, target), "你正在评估一个由 AI 生成的回答。\n用户请求：\n总结关键发现。"
+        )
+        # More lines than sources: the breaks still stay.
+        extra = {"t1": SimpleNamespace(text_zh="你正在评估。\n用户请求：\n总结关键发现。\n请回复 PASS 或 FAIL。")}
+        self.assertEqual(
+            markup.callout_target_text(sentences, joined, extra).split("\n"),
+            ["你正在评估。", "用户请求：", "总结关键发现。", "请回复 PASS 或 FAIL。"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

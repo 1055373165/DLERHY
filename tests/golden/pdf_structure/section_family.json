@@ -464,15 +464,6 @@
           124.578
          ],
          "page_number": 4
-        },
-        {
-         "bbox": [
-          72.0,
-          159.1,
-          314.1,
-          175.588
-         ],
-         "page_number": 4
         }
        ]
       },
@@ -489,7 +480,7 @@
      "translatability": "translate_all"
     },
     {
-     "anchor": "p4-b10-s2",
+     "anchor": "p4-b11",
      "block_type": "paragraph",
      "confidence_breakdown": {
       "sanity_ok": true
@@ -500,26 +491,15 @@
       "pdf_font_names": [
        "Helvetica"
       ],
-      "pdf_heading_recovery_source": "embedded_references_heading_recovered",
       "pdf_page_family": "references",
       "pdf_page_family_heading": "References",
       "pdf_page_family_source": "heading",
       "reading_order_index": 11,
       "recovery_flags": [
-       "page_family_references",
-       "embedded_references_heading_recovered"
+       "page_family_references"
       ],
       "source_bbox_json": {
        "regions": [
-        {
-         "bbox": [
-          72.0,
-          94.35,
-          184.486,
-          124.578
-         ],
-         "page_number": 4
-        },
         {
          "bbox": [
           72.0,
@@ -540,7 +520,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/4",
      "style_hints": {},
-     "text": "Hamilton, J. Compounding Companies. 2024",
+     "text": "Hamilton, J. Compounding Companies. 2024.",
      "translatability": "translate_all"
     },
     {

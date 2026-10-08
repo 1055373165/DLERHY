@@ -62,11 +62,22 @@ def resolve_chapter_title(
     chapter: Any,
     blocks: Sequence[TitleBlock],
 ) -> str | None:
-    """The chapter's title as a reader should see it.
+    """The chapter's title as a reader should see it, numbered titles in one form ("第 N 章 标题").
 
     The export and the interface must say the same thing, so both call this. `blocks` are the
     chapter's blocks in order, carrying the Chinese text where there is one.
     """
+    title = _resolve_chapter_title(document, chapter, blocks)
+    if document.source_type == SourceType.WEB:
+        return title
+    return normalize_numbered_title(title, source_title=getattr(chapter, "title_src", None))
+
+
+def _resolve_chapter_title(
+    document: Any,
+    chapter: Any,
+    blocks: Sequence[TitleBlock],
+) -> str | None:
     fallback_title = next(
         (
             str(candidate).strip()
@@ -111,6 +122,11 @@ def resolve_chapter_title(
     heading_target = localize_chapter_label(str(first_content_block.target_text or "").strip()) or ""
     if not heading_target:
         return fallback_title
+    part_name = _part_name_heading(render_blocks, first_content_block)
+    if part_name:
+        # "Part 1" with its name set as the next heading (a repair split the name out of the
+        # part's introduction): one title, "第 1 部分 构建你的第一个 LLM 智能体".
+        return f"{heading_target} {part_name}"
     if render_repair.looks_like_prose_title_text(
         heading_target,
         source_heading_text=first_content_block.source_text,
@@ -120,17 +136,87 @@ def resolve_chapter_title(
     return heading_target
 
 
-def localize_chapter_label(title_text: str | None) -> str | None:
-    """"CHAPTER 11：额外技巧" → "第11章：额外技巧"; titles without a Chinese part keep their English label."""
+_BARE_PART_SOURCE = re.compile(r"^\s*part\s+(?:\d{1,2}|[ivx]{1,4}|one|two|three|four|five|six|seven|eight|nine|ten)\s*$", re.IGNORECASE)
+
+
+def _part_name_heading(blocks: Sequence[TitleBlock], first: TitleBlock) -> str | None:
+    """The translated name heading right after a bare "Part N" heading, if there is one."""
+    if not _BARE_PART_SOURCE.match(str(first.source_text or "")):
+        return None
+    following = [block for block in blocks if _normalize_render_text(block.target_text or block.source_text)]
+    index = next((position for position, block in enumerate(following) if block is first), None)
+    if index is None or index + 1 >= len(following):
+        return None
+    name = following[index + 1]
+    if name.block_type != BlockType.HEADING.value:
+        return None
+    text = " ".join(str(name.target_text or "").split())
+    return text if _CJK_RE.search(text) else None
+
+
+_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+_ZH_NUMERALS = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
+# "第 5 章　使用 RAG…", "第3章：…", "第十章 …"; "第 1 部分 …", "第二部分：…".
+_ZH_CHAPTER_LABEL = re.compile(r"^\s*第\s*(\d{1,3}|[一二三四五六七八九十]{1,3})\s*章\s*[:：.、·\-–—]?\s*")
+_ZH_PART_LABEL = re.compile(r"^\s*第\s*(\d{1,2}|[一二三四五六七八九十]{1,3})\s*部分\s*[:：.、·\-–—]?\s*")
+_EN_PART_LABEL = re.compile(r"^\s*part\s+(\d{1,2})\b\s*[:：.\-–—]?\s*", re.IGNORECASE)
+# A translated Manning title keeps the bare number: "6 为你的智能体添加记忆", "8　用代码执行赋能智能体".
+_BARE_TITLE_NUMBER = re.compile(r"^\s*(\d{1,3})(?:\s*[.:：、])?\s+(?=\S)")
+
+
+def _label_number(value: str) -> int | None:
+    if value.isdigit():
+        return int(value)
+    if value in _ZH_NUMERALS:
+        return _ZH_NUMERALS[value]
+    if len(value) == 2 and value[0] == "十":
+        return 10 + _ZH_NUMERALS.get(value[1], 0)
+    if len(value) in {2, 3} and value[1] == "十":
+        return _ZH_NUMERALS.get(value[0], 0) * 10 + (_ZH_NUMERALS.get(value[2], 0) if len(value) == 3 else 0)
+    return None
+
+
+def normalize_numbered_title(title_text: str | None, *, source_title: str | None = None) -> str | None:
+    """A numbered chapter or part title in one form: "第 N 章 标题", "第 N 部分 标题" (normal spaces).
+
+    The translations wrote the same kind of title four ways ("1 什么是 AI 智能体？", "第 3 章 使能行动",
+    "第 5 章\u3000使用 RAG…", "第3章：…"). The number comes from the title's own label (Chinese,
+    "Chapter N", "Part N") or, for a bare leading number, from the source title ("6 Adding memory to your
+    agent"). A title whose rest is still English keeps its form (it is not translated yet); a title
+    with no number is only tidied (one space for any run of whitespace).
+    """
     if not title_text:
         return title_text
-    match = _LEADING_ENGLISH_CHAPTER_LABEL.match(title_text)
-    if not match:
-        return title_text
-    rest = title_text[match.end():].strip()
-    if rest and not re.search(r"[\u4e00-\u9fff]", rest):
-        return title_text
-    return f"第{int(match.group(1))}章：{rest}" if rest else f"第{int(match.group(1))}章"
+    text = " ".join(title_text.replace("\u3000", " ").split())
+    source = " ".join((source_title or "").split())
+    part = _ZH_PART_LABEL.match(text) or _EN_PART_LABEL.match(text)
+    if part is not None:
+        number = _label_number(part.group(1))
+        rest = text[part.end():].strip()
+        if number is None or (rest and not _CJK_RE.search(rest)):
+            return text
+        return f"第 {number} 部分 {rest}".strip()
+    label = _ZH_CHAPTER_LABEL.match(text) or _LEADING_ENGLISH_CHAPTER_LABEL.match(text)
+    number: int | None = None
+    rest = text
+    if label is not None:
+        number = _label_number(label.group(1))
+        rest = text[label.end():].strip()
+    else:
+        source_number = extract_main_chapter_number(source) if source and not looks_like_part_title(source) else None
+        bare = _BARE_TITLE_NUMBER.match(text)
+        if source_number is not None and bare is not None and int(bare.group(1)) == source_number:
+            number, rest = source_number, text[bare.end():].strip()
+        elif source_number is not None and bare is None and _CJK_RE.search(text):
+            number = source_number
+    if number is None or (rest and not _CJK_RE.search(rest)):
+        return text
+    return f"第 {number} 章 {rest}".strip()
+
+
+def localize_chapter_label(title_text: str | None) -> str | None:
+    """"CHAPTER 11：额外技巧" → "第 11 章 额外技巧"; titles without a Chinese part keep their English label."""
+    return normalize_numbered_title(title_text)
 
 
 def localized_structural_title_fallback(title_text: str | None) -> str | None:
