@@ -138,6 +138,9 @@ _SPECS = (
     CheckSpec("L1.sublist_as_text", MAJOR, "子列表项被排成了正文或挤在上一项里", REPAIR_NEST_LIST_ITEMS),
     CheckSpec("L1.sidebar_as_text", MAJOR, "侧栏的标题被排成了正文，侧栏没有成框", REPAIR_RELABEL_AS_SIDEBAR),
     CheckSpec("L1.paragraph_split_midsentence", MAJOR, "一句话被图或分页断成了两段", REPAIR_JOIN_CONTINUATION),
+    # An EPUB parsed before the parser kept lists, definition terms and note/sidebar boxes: a
+    # structure refresh reads it again and keeps every translation whose text is unchanged.
+    CheckSpec("L1.epub_structure_outdated", MAJOR, "EPUB 的列表、术语表或提示框结构没有保留（解析器版本旧）", REPAIR_STRUCTURE),
     CheckSpec("L1.review_blocking", BLOCKING, "审校标记的结构阻断问题（如阅读顺序错乱）", REPAIR_REVIEW_RECHECK),
     CheckSpec("L2.figure_regions", BLOCKING, "图片裁剪不对（切掉了图，或框进了页眉、图注）", REPAIR_FIGURE_REGION),
     CheckSpec("L2.figure_without_image", BLOCKING, "图没有图片", REPAIR_FIGURE_REGION),
@@ -247,6 +250,9 @@ class QaBlock:
     merged_blocks: tuple[tuple[str, str], ...] = ()
     # A figure whose page gives it no caption, accepted as such (the repair's ``accept_uncaptioned_figure``).
     caption_absent_accepted: bool = False
+    # EPUB blocks: the structure version the parser read them with (``epub.EPUB_STRUCTURE_VERSION``;
+    # 1 for blocks parsed before it was recorded). None for other sources.
+    epub_structure_version: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -792,6 +798,34 @@ def check_pilot_chapters(inputs: PilotQaInputs) -> list[CheckRun]:
                 )
             )
     return [not_body, contents, folded]
+
+
+def check_epub_structure(inputs: PilotQaInputs) -> CheckRun:
+    """A chapter of an EPUB read by an older parser: its lists show without markers, its definition
+    terms are missing, its notes are a heading over loose paragraphs. One finding per chapter."""
+    from book_agent.domain.structure.epub import EPUB_STRUCTURE_VERSION
+
+    run = CheckRun("L1.epub_structure_outdated")
+    oldest: dict[str, int] = {}
+    for block in inputs.blocks:
+        if block.epub_structure_version is None:
+            continue
+        oldest[block.chapter_id] = min(oldest.get(block.chapter_id, block.epub_structure_version), block.epub_structure_version)
+    for chapter in inputs.chapters:
+        version = oldest.get(chapter.id)
+        if version is None or version >= EPUB_STRUCTURE_VERSION:
+            continue
+        run.findings.append(
+            Finding(
+                "L1.epub_structure_outdated",
+                CHECKS["L1.epub_structure_outdated"].severity,
+                {"kind": "chapter", "id": chapter.id},
+                Location(chapter_id=chapter.id),
+                "这一章是旧版解析器读的：列表没有圆点或编号、术语表的词条丢了、“注意”框排成了标题加正文，要按当前解析器刷新结构",
+                {"structure_version": version, "current_version": EPUB_STRUCTURE_VERSION, "chapter": chapter.title_src},
+            )
+        )
+    return run
 
 
 def check_exported_chapters(inputs: PilotQaInputs) -> list[CheckRun]:
@@ -2565,6 +2599,7 @@ def run_layers(inputs: PilotQaInputs, extra_checks: Sequence[ExtraCheck] = ()) -
     runs: list[CheckRun] = [
         *check_pilot_chapters(inputs),
         *check_exported_chapters(inputs),
+        check_epub_structure(inputs),
         *check_headings_and_headers(inputs),
         check_headings_as_text(inputs),
         *check_reading_structure(inputs),

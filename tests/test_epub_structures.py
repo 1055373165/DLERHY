@@ -183,6 +183,35 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(term, "**环境**")
 
 
+class OnlyNewSentencesTest(unittest.TestCase):
+    """Translating only a packet's new sentences (a definition term): the model sees only their
+    blocks as the current text, the rest as context; a code-only term is kept as it is."""
+
+    def test_the_packet_narrows_to_the_wanted_blocks(self) -> None:
+        from book_agent.services.translation import _only_blocks_of
+        from book_agent.translation.contracts import ContextPacket, PacketBlock
+
+        blocks = [
+            PacketBlock(block_id="b1", block_type="paragraph", sentence_ids=["s1"], text="An agent has these parts:"),
+            PacketBlock(block_id="b2", block_type="paragraph", sentence_ids=["s2"], text="Environment"),
+            PacketBlock(block_id="b3", block_type="paragraph", sentence_ids=["s3"], text="The world the agent interacts with"),
+        ]
+        packet = ContextPacket(
+            packet_id="p", document_id="d", chapter_id="c", packet_type="translate", book_profile_version=1, current_blocks=blocks
+        )
+        narrowed = _only_blocks_of(packet, {"s2"})
+        self.assertEqual([block.block_id for block in narrowed.current_blocks], ["b2"])
+        self.assertEqual([block.block_id for block in narrowed.prev_blocks], ["b1"])
+        self.assertEqual([block.block_id for block in narrowed.next_blocks], ["b3"])
+        self.assertIs(_only_blocks_of(packet, {"s1", "s2", "s3"}), packet)
+
+    def test_a_code_only_term_needs_no_model(self) -> None:
+        from book_agent.services.translation import _CODE_ONLY_SENTENCE
+
+        self.assertTrue(_CODE_ONLY_SENTENCE.fullmatch("`_execute_action`"))
+        self.assertFalse(_CODE_ONLY_SENTENCE.fullmatch("`run` the agent"))
+
+
 OLD_PARSE = """<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">
   <body>

@@ -1184,5 +1184,27 @@ class EmphasisMarkerTests(unittest.TestCase):
         self.assertFalse(needs_reexport(pilot_qa.run_layers(build([*clean_blocks(), block]))))
 
 
+class EpubStructureVersionTests(unittest.TestCase):
+    """An EPUB chapter read before the parser kept lists, definition terms and note boxes."""
+
+    def _hits(self, version: int | None) -> list[dict[str, Any]]:
+        blocks = [dataclasses.replace(block, epub_structure_version=version) for block in clean_blocks()]
+        return _by_check(build(blocks)).get("L1.epub_structure_outdated", [])
+
+    def test_an_old_parse_is_one_finding_per_chapter_with_the_refresh_path(self) -> None:
+        from book_agent.domain.quality.pilot_repair import paths_for
+
+        hits = self._hits(1)
+        self.assertEqual(sorted(hit["target"]["id"] for hit in hits), sorted([C1, C2]))
+        self.assertEqual(hits[0]["severity"], MAJOR)
+        self.assertEqual([path.name for path in paths_for("L1.epub_structure_outdated", hits[0])], ["structure_edit.refresh_epub_structure"])
+
+    def test_a_current_parse_and_other_sources_are_not(self) -> None:
+        from book_agent.domain.structure.epub import EPUB_STRUCTURE_VERSION
+
+        self.assertEqual(self._hits(EPUB_STRUCTURE_VERSION), [])
+        self.assertEqual(self._hits(None), [])
+
+
 if __name__ == "__main__":
     unittest.main()

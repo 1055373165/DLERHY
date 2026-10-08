@@ -55,6 +55,7 @@ from book_agent.domain.enums import (
     PacketStatus,
     RunStatus,
     SnapshotType,
+    SourceType,
     TargetSegmentStatus,
 )
 from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
@@ -412,6 +413,7 @@ class PilotRepairToolbox:
             self.ctx.budget.packets += 1
             self._charge_since(watermark)
             if not texts:
+                logger.info("packet %s: the answer did not give each new sentence its own translation; retranslating it", packet_id)
                 whole.append(packet_id)
                 continue
             try:
@@ -420,7 +422,7 @@ class PilotRepairToolbox:
                         packet_id, texts, reason="只翻译重建后的表格单元格", actor_id=ACTOR_ID, run_id=self.ctx.run_id, replace=redo_all
                     )
             except Exception:  # a guard refused the cells: the packet is retranslated as before
-                logger.debug("filling the cells of packet %s refused", packet_id, exc_info=True)
+                logger.info("packet %s: filling its new sentences was refused; retranslating it", packet_id, exc_info=True)
                 whole.append(packet_id)
                 continue
             packet.status = PacketStatus.TRANSLATED
@@ -1788,6 +1790,47 @@ class PilotRepairToolbox:
         except Exception:  # pragma: no cover - an unreadable file only loses the PDF's evidence
             logger.warning("pilot repair: cannot open %s", source, exc_info=True)
             return None
+
+    def _structure_edit__refresh_epub_structure(self, item: WorkItem) -> ToolResult:
+        """An EPUB's chapters read again by the current parser (the structure refresh): lists, definition
+        terms and note/sidebar boxes come back. Blocks are matched by text, so every block whose text is
+        unchanged keeps its sentences and translation; only the new blocks' sentences (a definition
+        term the old parser dropped) go to the model, with the rest of their packet as context."""
+        document = self.session.get(Document, self.ctx.document_id)
+        if document is None or document.source_type != SourceType.EPUB:
+            raise NotApplicable("not an EPUB")
+        if not Path(str(document.source_path or "")).expanduser().is_file():
+            raise NotApplicable("the EPUB file is not where the document says")
+        chapter_ids = sorted(
+            {str((finding.get("target") or {}).get("id") or "") for finding in item.findings} & set(self.ctx.chapter_ids)
+        )
+        if not chapter_ids:
+            raise NotApplicable("the findings name no chapter of this run")
+        artifacts = self.ctx.workflow().refresh_epub_structure(self.ctx.document_id, chapter_ids=chapter_ids)
+        fork = artifacts.parse_revision_fork
+        packets = list(dict.fromkeys([
+            *(getattr(fork, "retranslate_packet_ids", None) or []),
+            *self._packets_of_blocks(list(artifacts.created_block_ids)),
+        ]))
+        filled: list[str] = []
+        retranslated: list[str] = []
+        if packets:
+            filled, retranslated = self.translate_block_sentences(
+                packets,
+                list(artifacts.created_block_ids),
+                ["这些是书中定义列表的词条（术语名）或新拆出的短句：只翻译这几句，术语名译成简短的中文，代码标识符原样保留。"],
+            )
+        return ToolResult(
+            params={
+                "chapter_ids": chapter_ids,
+                "created_block_count": len(artifacts.created_block_ids),
+                "refreshed_block_count": len(artifacts.refreshed_block_ids),
+                "invalidated_block_count": len(artifacts.invalidated_block_ids),
+                "cells_only_packets": filled,
+            },
+            block_ids=list(artifacts.created_block_ids),
+            packet_ids=list(dict.fromkeys([*filled, *retranslated])),
+        )
 
     def _structure_edit__reextract_table(self, item: WorkItem) -> ToolResult:
         """The table read again from its page with the current extractor (rows that share one cell box
