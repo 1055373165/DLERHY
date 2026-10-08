@@ -235,7 +235,9 @@ class ProseInsideFiguresTest(unittest.TestCase):
 def _book_test(book: dict[str, Any]):
     @unittest.skipUnless(RUN_CORPUS, "Set BOOK_AGENT_RUN_CORPUS_TESTS=1 to parse the real-book corpus.")
     def test(self: unittest.TestCase) -> None:
-        path = Path(book["path"])
+        # The owner moves books between disks: the first of its recorded places that exists.
+        candidates = [Path(book["path"]), *(Path(alt).expanduser() for alt in book.get("alt_paths", []))]
+        path = next((candidate for candidate in candidates if candidate.exists()), candidates[0])
         if not path.exists():
             self.skipTest(f"corpus book not on this machine: {path}")
         with tempfile.TemporaryDirectory() as tmpdir:
