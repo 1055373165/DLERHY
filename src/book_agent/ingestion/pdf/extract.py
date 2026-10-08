@@ -804,6 +804,39 @@ def table_rows(table: Any, page_lines: Sequence[tuple[float, float, float, float
     return [row for row in rows if any(row)]
 
 
+def ruled_table_rows_at(page: Any, bbox: Sequence[float]) -> list[list[str]] | None:
+    """The rows of the ruled data table set at ``bbox`` on ``page``, as the parser reads them now.
+
+    For a book parsed before rows that share one cell box were split: the QA compares the row count
+    with the parsed table's, and the repair rebuilds the table from these rows. None when no data
+    table lies there.
+    """
+    try:
+        tables = page.find_tables().tables
+    except Exception:
+        return None
+    x0, y0, x1, y1 = (float(value) for value in bbox)
+    area = max((x1 - x0) * (y1 - y0), 1.0)
+
+    def overlap(table: Any) -> float:
+        tx0, ty0, tx1, ty1 = (float(value) for value in table.bbox)
+        width = max(0.0, min(x1, tx1) - max(x0, tx0))
+        height = max(0.0, min(y1, ty1) - max(y0, ty0))
+        return width * height / min(area, max((tx1 - tx0) * (ty1 - ty0), 1.0))
+
+    candidates = [table for table in tables if overlap(table) >= 0.5]
+    if not candidates:
+        return None
+    table = max(candidates, key=overlap)
+    try:
+        unsplit = [row for row in ([_table_cell_text(cell) for cell in row] for row in table.extract()) if any(row)]
+        if not _looks_like_data_table(unsplit):
+            return None
+        return table_rows(table, table_page_lines(page))
+    except Exception:
+        return None
+
+
 def _looks_like_data_table(rows: list[list[str]]) -> bool:
     if len(rows) < 2 or max((len(row) for row in rows), default=0) < 2:
         return False

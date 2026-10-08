@@ -475,6 +475,7 @@ def load_pilot_inputs(
         review_blockers=_review_blockers(session, document_id, chapter_ids),
         exported=exported,
         health=health,
+        table_rows=pages.table_rows if pages else None,
         scope=scope,
     )
     return _Loaded(inputs, export_source, pages)

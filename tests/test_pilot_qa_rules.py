@@ -236,7 +236,7 @@ def build(
         else [GlossaryTerm("agent", ("智能体",), locked=True), GlossaryTerm("tool", ("工具",))],
         model_issues=model_issues or [],
         review_blockers=review_blockers or [],
-        exported=[ExportedChapter(C1, "1 为什么需要智能体", ""), ExportedChapter(C2, "2 循环", "")]
+        exported=[ExportedChapter(C1, "第 1 章 为什么需要智能体", ""), ExportedChapter(C2, "第 2 章 循环", "")]
         if exported == "default"
         else exported,  # type: ignore[arg-type]
         health=health,
@@ -564,7 +564,7 @@ class KnownIssueTests(unittest.TestCase):
 
     def test_a_pilot_chapter_missing_from_the_reading_copy(self) -> None:
         # Both books' pilots: the export folded chapter 2 into chapter 1's section.
-        inputs = build(exported=[ExportedChapter(C1, "1 为什么需要智能体", "")])
+        inputs = build(exported=[ExportedChapter(C1, "第 1 章 为什么需要智能体", "")])
         self.assertFound(inputs, "L1.export_chapter_missing", BLOCKING, target_id=C2)
 
     def test_a_stray_symbol_font_bullet(self) -> None:

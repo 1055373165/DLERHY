@@ -180,6 +180,35 @@ class StructureEditTests(unittest.TestCase):
             self.assertEqual(block.source_span_json["pdf_block_role"], "code_like")
             self.assertEqual(block.source_span_json["structure_edit_previous_type"], "table")
 
+    def test_a_table_rebuilt_from_its_page_gets_one_sentence_per_cell_and_replays(self) -> None:
+        # Build an AI Agent, table 4.3: the two body rows came out as one row.
+        block_id = self.blocks[OTHER]
+        merged = "| Condition | Correct |\n| With web search Without web search | 7/10 2/10 |"
+        rows = "| Condition | Correct |\n| With web search | 7/10 |\n| Without web search | 2/10 |"
+        with self.session_factory() as session:
+            block = session.get(Block, block_id)
+            block.block_type = BlockType.TABLE
+            block.source_text = merged
+            block.source_span_json = {**(block.source_span_json or {}), "pdf_block_role": "table_like", "table_markdown": "stale"}
+            session.commit()
+            with self.assertRaisesRegex(StructureEditRejected, "only a table"):
+                self._edit(session).rebuild_table(self.document_id, self.blocks[FIRST], rows, actor_id="t", reason="no")
+            with self.assertRaisesRegex(StructureEditRejected, "already has these rows"):
+                self._edit(session).rebuild_table(self.document_id, block_id, merged, actor_id="t", reason="no")
+            outcome = self._edit(session).rebuild_table(self.document_id, block_id, rows, actor_id="t", reason="read again")
+            session.commit()
+            block = session.get(Block, block_id)
+            self.assertEqual(block.source_text, rows)
+            self.assertNotIn("table_markdown", block.source_span_json)
+            self.assertIn("table_rows_reextracted", block.source_span_json["recovery_flags"])
+            cells = session.scalars(
+                select(Sentence.source_text).where(Sentence.block_id == block_id, Sentence.retired_by_revision_id.is_(None))
+            ).all()
+            self.assertIn("Without web search", cells)
+            self.assertEqual(outcome.kind, "rebuild_table")
+            # Still in effect: a replay leaves it alone.
+            self.assertEqual(self._edit(session).replay(self.document_id).stale_edit_ids, [])
+
     def test_relabel_to_heading_keeps_the_sentence_and_its_translation(self) -> None:
         block_id = self.blocks[OTHER]
         with self.session_factory() as session:

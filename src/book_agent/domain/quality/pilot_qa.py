@@ -58,7 +58,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from book_agent.domain.structure import parse_health
-from book_agent.domain.structure.callouts import CALLOUT_KIND_CODE, LooseBlock, is_tiny_image, split_callouts
+from book_agent.domain.structure.callouts import CALLOUT_KIND_CODE, LooseBlock, callout_lines, is_tiny_image, split_callouts
 from book_agent.domain.structure.parse_health import (
     BLOCKING,
     MAJOR,
@@ -126,10 +126,12 @@ _SPECS = (
     CheckSpec("L1.chapter_folded", BLOCKING, "一章里混进了另一章", REPAIR_RESPLIT),
     CheckSpec("L1.export_chapter_missing", BLOCKING, "中文版里这一章没有单独成章", REPAIR_EXPORT_CODE),
     CheckSpec("L1.export_title", MAJOR, "中文版目录里的章节标题有问题", REPAIR_RETRANSLATE),
+    CheckSpec("L1.part_title_unnamed", MAJOR, "“第 N 部分”只有编号，部分的名称并进了正文", REPAIR_STRUCTURE),
     CheckSpec("L1.heading_is_prose", MAJOR, "正文句子被当成了标题", REPAIR_STRUCTURE),
     CheckSpec("L1.running_header_as_text", MAJOR, "页眉被当成了正文或脚注", REPAIR_STRUCTURE),
     CheckSpec("L1.heading_merged_into_text", MAJOR, "小标题和正文粘在了一起", REPAIR_STRUCTURE),
     CheckSpec("L1.heading_as_text", MAJOR, "小标题被排成了正文段落", REPAIR_STRUCTURE),
+    CheckSpec("L1.clipped_text_copy", MAJOR, "旁边一段文字被裁掉一截的副本，又作为一段出现", REPAIR_STRUCTURE),
     CheckSpec("L1.icon_callout_split", MAJOR, "图标引出的提示框被拆成了零散段落", REPAIR_STRUCTURE),
     CheckSpec("L1.sublist_as_text", MAJOR, "子列表项被排成了正文或挤在上一项里", REPAIR_NEST_LIST_ITEMS),
     CheckSpec("L1.sidebar_as_text", MAJOR, "侧栏的标题被排成了正文，侧栏没有成框", REPAIR_RELABEL_AS_SIDEBAR),
@@ -150,6 +152,7 @@ _SPECS = (
     CheckSpec("L2.review_blocking", BLOCKING, "审校标记的图片阻断问题", REPAIR_REVIEW_RECHECK),
     CheckSpec("L3.table_flattened", BLOCKING, "表格被压成了文字", REPAIR_STRUCTURE),
     CheckSpec("L3.table_garbled", BLOCKING, "表格没有拆开（单元格里还有竖线）", REPAIR_STRUCTURE),
+    CheckSpec("L3.table_rows_merged", BLOCKING, "表格的几行挤成了一行（每格里是几行的内容）", REPAIR_STRUCTURE),
     CheckSpec("L3.table_ragged", MAJOR, "表格各行列数不一致", REPAIR_STRUCTURE),
     CheckSpec("L3.table_no_header", MAJOR, "表格没有表头", REPAIR_STRUCTURE),
     CheckSpec("L3.table_sparse", MAJOR, "表格大半是空格子（多半是图被当成了表格）", REPAIR_STRUCTURE),
@@ -163,6 +166,8 @@ _SPECS = (
     CheckSpec("L4.inline_code_lost", MAJOR, "行内代码在译文里丢了或被改了", REPAIR_RETRANSLATE),
     CheckSpec("L4.inline_code_markup", MAJOR, "行内代码没有显示成代码（露出了反引号）", REPAIR_EXPORT_CODE),
     CheckSpec("L4.list_marker_lost", MAJOR, "列表编号丢了", REPAIR_RETRANSLATE),
+    CheckSpec("L4.list_marker_doubled", MAJOR, "编号列表项前多了一个圆点（“1. •”）", REPAIR_RETRANSLATE),
+    CheckSpec("L4.callout_lines_collapsed", MAJOR, "提示框的分行没了，几行挤成了一行", REPAIR_RETRANSLATE),
     CheckSpec("L4.footnote_marker_lost", MAJOR, "脚注编号丢了", REPAIR_RETRANSLATE),
     CheckSpec("L4.equation_altered", MAJOR, "公式被改动了", REPAIR_RETRANSLATE),
     CheckSpec("L4.review_blocking", BLOCKING, "审校标记的代码或格式阻断问题", REPAIR_REVIEW_RECHECK),
@@ -331,6 +336,8 @@ class PilotQaInputs:
     # The exported reading copy's chapter sections; None when the pilot has no export to read.
     exported: Sequence[ExportedChapter] | None = None
     health: HealthInputs | None = None
+    # table_rows(page, bbox): the ruled table at bbox read again from the PDF (None without the PDF).
+    table_rows: Callable[[int, Sequence[float]], list[list[str]] | None] | None = None
     # "pilot": the two pilot chapters; "book": every chapter after the whole-book run, where front
     # matter, a contents page and the index are the book's own chapters, not a wrong pick.
     scope: str = "pilot"
@@ -784,8 +791,9 @@ def check_exported_chapters(inputs: PilotQaInputs) -> list[CheckRun]:
     """The reading copy: every pilot chapter is its own chapter, under a Chinese title without a page number."""
     missing = CheckRun("L1.export_chapter_missing")
     titles = CheckRun("L1.export_title")
+    unnamed = CheckRun("L1.part_title_unnamed")
     if inputs.exported is None:
-        return [missing, titles]
+        return [missing, titles, unnamed]
     sections = {section.chapter_id: section for section in inputs.exported if section.chapter_id}
     for chapter in inputs.chapters:
         section = sections.get(chapter.id)
@@ -813,6 +821,23 @@ def check_exported_chapters(inputs: PilotQaInputs) -> list[CheckRun]:
             problem = "标题后面带着页码"
         elif not cjk_count(title) and len(english_words(title)) >= 2:
             problem = "标题没有翻译"
+        elif _MIXED_NUMBERED_TITLE.match(title):
+            problem = "标题的编号写法和全书不一致（应为“第 N 章 标题”）"
+        if (
+            not problem
+            and _PART_LABEL_ONLY.match(title)
+            and len(_PART_SOURCE.sub("", " ".join((chapter.title_src or "").split())).split()) >= 1
+        ):
+            unnamed.findings.append(
+                Finding(
+                    "L1.part_title_unnamed",
+                    MAJOR,
+                    {"kind": "chapter", "id": chapter.id},
+                    Location(chapter_id=chapter.id, page=chapter.page_start),
+                    f"中文版里这一部分只有编号「{title}」，名称（原书「{_snippet(chapter.title_src, 60)}」）并进了正文第一段",
+                    {"source": chapter.title_src, "target": title},
+                )
+            )
         if problem:
             titles.findings.append(
                 Finding(
@@ -824,7 +849,13 @@ def check_exported_chapters(inputs: PilotQaInputs) -> list[CheckRun]:
                     {"source": chapter.title_src, "target": title},
                 )
             )
-    return [missing, titles]
+    return [missing, titles, unnamed]
+
+
+# A numbered title in another form than "第 N 章 标题": a bare number, no spaces, a colon or U+3000.
+_MIXED_NUMBERED_TITLE = re.compile(r"^(?:\d{1,3}\s+\S|第\d|第\s*\d+\s*章(?:\S|\s*[:：\u3000]))")
+_PART_LABEL_ONLY = re.compile(r"^第\s*\d{1,2}\s*部分$")
+_PART_SOURCE = re.compile(r"^part\s+\w+\s*", re.IGNORECASE)
 
 
 # A run-in heading is short and never ends like a sentence or a clause.
@@ -1243,6 +1274,37 @@ def check_figures(inputs: PilotQaInputs) -> list[CheckRun]:
     return [swallowed, no_image, orphan, no_caption]
 
 
+def _clipped_lines(lines: Sequence[str], other_lines: Sequence[str]) -> bool:
+    """Every line is a strict start of one of ``other_lines``: text a box edge cut short."""
+    others = [" ".join(line.split()) for line in other_lines if line.strip()]
+    own = [" ".join(line.split()) for line in lines if line.strip()]
+    return len(own) >= 2 and all(any(other.startswith(line) and other != line for other in others) for line in own)
+
+
+def check_clipped_copies(inputs: PilotQaInputs) -> CheckRun:
+    """A block that repeats the block next to it cut short at a box edge ("Move back by the ov" beside
+    "Move back by the overlap amount"): an older parse clipped a listing's box into an annotation."""
+    run = CheckRun("L1.clipped_text_copy")
+    by_chapter: dict[str, list[QaBlock]] = defaultdict(list)
+    for block in inputs.blocks:
+        by_chapter[block.chapter_id].append(block)
+    for blocks in by_chapter.values():
+        for index, block in enumerate(blocks):
+            lines = (block.parsed_text or block.source_text or "").split("\n")
+            for neighbour in blocks[max(0, index - 2) : index] + blocks[index + 1 : index + 3]:
+                if _clipped_lines(lines, (neighbour.parsed_text or neighbour.source_text or "").split("\n")):
+                    run.findings.append(
+                        _block_finding(
+                            "L1.clipped_text_copy",
+                            block,
+                            f"「{_snippet(block.source_text, 40)}」是旁边「{_snippet(neighbour.source_text, 40)}」被裁掉一截的副本",
+                            copy_of=neighbour.block_id,
+                        )
+                    )
+                    break
+    return run
+
+
 def check_icon_callouts(inputs: PilotQaInputs) -> list[CheckRun]:
     """A small icon and the lines beside it read as loose pieces (a book parsed before callouts were
     recognised), and any icon-sized picture drawn as a whole figure card.
@@ -1371,6 +1433,7 @@ def check_tables(inputs: PilotQaInputs) -> list[CheckRun]:
     sparse = CheckRun("L3.table_sparse")
     is_code = CheckRun("L3.table_is_code")
     untranslated = CheckRun("L3.table_untranslated")
+    rows_merged = CheckRun("L3.table_rows_merged")
     for block in inputs.blocks:
         if _is_table(block):
             label = _snippet(block.caption_text or block.target_text or "这个表格", 40)
@@ -1378,6 +1441,19 @@ def check_tables(inputs: PilotQaInputs) -> list[CheckRun]:
                 # Even when the reading copy already sets it as code, the block is still a table to
                 # the export's layout gate, which blocks it as a table it cannot draw.
                 is_code.findings.append(_block_finding("L3.table_is_code", block, f"{label}其实是一段代码"))
+                continue
+            merged_rows = _merged_table_rows(inputs, block)
+            if merged_rows is not None:
+                pdf_rows, parsed_rows = merged_rows
+                rows_merged.findings.append(
+                    _block_finding(
+                        "L3.table_rows_merged",
+                        block,
+                        f"{label}原书有 {pdf_rows} 行，这里只有 {parsed_rows} 行：几行挤在一行里，每格是几行的内容",
+                        pdf_rows=pdf_rows,
+                        parsed_rows=parsed_rows,
+                    )
+                )
                 continue
             rows = _table_rows(block.html)
             if not rows:
@@ -1426,7 +1502,29 @@ def check_tables(inputs: PilotQaInputs) -> list[CheckRun]:
             flattened.findings.append(
                 _block_finding("L3.table_flattened", block, "一张表格被当成了正文段落，读者看到的是一串竖线和文字")
             )
-    return [flattened, garbled, ragged, no_header, sparse, is_code, untranslated]
+    return [flattened, garbled, ragged, no_header, sparse, is_code, untranslated, rows_merged]
+
+
+def _parsed_table_row_count(source_text: str) -> int:
+    rows = [line for line in (source_text or "").splitlines() if line.strip().startswith("|")]
+    return len([line for line in rows if not re.fullmatch(r"[\s|:\-]+", line)])
+
+
+def _merged_table_rows(inputs: PilotQaInputs, block: QaBlock) -> tuple[int, int] | None:
+    """(rows on the page, rows parsed) when the PDF sets more rows than the parsed table has."""
+    if inputs.table_rows is None or not block.regions:
+        return None
+    page, bbox = block.regions[0]
+    parsed = _parsed_table_row_count(block.source_text)
+    if parsed < 2:
+        return None
+    try:
+        rows = inputs.table_rows(page, bbox)
+    except Exception:  # pragma: no cover - an unreadable page only loses this check
+        return None
+    if not rows or len(rows) <= parsed:
+        return None
+    return len(rows), parsed
 
 
 # ---------------------------------------------------------------------------
@@ -1467,6 +1565,27 @@ def _code_body_html(html: str) -> str:
     return "".join(bodies) if bodies else (html or "")
 
 
+# A numbered item's source ("1 A router agent ...", "2. Add a payment method") and the number a
+# translation may keep in front of its text.
+_NUMBERED_SOURCE_RE = re.compile(r"^\s*\d{1,3}(?:[.)]\s*|\s+)\S")
+_NUMBERED_TARGET_RE = re.compile(r"^\s*\d{1,3}(?:[.)\u3001]\s*|\s+)")
+_LEADING_BULLET_RE = re.compile(r"^\s*[\u2022\u25cf\u25e6\u25aa\u2023\u2219\u25a0]")
+_CALLOUT_LINE_HTML_RE = re.compile(r"<p class='callout-line'>|<li\b")
+# Below this share of its source lines a prose callout has lost its lines (a line or two may join).
+_CALLOUT_LINES_KEPT = 0.75
+
+
+def _collapsed_callout_lines(block: QaBlock) -> tuple[int, int] | None:
+    """(source lines, lines shown) of a prose callout the reading copy shows with far fewer lines."""
+    if "callout-prose" not in (block.html or "") or not block.target_text.strip():
+        return None
+    source_lines = len(callout_lines(block.source_text))
+    shown = len(_CALLOUT_LINE_HTML_RE.findall(block.html))
+    if source_lines < 3 or shown >= source_lines * _CALLOUT_LINES_KEPT:
+        return None
+    return source_lines, shown
+
+
 def check_code_and_format(inputs: PilotQaInputs) -> list[CheckRun]:
     translated_code = CheckRun("L4.code_translated")
     prose_code = CheckRun("L4.prose_in_code")
@@ -1474,11 +1593,38 @@ def check_code_and_format(inputs: PilotQaInputs) -> list[CheckRun]:
     lost = CheckRun("L4.inline_code_lost")
     markup = CheckRun("L4.inline_code_markup")
     list_marker = CheckRun("L4.list_marker_lost")
+    doubled = CheckRun("L4.list_marker_doubled")
+    collapsed = CheckRun("L4.callout_lines_collapsed")
     footnote = CheckRun("L4.footnote_marker_lost")
     equation = CheckRun("L4.equation_altered")
     by_chapter: dict[str, list[QaBlock]] = defaultdict(list)
     for block in inputs.blocks:
         by_chapter[block.chapter_id].append(block)
+    for block in inputs.blocks:
+        if block.block_type == "list_item" and _NUMBERED_SOURCE_RE.match(block.source_text or ""):
+            reader = visible_text(block.html)
+            shown = bool(_LEADING_BULLET_RE.match(reader))
+            if shown or _LEADING_BULLET_RE.match(_NUMBERED_TARGET_RE.sub("", block.target_text or "", count=1)):
+                doubled.findings.append(
+                    _block_finding(
+                        "L4.list_marker_doubled",
+                        block,
+                        "编号列表项的译文前面多了一个圆点，读者看到“1. •”" if shown else "编号列表项的译文前面多了一个圆点（阅读版已不显示）",
+                        shown=shown,
+                    )
+                )
+        lines = _collapsed_callout_lines(block)
+        if lines is not None:
+            source_lines, shown_lines = lines
+            collapsed.findings.append(
+                _block_finding(
+                    "L4.callout_lines_collapsed",
+                    block,
+                    f"提示框原文有 {source_lines} 行，阅读版只显示 {shown_lines} 行：几行译文挤成了一行",
+                    source_lines=source_lines,
+                    shown_lines=shown_lines,
+                )
+            )
     for chapter_blocks in by_chapter.values():
         for index, block in enumerate(chapter_blocks):
             if _is_code(block) and not _is_table(block):
@@ -1576,7 +1722,7 @@ def check_code_and_format(inputs: PilotQaInputs) -> list[CheckRun]:
                 footnote.findings.append(
                     _block_finding("L4.footnote_marker_lost", block, f"脚注编号「{note.group(1)}」在译文里丢了", marker=note.group(1))
                 )
-    return [translated_code, prose_code, comment_text, lost, markup, list_marker, footnote, equation]
+    return [translated_code, prose_code, comment_text, lost, markup, list_marker, doubled, collapsed, footnote, equation]
 
 
 # ---------------------------------------------------------------------------
@@ -2162,6 +2308,8 @@ def check_purity(inputs: PilotQaInputs) -> list[CheckRun]:
     residue = CheckRun("L7.english_residue")
     halfwidth = CheckRun("L7.halfwidth_punctuation")
     odd = CheckRun("L7.odd_whitespace")
+    # Blocks with a sentence that has no translation: L6.untranslated_sentence reports those.
+    missing_translation = {sentence.block_id for sentence in inputs.sentences if not (sentence.target_text or "").strip()}
     for block in inputs.blocks:
         reader = _reader_text(block)
         target = block.target_text or ""
@@ -2186,6 +2334,24 @@ def check_purity(inputs: PilotQaInputs) -> list[CheckRun]:
                         glyph=f"U+{ord(glyph.group(0)):04X}",
                     )
                 )
+        if (
+            _is_prose_block(block)
+            and block.block_id not in missing_translation
+            and len(english_words(reader)) >= 6
+            and not cjk_count(reader)
+        ):
+            # The reader sees a whole English paragraph: program output or code parsed as prose, a
+            # figure's text left in the body, a stale fragment of an older parse.
+            english.findings.append(
+                _block_finding(
+                    "L7.untranslated_prose",
+                    block,
+                    "读者看到的是整段英文（没有译文）",
+                    detail="shown_untranslated",
+                    code_face=bool(block.font_names) and all(parse_health.is_monospace_font(name) for name in block.font_names),
+                )
+            )
+            continue
         if not _is_prose_block(block) or not target.strip():
             continue
         plain = _without_code_and_urls(target)
@@ -2282,6 +2448,7 @@ def run_layers(inputs: PilotQaInputs, extra_checks: Sequence[ExtraCheck] = ()) -
         *check_reading_structure(inputs),
         *check_figures(inputs),
         *check_icon_callouts(inputs),
+        check_clipped_copies(inputs),
         check_figure_residue(inputs),
         *check_tables(inputs),
         *check_code_and_format(inputs),
