@@ -109,7 +109,7 @@ def split_merged_book(document: str) -> tuple[str, list[ReaderChapter]]:
         chapters.append(
             ReaderChapter(
                 anchor=start.group("id"),
-                title=_text(heading.group("title")) if heading else f"第{index + 1}部分",
+                title=_text(heading.group("title")) if heading else f"第 {index + 1} 部分",
                 body=body,
             )
         )

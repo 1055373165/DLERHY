@@ -1530,16 +1530,23 @@ class ExportService:
         normalized_title = _normalize_render_text(chapter_title) if chapter_title else ""
         body: list[MergedRenderBlock] = []
         dropped_title_heading = not normalized_title
+        # The title may be spread over two headings ("Part 1" and the part's name): what is left of it.
+        remaining_title = normalized_title
         for block in render_blocks:
             if (
                 not dropped_title_heading
                 and block.block_type == BlockType.HEADING.value
             ):
+                text = block.target_text or block.source_text or ""
                 candidate = _normalize_render_text(
-                    block.target_text or block.source_text or ""
+                    titles.normalize_numbered_title(text, source_title=block.source_text) or text
                 )
-                if candidate and candidate == normalized_title:
+                if candidate and candidate == remaining_title:
                     dropped_title_heading = True
+                    continue
+                if candidate and remaining_title == normalized_title and remaining_title.startswith(f"{candidate} "):
+                    # The title's first heading; its next heading carries the rest.
+                    remaining_title = remaining_title[len(candidate) :].strip()
                     continue
             if self._is_code_language_label_block(block):
                 continue
