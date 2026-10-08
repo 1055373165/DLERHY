@@ -5212,6 +5212,165 @@ def _rejoin_line_break_hyphens_pass(service, blocks, context):
     return blocks
 
 
+_HEADING_FACE_LINE_MAX_WORDS = 10
+
+
+def _heading_face_lines(context: RecoveryContext) -> dict[int, dict[str, float]]:
+    """Per page, the lines the PDF sets apart as headings: {normalized text: font size}.
+
+    A line is one when its text block opens with it set in bold (or larger) over a plain paragraph
+    ("basic flow" in small caps above "The E2B flow is straightforward: ..."). A bold label over a
+    word or two (a code annotation, "Upload to / Pinecone") is not, nor is code set in a monospace
+    face: its bold lines are emphasized comments.
+    """
+    found: dict[int, dict[str, float]] = defaultdict(dict)
+    if not context.font_emphasis_available:
+        return found
+    for page in context.extraction.pages:
+        for raw in page.blocks:
+            if raw.ruled_table or not raw.line_styles or len(raw.line_styles) != len(raw.line_texts or []):
+                continue
+            if raw.font_names and all(_has_monospace_font(frozenset({name})) for name in raw.font_names):
+                continue
+            count = leading_emphasis_line_count(raw.line_styles)
+            rest = [line.split() for line in raw.line_texts[count:]]
+            if not count or sum(map(len, rest)) < 8 or max(map(len, rest), default=0) < 5:
+                continue
+            for line, (size, _bold) in zip(raw.line_texts[:count], raw.line_styles[:count]):
+                text = _normalize_text(line)
+                words = text.split()
+                if (
+                    not 1 <= len(words) <= _HEADING_FACE_LINE_MAX_WORDS
+                    or not re.search(r"[A-Za-z]{2}", text)
+                    or text.endswith((".", ",", ";", ":", "!", "?"))
+                    or ARTIFACT_TITLE_PATTERN.match(text)
+                    or re.match(r"^(?:\d+(?:\.\d+)*|[•●▪¡-])\s", text)
+                ):
+                    continue
+                found[page.page_number][text] = size
+    return found
+
+
+def _split_heading_face_lines_pass(service, blocks, context):
+    """A line the PDF sets in the heading face is never part of the text around it.
+
+    Earlier passes join lines into blocks by position and shape; a run-in subheading in small caps
+    ("structured output", "basic flow") can end up as the last line of the paragraph or code above
+    it, the first line of the text below it, or a line between two paragraphs. Each such line is
+    split out as its own heading; the text before and after keeps its block type.
+    """
+    face_lines = _heading_face_lines(context)
+    if not face_lines:
+        return blocks
+    result: list[_RecoveredBlock] = []
+    for block in blocks:
+        if (
+            block.block_type not in {BlockType.PARAGRAPH, BlockType.CODE, BlockType.LIST_ITEM}
+            or block.metadata.get("pdf_sidebar_panel") is not None
+            or str(block.metadata.get("pdf_page_family") or "body") != "body"
+        ):
+            result.append(block)
+            continue
+        candidates: dict[str, float] = {}
+        for page_number in range(block.page_start, block.page_end + 1):
+            candidates.update(face_lines.get(page_number, {}))
+        pieces = _heading_face_pieces(block, candidates) if candidates else None
+        if pieces is None:
+            result.append(block)
+            continue
+        for index, (kind, text, size) in enumerate(pieces):
+            if kind == "heading":
+                metadata = {
+                    **block.metadata,
+                    "pdf_heading_recovery_source": "embedded_book_styled_heading_recovered",
+                    "pdf_leading_emphasis_text": text,
+                    "pdf_leading_emphasis_size": size,
+                }
+                metadata.pop("heading_level", None)
+                result.append(
+                    replace(
+                        block,
+                        role="heading",
+                        block_type=BlockType.HEADING,
+                        text=text,
+                        metadata=metadata,
+                        flags=list(dict.fromkeys([*block.flags, "heading_face_line_split"])),
+                        anchor=f"{block.anchor}-hf{index}",
+                    )
+                )
+                continue
+            part_type = block.block_type
+            role = block.role
+            if part_type == BlockType.LIST_ITEM and index > 0:
+                # What follows a heading line is the paragraph under it, not a list item.
+                part_type, role = BlockType.PARAGRAPH, "body"
+            result.append(
+                replace(
+                    block,
+                    role=role,
+                    block_type=part_type,
+                    text=text,
+                    metadata=dict(block.metadata),
+                    flags=list(dict.fromkeys([*block.flags, "heading_face_line_split"])),
+                    anchor=block.anchor if index == 0 else f"{block.anchor}-hf{index}",
+                )
+            )
+    return result
+
+
+def _heading_face_pieces(block: _RecoveredBlock, candidates: dict[str, float]) -> list[tuple[str, str, float]] | None:
+    """The block cut at its heading-face lines: [(kind, text, size)], or None when it has none.
+
+    A heading line is matched as a whole line of the block. A code block may also end with it on
+    its last line ("uv add e2b-code-interpreter basic flow"): the code face never sets a heading.
+    """
+    lines = block.text.split("\n")
+    pieces: list[tuple[str, str, float]] = []
+    body: list[str] = []
+    found = False
+    for index, line in enumerate(lines):
+        text = _normalize_text(line)
+        size = candidates.get(text)
+        if size is not None and (
+            block.block_type == BlockType.CODE
+            or (index > 0 and not lines[index - 1].rstrip().endswith((".", "?", "!", ":", "”", '"', "’", ")")))
+            or (index + 1 < len(lines) and lines[index + 1].strip()[:1].islower())
+        ):
+            # A bold line after a line that does not end a sentence, or before one that goes on in
+            # lowercase, is part of that sentence (a bold term wrapping onto the next line). Inside
+            # code a matching line is an annotation's text, not a heading.
+            size = None
+        if size is not None and len(lines) > 1:
+            if body:
+                pieces.append(("body", "\n".join(body), 0.0))
+                body = []
+            pieces.append(("heading", text, size))
+            found = True
+            continue
+        if block.block_type == BlockType.CODE and index == len(lines) - 1:
+            for heading, heading_size in candidates.items():
+                if text == heading and index > 0:
+                    pieces.append(("body", "\n".join(body), 0.0))
+                    pieces.append(("heading", heading, heading_size))
+                    return pieces
+                if text.endswith(" " + heading) and len(text) > len(heading) + 1:
+                    body.append(line[: line.rstrip().rfind(heading)].rstrip())
+                    pieces.append(("body", "\n".join(body), 0.0))
+                    pieces.append(("heading", heading, heading_size))
+                    return pieces
+        body.append(line)
+    if not found:
+        return None
+    if body:
+        pieces.append(("body", "\n".join(body), 0.0))
+    if all(kind == "heading" for kind, _text, _size in pieces):
+        return None
+    if any(kind == "body" and not re.search(r"[A-Za-z]{3}", text) for kind, text, _size in pieces):
+        # "19\nSummary": a running header (page number and section title), not a heading in text.
+        return None
+    return pieces
+
+
 def _rejoin_split_identifiers_pass(service, blocks, context):
     """Remove spaces that split an identifier ("final_ answer"), using the book's own identifiers as evidence."""
     identifier_counts = inline_identifier_counts(
@@ -5258,6 +5417,8 @@ _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
     BlockRecoveryPass("split_mixed_code_prose", _returning("_split_mixed_code_prose_blocks")),
     BlockRecoveryPass("promote_late_code_bodies", _returning("_promote_late_code_like_bodies")),
     BlockRecoveryPass("split_mixed_code_prose_again", _returning("_split_mixed_code_prose_blocks")),
+    BlockRecoveryPass("split_heading_face_lines", _split_heading_face_lines_pass),
+    BlockRecoveryPass("assign_split_heading_levels", _returning("_assign_styled_heading_levels")),
     BlockRecoveryPass("promote_late_table_bodies", _returning("_promote_late_table_like_bodies")),
     BlockRecoveryPass("merge_table_fragments", _returning("_merge_adjacent_table_fragments", "ordered_pages")),
     BlockRecoveryPass("lock_listing_scope", _returning("_lock_listing_scope")),

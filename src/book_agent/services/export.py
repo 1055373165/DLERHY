@@ -241,6 +241,10 @@ def _drop_refresh_fragments_parsed_as_blocks(
         )
     ]
 
+# A numbered section of the Markdown's contents list ("2.1 为智能体选择 LLM").
+_SECTION_ENTRY = re.compile(r"^\d+\.\d+\s")
+
+
 class ExportService:
     def __init__(
         self,
@@ -1420,7 +1424,7 @@ class ExportService:
         bundle: DocumentExportBundle,
         asset_path_by_block_id: dict[str, str] | None = None,
     ) -> str:
-        visible_chapters = self._visible_merged_chapters(bundle)
+        visible_chapters = self._reading_copy_chapters(bundle)
         chapters_html = "".join(
             self._render_chapter_for_merged_html(chapter_bundle, visible_ordinal, render_blocks, title_text, asset_path_by_block_id)
             for visible_ordinal, chapter_bundle, render_blocks, title_text in visible_chapters
@@ -1465,18 +1469,17 @@ class ExportService:
         bundle: DocumentExportBundle,
         asset_path_by_block_id: dict[str, str] | None = None,
     ) -> str:
-        visible_chapters = self._visible_merged_chapters(bundle)
+        visible_chapters = self._reading_copy_chapters(bundle)
         title = (document_display_title(bundle.document) or bundle.document.id or "Merged Reading Edition").strip()
         author = display_author_value(bundle.document.author)
 
-        # Chinese reading edition — only the book's own front matter
-        # (title + author). No "Merged Reading Edition" kicker, no
-        # "Document Summary" bullet list, no chapter TOC. Synthetic
-        # export metadata doesn't belong in a reader-facing file.
-        # Translation statistics stay in the app and the usage statement.
+        # Chinese reading edition — the book's title and author, then a table of contents made from
+        # the chapters and sections in Chinese (the book's printed contents page, with its page
+        # numbers and "■" separators, is left out). No export metadata or translation statistics.
         lines: list[str] = [f"# {title}", ""]
         if author:
             lines.extend([f"_作者：{author}_", ""])
+        lines.extend(self._markdown_contents(visible_chapters))
 
         for visible_ordinal, chapter_bundle, render_blocks, title_text in visible_chapters:
             lines.extend(
@@ -1489,6 +1492,59 @@ class ExportService:
                 )
             )
         return "\n".join(lines).rstrip() + "\n"
+
+    # The book's printed table of contents: a chapter so titled, or one set mostly on contents pages.
+    _CONTENTS_TITLES = frozenset({"contents", "table of contents", "brief contents", "目录", "目次"})
+
+    def _is_printed_contents_chapter(self, bundle: ChapterExportBundle) -> bool:
+        title = " ".join(str(bundle.chapter.title_src or "").split()).casefold()
+        if title in self._CONTENTS_TITLES:
+            return True
+        families = (bundle.chapter.metadata_json or {}).get("pdf_page_family_counts") or {}
+        if not isinstance(families, dict):
+            return False
+        toc_pages = int(families.get("toc") or 0)
+        return bool(toc_pages) and toc_pages * 2 >= sum(int(value or 0) for value in families.values())
+
+    def _reading_copy_chapters(
+        self,
+        bundle: DocumentExportBundle,
+    ) -> list[tuple[int, ChapterExportBundle, list[MergedRenderBlock], str | None]]:
+        """The visible chapters without the book's printed contents page.
+
+        A reading copy has its own navigation (the HTML's sidebar, the Markdown's contents list);
+        the printed page, translated, is page numbers and "■" separators run together.
+        """
+        contents_ids = {
+            chapter_bundle.chapter.id for chapter_bundle in bundle.chapters if self._is_printed_contents_chapter(chapter_bundle)
+        }
+        visible = self._visible_merged_chapters(bundle)
+        if not contents_ids:
+            return visible
+        return [
+            (ordinal, chapter_bundle, [block for block in render_blocks if block.chapter_id not in contents_ids], title_text)
+            for ordinal, chapter_bundle, render_blocks, title_text in visible
+            if chapter_bundle.chapter.id not in contents_ids
+        ]
+
+    def _markdown_contents(
+        self,
+        visible_chapters: list[tuple[int, ChapterExportBundle, list[MergedRenderBlock], str | None]],
+    ) -> list[str]:
+        """The Markdown's "目录": each chapter's title and, under it, its numbered sections ("2.1 ...")."""
+        entries: list[str] = []
+        for _ordinal, _chapter_bundle, render_blocks, title_text in visible_chapters:
+            title = str(title_text or "").strip()
+            if not title or (entries and entries[-1] == f"- {title}"):
+                continue
+            entries.append(f"- {title}")
+            for block in self._merged_body_blocks(render_blocks, title):
+                if block.block_type != BlockType.HEADING.value or (block.source_metadata or {}).get("heading_level") != 2:
+                    continue
+                heading = " ".join(str(block.target_text or block.source_text or "").split())
+                if heading and len(heading) <= 150 and _SECTION_ENTRY.match(heading):
+                    entries.append(f"  - {heading}")
+        return ["## 目录", "", *entries, ""] if entries else []
 
     def _render_chapter_for_merged_markdown(
         self,
@@ -1509,6 +1565,11 @@ class ExportService:
         heading = f"## {title}" if title else f"## Chapter {visible_ordinal}"
         body_blocks = self._merged_body_blocks(render_blocks, title)
         lines = [heading, ""]
+        # The front matter repeats the cover on the title page ("Jungjun Hur、Younghee Song 著" twice,
+        # the English title set as a line of code); the file already opens with title and author.
+        front_matter = visible_ordinal == 1 and titles.extract_main_chapter_number(title) is None
+        source_title = " ".join(str(document_source_title(bundle.document) or "").split()).casefold()
+        seen: set[str] = set()
         for block in body_blocks:
             block_markdown = markup.render_block_markdown(
                 block,
@@ -1518,6 +1579,13 @@ class ExportService:
             )
             if not block_markdown:
                 continue
+            if front_matter:
+                source = " ".join(str(block.source_text or "").split()).casefold()
+                if source in seen and block.block_type in {BlockType.PARAGRAPH.value, BlockType.HEADING.value}:
+                    continue
+                if source_title and source == source_title:
+                    continue
+                seen.add(source)
             lines.append(block_markdown)
             lines.append("")
         return lines

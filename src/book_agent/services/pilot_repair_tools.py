@@ -1589,6 +1589,87 @@ class PilotRepairToolbox:
             packet_ids=done,
         )
 
+    def _run_in_heading_level(self, chapter_id: str) -> int:
+        """A run-in heading sits below the chapter's numbered sections ("1.2.1 ..." is level 3, so 4)."""
+        numbered_levels = [
+            int((b.source_span_json or {}).get("heading_level") or 0)
+            for b in self._chapter_blocks(chapter_id)
+            if b.block_type == BlockType.HEADING
+            and (b.source_span_json or {}).get("heading_level")
+            and pilot_qa._SECTION_NUMBER_RE.match(b.source_text or "")
+        ]
+        return min(6, max(numbered_levels) + 1) if numbered_levels else 3
+
+    def _structure_edit__split_trailing_heading(self, item: WorkItem) -> ToolResult:
+        """A subheading shown at the end of the paragraph before it becomes a heading line of its own.
+
+        - The export joined it on (``cause=export_join``): the text before it was parsed as a heading
+          (an older split of a run-in heading kept the heading type for the paragraph after it), and
+          the reading copy joins adjacent headings. That text is relabeled a paragraph and the
+          heading gets the run-in level; the translation is kept as it is.
+        - The parse kept it as the block's last line (``cause=parsed``): the line is split off,
+          relabeled a heading of the run-in level, and only that block's packet is retranslated.
+        """
+        finding = item.findings[0]
+        evidence = finding.get("evidence") or {}
+        block = self._finding_block(finding)
+        level = self._run_in_heading_level(block.chapter_id)
+        outcomes: list[Any] = []
+        headings: list[str] = []
+        if evidence.get("cause") == "export_join":
+            for prose_id in evidence.get("prose_heading_block_ids") or []:
+                prose = self._block(str(prose_id))
+                if prose.block_type == BlockType.HEADING:
+                    outcomes.append(
+                        self.structure.relabel_block(
+                            self.ctx.document_id, prose.id, BlockType.PARAGRAPH.value, actor_id=ACTOR_ID, reason="这段正文被当成了标题"
+                        )
+                    )
+            for heading_id in evidence.get("heading_block_ids") or []:
+                heading = self._block(str(heading_id))
+                headings.append((heading.source_text or "").strip())
+                current = (heading.source_span_json or {}).get("heading_level")
+                if heading.block_type == BlockType.HEADING and not pilot_qa._SECTION_NUMBER_RE.match(heading.source_text or "") and current != level:
+                    outcomes.append(
+                        self.structure.relabel_block(
+                            self.ctx.document_id, heading.id, BlockType.HEADING.value, heading_level=level, actor_id=ACTOR_ID, reason="行内小标题的层级"
+                        )
+                    )
+            if not outcomes:
+                raise NotApplicable("nothing before the heading is parsed as a heading")
+            hints: list[str] = []
+        else:
+            text = block.source_text or ""
+            faces = frozenset(evidence.get("heading_faces") or ()) or frozenset((block.source_span_json or {}).get("pdf_font_names") or ())
+            span = pilot_qa.trailing_heading_span(text, list((block.source_span_json or {}).get("pdf_font_names") or ()), faces)
+            if span is None:
+                raise NotApplicable("the block does not end with a heading line")
+            start, end = span
+            heading_text = text[start:end].strip()
+            split = self.structure.split_block(
+                self.ctx.document_id, block.id, _marker(text, start), actor_id=ACTOR_ID, reason=f"拆出小标题「{heading_text}」"
+            )
+            outcomes.append(split)
+            heading_block = self.session.get(Block, split.block_ids[-1])
+            outcomes.append(
+                self.structure.relabel_block(
+                    self.ctx.document_id, heading_block.id, BlockType.HEADING.value, heading_level=level, actor_id=ACTOR_ID, reason="行内小标题"
+                )
+            )
+            headings.append(heading_text)
+            hints = [f"「{heading_text}」是小标题，单独成行，不要和上一段连在一起。"]
+        packets: list[str] = []
+        block_ids: list[str] = [block.id]
+        for outcome in outcomes:
+            packets.extend(getattr(outcome.fork, "retranslate_packet_ids", []) or [])
+            block_ids.extend(outcome.block_ids)
+        done = self.retranslate(list(dict.fromkeys(packets)), hints) if packets else []
+        return ToolResult(
+            params={"block_id": block.id, "cause": evidence.get("cause"), "headings": headings, "heading_level": level},
+            block_ids=list(dict.fromkeys(block_ids)),
+            packet_ids=done,
+        )
+
     def _structure_edit__split_run_in_heading(self, item: WorkItem) -> ToolResult:
         """Run-in subheadings out of their paragraph, each its own heading block.
 
@@ -1600,15 +1681,7 @@ class PilotRepairToolbox:
         """
         finding = item.findings[0]
         block = self._finding_block(finding)
-        # A run-in heading sits below the chapter's numbered sections ("1.2.1 ..." is level 3, so 4).
-        numbered_levels = [
-            int((b.source_span_json or {}).get("heading_level") or 0)
-            for b in self._chapter_blocks(block.chapter_id)
-            if b.block_type == BlockType.HEADING
-            and (b.source_span_json or {}).get("heading_level")
-            and pilot_qa._SECTION_NUMBER_RE.match(b.source_text or "")
-        ]
-        level = min(6, max(numbered_levels) + 1) if numbered_levels else 3
+        level = self._run_in_heading_level(block.chapter_id)
         outcomes: list[Any] = []
         headings: list[str] = []
         heading_ids: list[str] = []

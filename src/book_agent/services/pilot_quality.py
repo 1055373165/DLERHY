@@ -367,6 +367,15 @@ def load_pilot_inputs(
     block_texts = {
         candidate.id: candidate.source_text for chapter_bundle in bundle.chapters for candidate in chapter_bundle.blocks
     }
+    parsed_heading_ids = {
+        candidate.id
+        for chapter_bundle in bundle.chapters
+        for candidate in chapter_bundle.blocks
+        if getattr(candidate.block_type, "value", candidate.block_type) == "heading"
+    }
+    sentence_block_ids = {
+        sentence.id: sentence.block_id for chapter_bundle in bundle.chapters for sentence in chapter_bundle.sentences
+    }
     blocks: list[QaBlock] = []
     sentence_rendering: dict[str, str] = {}
     sentence_page: dict[str, int | None] = {}
@@ -400,6 +409,16 @@ def load_pilot_inputs(
             packet_id = next((packets[sentence_id] for sentence_id in sentence_ids if sentence_id in packets), None)
             caption_text = block.source_metadata.get("linked_caption_text")
             context_ids = block.source_metadata.get("artifact_group_context_block_ids") or []
+            shown_block_ids = list(
+                dict.fromkeys(
+                    [block.block_id, *(sentence_block_ids.get(sentence_id) for sentence_id in block.source_sentence_ids)]
+                )
+            )
+            folded_headings = tuple(
+                (str(shown_id), str(block_texts.get(shown_id) or ""))
+                for shown_id in shown_block_ids
+                if shown_id in parsed_heading_ids
+            )
             blocks.append(
                 QaBlock(
                     block_id=block.block_id,
@@ -426,6 +445,7 @@ def load_pilot_inputs(
                     epub_structure_version=(
                         int(block.source_metadata.get("epub_structure_version") or 1) if is_epub else None
                     ),
+                    folded_headings=folded_headings if block.block_type != "heading" else (),
                 )
             )
 

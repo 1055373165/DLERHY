@@ -1031,6 +1031,10 @@ def should_merge_adjacent_heading_render_blocks(
     previous_text = _normalize_render_text(previous.source_text)
     if code_text.looks_like_single_line_codeish_text(current_text):
         return False
+    if previous_text.endswith(_SENTENCE_END) and not previous_text.endswith(_ABBREVIATION_ENDINGS):
+        # A heading never runs on from a finished sentence: the block before is prose that was
+        # mislabeled a heading, and "stability and control" after it is a heading of its own.
+        return False
     if current_text[:1].islower() and (
         _MAIN_CHAPTER_TITLE_PATTERN.match(previous_text) or _APPENDIX_TITLE_PATTERN.match(previous_text)
     ):

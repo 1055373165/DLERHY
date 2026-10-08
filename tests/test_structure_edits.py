@@ -265,6 +265,27 @@ class StructureEditTests(unittest.TestCase):
             with self.assertRaisesRegex(StructureEditRejected, "more than once"):
                 service.split_block(self.document_id, self.blocks[SECOND], "ine", actor_id="t", reason="r")
 
+    def test_the_text_split_off_a_heading_is_a_paragraph(self) -> None:
+        # The Agent book: a run-in heading split off its paragraph ("stability and control" +
+        # "Depending on external APIs ..."), replayed after the block had become a heading, left the
+        # paragraph a heading too; the reading copy then joined it with the headings around it.
+        joined_id = self.blocks[JOINED]
+        with self.session_factory() as session:
+            service = self._edit(session)
+            service.relabel_block(self.document_id, joined_id, "heading", heading_level=4, actor_id="t", reason="r")
+            block = session.get(Block, joined_id)
+            split_off = service._apply_split(block, "Tools carry", "00000000-0000-0000-0000-00000000beef")
+            self.assertEqual(split_off.block_type, BlockType.PARAGRAPH)
+            self.assertNotIn("heading_level", split_off.source_span_json)
+            # Replayed onto a split-off block that exists already: it is reset to a paragraph as well.
+            split_off.block_type = BlockType.HEADING
+            split_off.source_span_json = {**split_off.source_span_json, "heading_level": 4}
+            block.source_text = JOINED
+            again = service._apply_split(block, "Tools carry", split_off.id)
+            self.assertEqual(again.block_type, BlockType.PARAGRAPH)
+            self.assertNotIn("heading_level", again.source_span_json)
+            self.assertEqual(session.get(Block, joined_id).block_type, BlockType.HEADING)
+
     def test_refresh_keeps_a_split_and_parks_it_when_the_source_changes(self) -> None:
         joined_id, quote_id = self.blocks[JOINED], self.blocks["Figure 1. The agent loop."]
         with self.session_factory() as session:
