@@ -388,13 +388,15 @@ class PilotRepairToolbox:
             if packet is None:
                 continue
             run, missing = self._uncovered_sentences(packet_id)
-            if redo_all and run is not None and not any(sentence.block_id not in wanted_blocks for sentence in missing):
+            if redo_all and run is not None:
                 # Every translatable sentence of the blocks: the translations the fork carried over may be
-                # an old answer that gave the whole table in one cell.
-                missing = [sentence for sentence in self._current_sentences(packet_id) if sentence.block_id in wanted_blocks]
+                # an old answer that gave the whole table in one cell. Other sentences the packet still
+                # lacks go along, one target each, rather than retranslating the packet.
+                own = [sentence for sentence in self._current_sentences(packet_id) if sentence.block_id in wanted_blocks]
+                missing = [*own, *(sentence for sentence in missing if sentence.block_id not in wanted_blocks)]
             if not missing:
                 continue
-            if run is None or any(sentence.block_id not in wanted_blocks for sentence in missing):
+            if run is None or (not redo_all and any(sentence.block_id not in wanted_blocks for sentence in missing)):
                 whole.append(packet_id)
                 continue
             if not self.ctx.budget.allow_packet():
