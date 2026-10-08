@@ -368,7 +368,9 @@ class PilotRepairToolbox:
             )
         )
 
-    def translate_block_sentences(self, packet_ids: Sequence[str], block_ids: Sequence[str], hints: Sequence[str]) -> tuple[list[str], list[str]]:
+    def translate_block_sentences(
+        self, packet_ids: Sequence[str], block_ids: Sequence[str], hints: Sequence[str], *, redo_all: bool = False
+    ) -> tuple[list[str], list[str]]:
         """Translate only the untranslated sentences of these blocks in each packet; the rest keeps its text.
 
         A rebuilt table leaves its new cells without a translation in a packet whose other sentences
@@ -386,6 +388,10 @@ class PilotRepairToolbox:
             if packet is None:
                 continue
             run, missing = self._uncovered_sentences(packet_id)
+            if redo_all and run is not None and not any(sentence.block_id not in wanted_blocks for sentence in missing):
+                # Every translatable sentence of the blocks: the translations the fork carried over may be
+                # an old answer that gave the whole table in one cell.
+                missing = [sentence for sentence in self._current_sentences(packet_id) if sentence.block_id in wanted_blocks]
             if not missing:
                 continue
             if run is None or any(sentence.block_id not in wanted_blocks for sentence in missing):
@@ -408,7 +414,7 @@ class PilotRepairToolbox:
             try:
                 with self.session.begin_nested():
                     SegmentEditService(self.session).fill_sentences(
-                        packet_id, texts, reason="只翻译重建后的表格单元格", actor_id=ACTOR_ID, run_id=self.ctx.run_id
+                        packet_id, texts, reason="只翻译重建后的表格单元格", actor_id=ACTOR_ID, run_id=self.ctx.run_id, replace=redo_all
                     )
             except Exception:  # a guard refused the cells: the packet is retranslated as before
                 logger.debug("filling the cells of packet %s refused", packet_id, exc_info=True)
@@ -453,6 +459,20 @@ class PilotRepairToolbox:
             ).all()
         )
         return run, [sentence for sentence in current if sentence.id not in covered]
+
+    def _current_sentences(self, packet_id: str) -> list[Sentence]:
+        return list(
+            self.session.scalars(
+                select(Sentence)
+                .join(PacketSentenceMap, PacketSentenceMap.sentence_id == Sentence.id)
+                .where(
+                    PacketSentenceMap.packet_id == packet_id,
+                    PacketSentenceMap.role == PacketSentenceRole.CURRENT,
+                    Sentence.translatable.is_(True),
+                    Sentence.retired_by_revision_id.is_(None),
+                )
+            ).all()
+        )
 
     def remembered_translation(self, sentence: Sentence) -> str | None:
         """The book's translation of this exact source sentence elsewhere (the most used one), if any."""
@@ -1761,7 +1781,7 @@ class PilotRepairToolbox:
         fork_packets = list(getattr(outcome.fork, "retranslate_packet_ids", []) or []) if outcome.fork else []
         packets = list(dict.fromkeys([*fork_packets, *self._packets_of_blocks([block.id])]))
         filled, retranslated = self.translate_block_sentences(
-            packets, [block.id], ["这是一张表格的单元格：每个单元格单独译成简短的中文，数字、代码标识符、模型名原样保留。"]
+            packets, [block.id], ["这是一张表格的单元格：每个单元格单独译成简短的中文，数字、代码标识符、模型名原样保留。"], redo_all=True
         )
         return ToolResult(
             params={"block_id": block.id, "page": page_number, "rows": len(rows), "columns": max(len(row) for row in rows), "cells_only_packets": filled},

@@ -27,7 +27,7 @@ from book_agent.domain.quality import pilot_qa
 from book_agent.domain.quality.pilot_qa import ExportedChapter, QaBlock, QaChapter
 from book_agent.infra.repositories.review import active_target_texts
 from book_agent.services.parse_revision_fork import ParseRevisionForkService
-from tests.pilot_repair_fixture import block_with_text
+from tests.pilot_repair_fixture import block_with_text, edit_translation
 from tests.test_pilot_repair import PilotRepairBenchCase, _findings
 
 _COLUMNS = (102.0, 220.0, 312.0, 403.0)
@@ -73,6 +73,11 @@ class TableRowsRepairTests(PilotRepairBenchCase):
     def test_a_table_whose_rows_were_merged_is_read_again_and_only_its_cells_translated(self) -> None:
         table_id = self._inject_merged_table()
         self.translate()
+        with self.bench.session_factory() as session:
+            # The first translation answered the whole table in its first cell (as on the Agent book).
+            header = session.scalars(select(Sentence).where(Sentence.block_id == table_id, Sentence.source_text == "Condition")).one()
+            edit_translation(session, header.id, lambda _text: "| 条件 | 正确数 | 总成本 |\n| 使用网页搜索 | 7/10 | $1.89 |")
+            session.commit()
         before = self.qa()
         merged = _findings(before, "L3.table_rows_merged")
         self.assertEqual([finding["evidence"]["pdf_rows"] for finding in merged], [3])
@@ -106,6 +111,8 @@ class TableRowsRepairTests(PilotRepairBenchCase):
             cell_texts = active_target_texts(session, [cell.id for cell in cells])
             self.assertTrue(cells)
             self.assertTrue(all(cell_texts.get(cell.id) for cell in cells), [cell.source_text for cell in cells])
+            # The carried whole-table answer is gone: every cell has its own translation.
+            self.assertFalse([text for text in cell_texts.values() if "|" in text])
             self.assertEqual(active_target_texts(session, others), translations_before)
             self.assertEqual(
                 session.scalars(select(StructureEdit.kind).where(StructureEdit.document_id == self.bench.document_id)).all(),
