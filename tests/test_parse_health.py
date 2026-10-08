@@ -137,6 +137,14 @@ class ChapterTitleCheckTest(unittest.TestCase):
         self.assertEqual(result.samples[0].chapter_id, "c1")
         self.assertIn("1 LLMs", result.samples[0].text)
 
+    def test_many_chapters_under_one_title_fail(self) -> None:
+        # "An Illustrated Guide to AI Agents": every chapter was titled by its last section, "Summary".
+        chapters = [chapter(index, "Summary", index * 20, index * 20 + 19) for index in range(1, 5)] + [chapter(5, "Afterword", 120, 121)]
+        result = ph.check_chapter_titles(chapters, [])
+        self.assertFalse(result.passed)
+        self.assertEqual(result.breakdown, {"repeated_title": 4})
+        self.assertTrue(ph.check_chapter_titles(chapters[:2] + chapters[4:], []).passed)
+
     def test_long_prose_under_a_back_matter_title_fails(self) -> None:
         prose = " ".join(["Retrieval gives a language model facts it never saw during training."] * 4)
         blocks = [block(f"p{index}", prose, chapter="c1") for index in range(20)]
