@@ -197,7 +197,12 @@ def _extract_rich_text(element: ET.Element) -> str:
             # Collect all nested text inside this inline element.
             inner = "".join(el.itertext())
             if inner.strip():
-                parts.append(f"{markers[0]}{inner}{markers[1]}")
+                # "<em>arXiv, </em>2502.02649": the space belongs outside the markers, or the
+                # closing star sits after a space and no longer reads as one.
+                stripped = inner.strip()
+                lead = inner[: len(inner) - len(inner.lstrip())]
+                trail = inner[len(inner.rstrip()) :]
+                parts.append(f"{lead}{markers[0]}{stripped}{markers[1]}{trail}")
             # Handle tail text (text after the closing tag).
             if el.tail:
                 parts.append(el.tail)
