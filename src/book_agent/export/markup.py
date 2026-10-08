@@ -283,7 +283,8 @@ def render_block_markdown(
     if block.render_mode == "image_anchor_with_translated_caption":
         parts: list[str] = []
         if asset_src:
-            parts.append(markdown_image_reference(image_alt_text, asset_src))
+            # The reading copy is Chinese: the picture's alt text is its translated caption.
+            parts.append(markdown_image_reference(_caption_alt_text(target_text) or image_alt_text, asset_src))
         elif include_source_caption and source_text:
             parts.append(markdown_blockquote(source_text, label="Image caption"))
         if target_text:
@@ -311,7 +312,10 @@ def render_block_markdown(
         # Long blocks misclassified as headings (e.g. chapter description
         # paragraphs starting with "Chapter N, ...") should render as body.
         if len(heading_text) <= 150:
-            return f"### {heading_text}".strip()
+            # The chapter is "##": an x.y section "###", x.y.z "####", a run-in heading below it.
+            level = (block.source_metadata or {}).get("heading_level")
+            marks = "#" * (min(max(level, 2), 5) + 1) if isinstance(level, int) else "###"
+            return f"{marks} {heading_text}".strip()
     if block.block_type == BlockType.TABLE.value:
         table_source = target_text or source_text
         markdown_table = markdown_table_from_source_text(
@@ -326,12 +330,16 @@ def render_block_markdown(
         list_text = target_text or source_text
         list_metadata = block.source_metadata or {}
         if list_metadata.get("list_kind") == "dash":
-            list_text = _LEADING_DASH_MARKER.sub(r"\1", list_text, count=1)
+            # The translation may set a bullet where the source has a dash ("• 第 1 章探讨……").
+            list_text = _LEADING_BULLET_GLYPH.sub(r"\1", _LEADING_DASH_MARKER.sub(r"\1", list_text, count=1), count=1)
         elif list_metadata.get("list_kind") == "number":
             # "1. " from the source's number; never a bullet glyph next to it.
             number = _LEADING_NUMBER_MARKER.match(source_text or "")
             body = _LEADING_BULLET_GLYPH.sub(r"\1", _LEADING_NUMBER_MARKER.sub(r"\1", list_text, count=1), count=1)
             list_text = f"{number.group(2)}. {body.strip()}" if number else body
+        else:
+            # The item keeps its bullet glyph in the text ("• 用过 LLM API ..."); the "- " is the marker.
+            list_text = _LEADING_BULLET_GLYPH.sub(r"\1", list_text, count=1)
         marker = "" if re.match(r"^\s*(?:[-*+]\s+|\d+\.\s+)", list_text) else "- "
         indent = "  " if list_metadata.get("list_level") == 2 else ""
         parts = [f"{indent}{marker}{list_text}".rstrip()]
@@ -344,6 +352,19 @@ def render_block_markdown(
     # toggle with the English source. Bilingual comparison is a
     # separate export type.
     return "\n\n".join(part for part in parts if part)
+
+
+_CAPTION_SENTENCE_END = re.compile(r"(?<=[。！？])|(?<=[.!?])\s")
+
+
+def _caption_alt_text(caption: str) -> str:
+    """A picture's alt text from its translated caption: the caption's first sentence.
+
+    The translation may run on into the text the export folded into the caption; the full caption
+    is printed under the picture anyway.
+    """
+    first_line = next((line.strip() for line in str(caption or "").splitlines() if line.strip()), "")
+    return _CAPTION_SENTENCE_END.split(first_line, maxsplit=1)[0].strip()[:160]
 
 
 def markdown_blockquote(text: str, *, label: str | None = None) -> str:
@@ -388,8 +409,13 @@ def markdown_list_text(text: str) -> str | None:
 def markdown_fenced_block(text: str, *, language: str = "") -> str:
     content = (text or "").rstrip("\n")
     fence = "```"
-    while fence in content:
-        fence += "`"
+    if fence in content:
+        # Code that holds its own ``` fences (a SKILL.md with a Python example): a tilde fence. A
+        # longer backtick run is valid CommonMark too, but viewers that miss it show the inner
+        # fence's lines ("## Usage") as the book's own headings.
+        fence = "~~~"
+        while fence in content:
+            fence += "~"
     opener = f"{fence}{language}" if language else fence
     return f"{opener}\n{content}\n{fence}"
 
