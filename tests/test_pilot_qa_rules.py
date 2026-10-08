@@ -1101,6 +1101,17 @@ class CitationEntryTests(unittest.TestCase):
         self.assertNotIn("L7.untranslated_prose", hits)
         self.assertNotIn("L5.locked_term", hits)
 
+    def test_a_term_forced_into_a_cited_title_is_found(self) -> None:
+        source, _target = REFERENCES[1]
+        forced = rendered(
+            "b-forced", C2, "paragraph", source,
+            "3 Mitchell, Margaret 等，2025。“Fully Autonomous AI 智能体 Should Not Be Developed.” *arXiv,* 2502.02649。",
+            page=39,
+        )
+        hits = _by_check(build([*clean_blocks(), forced])).get("L5.cited_title_altered", [])
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["evidence"]["title"], "“Fully Autonomous AI Agents Should Not Be Developed.”")
+
     def test_english_prose_left_untranslated_is_still_found(self) -> None:
         text = "Gabriel et al. (2024) showed that agents in production need careful oversight and evaluation."
         prose = rendered("b-en", C2, "paragraph", text, text, page=33)

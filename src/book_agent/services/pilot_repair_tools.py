@@ -710,6 +710,26 @@ class PilotRepairToolbox:
         changed = self._rewrite(packets, transform, "去掉译文里的程序提示")
         return ToolResult(params={"markers": markers}, edited_packet_ids=changed)
 
+    def _segment_edit__restore_cited_title(self, item: WorkItem) -> ToolResult:
+        """A cited English title the translation changed inside ("Fully Autonomous AI 智能体 Should Not
+        Be Developed."): the source's title goes back in its place."""
+        swaps = [
+            (str((finding.get("evidence") or {}).get("shown") or ""), str((finding.get("evidence") or {}).get("title") or ""))
+            for finding in item.findings
+        ]
+        swaps = [(shown, title) for shown, title in swaps if shown and title]
+        packets = self._block_packets(item.findings)
+        if not swaps or not packets:
+            raise NotApplicable("the findings name no altered title")
+
+        def transform(text: str, _ids: list[str]) -> str:
+            for shown, title in swaps:
+                text = text.replace(shown, title)
+            return text
+
+        changed = self._rewrite(packets, transform, "引用的英文标题保留原文")
+        return ToolResult(params={"titles": [title for _shown, title in swaps]}, edited_packet_ids=changed)
+
     def _segment_edit__balance_emphasis_markers(self, item: WorkItem) -> ToolResult:
         """Emphasis markers left unpaired in a translation ("其*智能体程序（agent"): the ones its
         source has no such marker for are dropped; the pairs the source has stay (the reading copy

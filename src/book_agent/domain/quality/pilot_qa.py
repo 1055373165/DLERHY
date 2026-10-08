@@ -176,6 +176,8 @@ _SPECS = (
     CheckSpec("L5.locked_term", MAJOR, "没有遵守锁定的术语", REPAIR_RETRANSLATE),
     CheckSpec("L5.term_variants", MAJOR, "同一术语用了几种译法", REPAIR_GLOSSARY),
     CheckSpec("L5.term_left_in_english", MAJOR, "术语有时翻译、有时留英文", REPAIR_GLOSSARY),
+    # A cited work's English title with a term rendering put inside it ("Fully Autonomous AI 智能体 …").
+    CheckSpec("L5.cited_title_altered", MAJOR, "引用的英文标题里被塞进了中文术语", REPAIR_RETRANSLATE),
     CheckSpec("L5.label_rendering", MAJOR, "图、表、代码清单的编号叫法前后不一", REPAIR_GLOSSARY),
     CheckSpec("L5.mixed_rendering", MINOR, "同一个词有时翻译、有时留英文", REPAIR_GLOSSARY),
     CheckSpec("L5.review_blocking", BLOCKING, "审校标记的术语阻断问题", REPAIR_REVIEW_RECHECK),
@@ -1774,6 +1776,24 @@ def check_locked_terms(inputs: PilotQaInputs) -> CheckRun:
     return run
 
 
+def check_cited_titles(inputs: PilotQaInputs) -> CheckRun:
+    """A quoted English title the translation keeps in English but changed inside: the book keeps
+    cited titles as they are, so the source's title goes back (a segment edit, no model call)."""
+    run = CheckRun("L5.cited_title_altered")
+    for sentence in _translated_sentences(inputs):
+        for title, shown in citations.altered_titles(sentence.source_text, sentence.target_text):
+            run.findings.append(
+                _sentence_finding(
+                    "L5.cited_title_altered",
+                    sentence,
+                    f"引用的标题应保留英文原文：{_snippet(shown, 60)}",
+                    title=title,
+                    shown=shown,
+                )
+            )
+    return run
+
+
 def _renderings_used(target: str, renderings: Sequence[str]) -> list[str]:
     """Which renderings a translation uses; a longer rendering owns the characters it covers ("代码清单" is not also "清单")."""
     text = normalize_target(target)
@@ -2555,6 +2575,7 @@ def run_layers(inputs: PilotQaInputs, extra_checks: Sequence[ExtraCheck] = ()) -
         *check_tables(inputs),
         *check_code_and_format(inputs),
         check_locked_terms(inputs),
+        check_cited_titles(inputs),
         *check_term_consistency(inputs),
         check_label_rendering(inputs),
         check_mixed_rendering(inputs),

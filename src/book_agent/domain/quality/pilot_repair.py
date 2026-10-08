@@ -167,6 +167,8 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     ),
     "L5.term_left_in_english": (RepairPath(TOOL_GLOSSARY, "lock_and_retranslate", costs_model=True),),
     "L5.review_blocking": (_RECHECK,),
+    # The source's English title put back in place of the altered one; retranslation only if that fails.
+    "L5.cited_title_altered": (RepairPath(TOOL_SEGMENT_EDIT, "restore_cited_title", SCOPE_CHECK), _RETRANSLATE),
     "L5.label_rendering": (
         RepairPath(TOOL_GLOSSARY, "unify_label_rendering"),
         RepairPath(TOOL_GLOSSARY, "lock_label_and_retranslate", costs_model=True),

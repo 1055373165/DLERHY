@@ -9,6 +9,8 @@ a locked term inside such a title is not a term to translate ("Fully Autonomous 
 Not Be Developed." must not become "Fully Autonomous AI 智能体 …"), a "Not" in it is not a
 negation the translation lost, and an entry that reads mostly English is not untranslated prose.
 
+``altered_titles`` finds a title the translation kept in English but changed inside.
+
 ``is_citation_entry`` recognises an entry from its parts (a note number, an author list, a year,
 a quoted or italic title, a venue, an arXiv id, a DOI or a URL); ``title_spans`` finds the quoted
 English titles inside any text.
@@ -100,3 +102,32 @@ def is_citation_entry(text: str) -> bool:
         bool(_ARXIV_RE.search(text)) or bool(_DOI_RE.search(text)) or bool(_URL_RE.search(text)),
     ]
     return sum(parts) >= 3
+
+
+def _inner(quoted: str) -> str:
+    return quoted[1:-1]
+
+
+def altered_titles(source: str, target: str) -> list[tuple[str, str]]:
+    """English titles the translation kept in English but changed inside: (source title, shown).
+
+    "Fully Autonomous AI Agents Should Not Be Developed." came out as "Fully Autonomous AI 智能体
+    Should Not Be Developed.": a term rendering forced into the title. A title translated as a
+    whole (《…》 or a Chinese quote) or kept as it is, is fine.
+    """
+    altered: list[tuple[str, str]] = []
+    target_quotes = [match.group(0) for match in _QUOTED_RE.finditer(target or "")]
+    for start, end in title_spans(source or ""):
+        title = source[start:end]
+        if _inner(title) in (target or ""):
+            continue
+        words = {word.lower() for word in _WORD_RE.findall(title)}
+        for quoted in target_quotes:
+            if not re.search(r"[㐀-鿿]", quoted):
+                continue
+            shown = {word.lower() for word in _WORD_RE.findall(quoted)}
+            # Mostly the title's own English words, with Chinese put in among them.
+            if words and len(shown & words) >= max(3, int(0.6 * len(words))) and len(shown - words) <= 1:
+                altered.append((title, quoted))
+                break
+    return altered

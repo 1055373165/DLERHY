@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import unittest
 
-from book_agent.domain.structure.citations import is_citation_entry, is_english_title, title_spans
+from book_agent.domain.structure.citations import altered_titles, is_citation_entry, is_english_title, title_spans
 
 ENTRIES = (
     "1 Russell, Stuart and Peter Norvig, *Artificial Intelligence: A Modern Approach*, 4th ed. (Pearson, 2020).",
@@ -51,6 +51,18 @@ class TitleTest(unittest.TestCase):
         self.assertFalse(is_english_title("agents"))
         self.assertFalse(is_english_title("完全自主的 AI 智能体"))
         self.assertEqual(title_spans("an “agent” acts"), [])
+
+    def test_a_title_with_a_term_forced_into_it_is_altered(self) -> None:
+        source = "“Fully Autonomous AI Agents Should Not Be Developed.” *arXiv, *2502.02649."
+        forced = "“Fully Autonomous AI 智能体 Should Not Be Developed.” *arXiv,* 2502.02649。"
+        self.assertEqual(
+            altered_titles(source, forced),
+            [("“Fully Autonomous AI Agents Should Not Be Developed.”", "“Fully Autonomous AI 智能体 Should Not Be Developed.”")],
+        )
+        # Kept as it is, or translated as a whole: fine.
+        self.assertEqual(altered_titles(source, "“Fully Autonomous AI Agents Should Not Be Developed.” *arXiv,* 2502.02649。"), [])
+        self.assertEqual(altered_titles(source, "《不应开发完全自主的 AI 智能体》，*arXiv,* 2502.02649。"), [])
+        self.assertEqual(altered_titles(source, "“不应开发完全自主的 AI 智能体。”"), [])
 
 
 if __name__ == "__main__":
