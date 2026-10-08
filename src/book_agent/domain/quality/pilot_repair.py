@@ -94,6 +94,8 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L1.heading_is_prose": (RepairPath(TOOL_STRUCTURE, "relabel_as_paragraph"),),
     "L1.running_header_as_text": (RepairPath(TOOL_STRUCTURE, "hide_running_header"),),
     "L1.heading_merged_into_text": (RepairPath(TOOL_STRUCTURE, "split_run_in_heading"), _STRUCTURE_AGENT),
+    # Retranslates only when the heading line is split out of its block (cause=parsed).
+    "L1.heading_glued_to_text_end": (RepairPath(TOOL_STRUCTURE, "split_trailing_heading", costs_model=True), _STRUCTURE_AGENT),
     "L1.heading_as_text": (RepairPath(TOOL_STRUCTURE, "relabel_as_heading"),),
     # The icon and its lines become one callout block; its packets are retranslated line by line.
     "L1.icon_callout_split": (RepairPath(TOOL_STRUCTURE, "merge_icon_callout", costs_model=True),),
@@ -240,6 +242,12 @@ GENERIC_CAUSES: tuple[GenericCause, ...] = (
         "行内小标题（小写词组紧跟在句点后）没有从段落里拆出来",
     ),
     GenericCause("L1.heading_is_prose", "L1.heading_is_prose", "parser", "以句号结尾的整句被识别成了标题"),
+    GenericCause(
+        "L1.heading_glued_to_text_end",
+        "L1.heading_glued_to_text_end",
+        "parser",
+        "小标题字体的一行没有单独成块，接在了上一段（或上一个代码块）的末尾",
+    ),
     GenericCause(
         "L1.icon_callout_split",
         "L1.icon_callout_split",

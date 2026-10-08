@@ -130,6 +130,7 @@ _SPECS = (
     CheckSpec("L1.heading_is_prose", MAJOR, "正文句子被当成了标题", REPAIR_STRUCTURE),
     CheckSpec("L1.running_header_as_text", MAJOR, "页眉被当成了正文或脚注", REPAIR_STRUCTURE),
     CheckSpec("L1.heading_merged_into_text", MAJOR, "小标题和正文粘在了一起", REPAIR_STRUCTURE),
+    CheckSpec("L1.heading_glued_to_text_end", MAJOR, "小标题接在了上一段的末尾", REPAIR_STRUCTURE),
     CheckSpec("L1.heading_as_text", MAJOR, "小标题被排成了正文段落", REPAIR_STRUCTURE),
     CheckSpec("L1.clipped_text_copy", MAJOR, "旁边一段文字被裁掉一截的副本，又作为一段出现", REPAIR_STRUCTURE),
     CheckSpec("L1.icon_callout_split", MAJOR, "图标引出的提示框被拆成了零散段落", REPAIR_STRUCTURE),
@@ -238,6 +239,9 @@ class QaBlock:
     regions: tuple[tuple[int, tuple[float, float, float, float]], ...] = ()
     # The parsed blocks the export joined into this one ((id, text)): a code block and the prose after it.
     merged_blocks: tuple[tuple[str, str], ...] = ()
+    # The parsed blocks set as headings whose text the reading copy shows inside this block ((id, text)):
+    # this block's own when the export demoted it, and every heading the export joined onto it.
+    folded_headings: tuple[tuple[str, str], ...] = ()
     # A figure whose page gives it no caption, accepted as such (the repair's ``accept_uncaptioned_figure``).
     caption_absent_accepted: bool = False
 
@@ -894,6 +898,103 @@ def run_in_heading_lines(text: str) -> list[str]:
     return [text[start:end] for start, end in run_in_heading_spans(text)]
 
 
+def _is_body_text(text: str) -> bool:
+    """Text that is a paragraph, not a title: a sentence (or a lead-in to a list) of eight words or more."""
+    words = len(text.split())
+    return words >= 25 or (words >= 8 and text.rstrip().endswith((".", "?", "!", ":")))
+
+
+def heading_faces(blocks: Sequence[QaBlock]) -> frozenset[str]:
+    """The fonts the book sets its headings in and not its paragraphs.
+
+    Read off the book itself: the font of headings set in a single font ("2.1.3 ..." in
+    ITCFranklinGothicStd-Dem), unless as many paragraphs are set wholly in it.
+    """
+    in_headings: Counter[str] = Counter()
+    in_paragraphs: Counter[str] = Counter()
+    for block in blocks:
+        if len(block.font_names) != 1:
+            continue
+        if block.block_type == "heading":
+            in_headings[block.font_names[0]] += 1
+        elif block.block_type == "paragraph":
+            in_paragraphs[block.font_names[0]] += 1
+    return frozenset(font for font, count in in_headings.items() if count >= 2 and in_paragraphs[font] < count)
+
+
+def trailing_heading_span(text: str, font_names: Sequence[str], faces: frozenset[str]) -> tuple[int, int] | None:
+    """(start, end) of a heading line glued to the end of a parsed block, or None.
+
+    The block is set partly in the book's heading face (its fonts say so), and its last line is a
+    short phrase that does not end like a sentence, after a line that does ("... in chapter 3.\\n
+    structured output").
+    """
+    if not faces.intersection(font_names):
+        return None
+    lines = (text or "").rstrip().split("\n")
+    if len(lines) < 2:
+        return None
+    last = lines[-1].strip()
+    if (
+        not last
+        or len(last.split()) > RUN_IN_MAX_WORDS
+        or last.endswith((".", ",", ";", ":", "!", "?"))
+        or not re.search(r"[A-Za-z]{2}", last)
+        or _ARTIFACT_TITLE_RE.match(last)
+        or not lines[-2].rstrip().endswith(_RUN_IN_BEFORE)
+    ):
+        return None
+    start = len("\n".join(lines[:-1])) + 1 + (len(lines[-1]) - len(lines[-1].lstrip()))
+    return start, start + len(last)
+
+
+def check_heading_glued_to_text_end(inputs: PilotQaInputs) -> CheckRun:
+    """A subheading the reading copy shows at the end of the paragraph before it.
+
+    Two ways it happens: the export joined a heading onto a block before it (the block's parsed
+    headings say so), or the parse kept the heading line as the block's last line (the block is
+    set partly in the book's heading face and ends with a short line that is not a sentence).
+    """
+    run = CheckRun("L1.heading_glued_to_text_end")
+    faces = heading_faces(inputs.blocks)
+    for block in inputs.blocks:
+        if block.block_type == "heading":
+            continue
+        joined = [(block_id, text) for block_id, text in block.folded_headings if block_id != block.block_id]
+        joined = [(block_id, text) for block_id, text in joined if not _is_body_text(" ".join(text.split()))]
+        if joined:
+            prose = [block_id for block_id, text in block.folded_headings if _is_body_text(" ".join(text.split()))]
+            run.findings.append(
+                _block_finding(
+                    "L1.heading_glued_to_text_end",
+                    block,
+                    "小标题" + "、".join(f"「{_snippet(text, 40)}」" for _id, text in joined[:3]) + "接在了上一段的末尾",
+                    cause="export_join",
+                    headings=[text for _id, text in joined[:8]],
+                    heading_block_ids=[block_id for block_id, _text in joined[:8]],
+                    prose_heading_block_ids=prose[:8],
+                )
+            )
+            continue
+        if block.block_type not in {"paragraph", "list_item"}:
+            continue
+        span = trailing_heading_span(block.parsed_text, block.font_names, faces)
+        if span is None:
+            continue
+        heading = block.parsed_text[span[0] : span[1]]
+        run.findings.append(
+            _block_finding(
+                "L1.heading_glued_to_text_end",
+                block,
+                f"小标题「{_snippet(heading, 40)}」接在了这一段的末尾",
+                cause="parsed",
+                headings=[heading],
+                heading_faces=sorted(faces),
+            )
+        )
+    return run
+
+
 def check_headings_and_headers(inputs: PilotQaInputs) -> list[CheckRun]:
     prose_headings = CheckRun("L1.heading_is_prose")
     headers = CheckRun("L1.running_header_as_text")
@@ -916,6 +1017,18 @@ def check_headings_and_headers(inputs: PilotQaInputs) -> list[CheckRun]:
                     _block_finding("L1.heading_is_prose", block, f"代码清单或图表的标题被排成了章节标题：「{_snippet(text, 60)}」")
                 )
             continue
+        own_heading = next((text for block_id, text in block.folded_headings if block_id == block.block_id), None)
+        if own_heading is not None and _is_body_text(" ".join(own_heading.split())):
+            # Body text parsed as a heading that the export sets as a paragraph: the reading copy
+            # joins it with the headings next to it ("...开放 LLM。稳定与可控") unless it is relabeled.
+            prose_headings.findings.append(
+                _block_finding(
+                    "L1.heading_is_prose",
+                    block,
+                    f"这段正文在解析结果里是标题：「{_snippet(own_heading, 80)}」",
+                    detail="parsed_heading",
+                )
+            )
         if block.block_type not in {"paragraph", "footnote", "list_item"}:
             continue
         if _is_prose_block(block):
@@ -2444,6 +2557,7 @@ def run_layers(inputs: PilotQaInputs, extra_checks: Sequence[ExtraCheck] = ()) -
         *check_pilot_chapters(inputs),
         *check_exported_chapters(inputs),
         *check_headings_and_headers(inputs),
+        check_heading_glued_to_text_end(inputs),
         check_headings_as_text(inputs),
         *check_reading_structure(inputs),
         *check_figures(inputs),
