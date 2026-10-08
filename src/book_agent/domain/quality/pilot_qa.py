@@ -790,10 +790,13 @@ def check_exported_chapters(inputs: PilotQaInputs) -> list[CheckRun]:
     for chapter in inputs.chapters:
         section = sections.get(chapter.id)
         if section is None:
+            # The reading copy folds the contents page, the about-pages and the index into their
+            # neighbours on purpose; only a body chapter without its own section misleads a reader.
+            surrounding = bool(_FRONT_OR_BACK.match(" ".join((chapter.title_src or "").split())))
             missing.findings.append(
                 Finding(
                     "L1.export_chapter_missing",
-                    BLOCKING,
+                    MINOR if surrounding else BLOCKING,
                     {"kind": "chapter", "id": chapter.id},
                     Location(chapter_id=chapter.id, page=chapter.page_start),
                     f"中文版里「{_snippet(chapter.title_tgt or chapter.title_src, 40)}」没有自己的一章，"
@@ -1455,6 +1458,15 @@ def _prose_parsed_as_code(block: QaBlock) -> str | None:
     return next((block_id for block_id, parsed in block.merged_blocks if lead and lead in " ".join(parsed.split())), None)
 
 
+_PRE_RE = re.compile(r"<pre\b.*?</pre>", re.S | re.I)
+
+
+def _code_body_html(html: str) -> str:
+    """A code block's HTML without the caption drawn on its box; the whole HTML when it has no <pre>."""
+    bodies = _PRE_RE.findall(html or "")
+    return "".join(bodies) if bodies else (html or "")
+
+
 def check_code_and_format(inputs: PilotQaInputs) -> list[CheckRun]:
     translated_code = CheckRun("L4.code_translated")
     prose_code = CheckRun("L4.prose_in_code")
@@ -1470,7 +1482,8 @@ def check_code_and_format(inputs: PilotQaInputs) -> list[CheckRun]:
     for chapter_blocks in by_chapter.values():
         for index, block in enumerate(chapter_blocks):
             if _is_code(block) and not _is_table(block):
-                rendered = visible_text(block.html)
+                # Only the code itself: a listing's title (代码清单 3.1 …) is drawn as the box's caption.
+                rendered = visible_text(_code_body_html(block.html))
                 if cjk_count(rendered) > cjk_count(block.source_text):
                     translated_code.findings.append(
                         _block_finding("L4.code_translated", block, "代码块里出现了中文：代码被翻译了", rendered=_snippet(rendered))
@@ -2031,6 +2044,8 @@ _NEGATION_EN_RE = re.compile(
     r"\b(?:not|no|never|none|nothing|neither|nor|cannot|without|n't|unable|fail(?:s|ed)? to|lack(?:s|ing)?)\b|n't\b",
     re.IGNORECASE,
 )
+# "returns None", "is None": a code literal mid-sentence, not the word "none".
+_CODE_LITERAL_RE = re.compile(r"(?<=\S )None\b")
 _NEGATION_ZH_RE = re.compile(r"[不没无非未别勿否莫免缺难]|失败|拒绝|除非|除了|毫无|并非|仅|只有|才|缺乏|忽略|避免|防止|而非|取代")
 _COMPARATIVE_EN_RE = re.compile(
     r"\b(?:more|less|fewer|better|worse|greater|smaller|larger|higher|lower|faster|slower)\b(?:\s+\w+){0,6}?\s+than\b"
@@ -2078,7 +2093,7 @@ def check_faithfulness(inputs: PilotQaInputs) -> list[CheckRun]:
         target = sentence.target_text
         if not target.strip():
             continue
-        if _NEGATION_EN_RE.search(_without_code_and_urls(sentence.source_text)) and not _NEGATION_ZH_RE.search(target):
+        if _NEGATION_EN_RE.search(_CODE_LITERAL_RE.sub(" ", _without_code_and_urls(sentence.source_text))) and not _NEGATION_ZH_RE.search(target):
             negation.findings.append(_sentence_finding("L6.negation_lost", sentence, "原文是否定的，译文里找不到否定"))
         if _COMPARATIVE_EN_RE.search(sentence.source_text) and not _COMPARATIVE_ZH_RE.search(target):
             comparative.findings.append(_sentence_finding("L6.comparative_lost", sentence, "原文有比较（more … than），译文里没有"))

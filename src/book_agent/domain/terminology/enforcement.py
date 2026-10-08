@@ -16,7 +16,13 @@ import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
-from book_agent.domain.terminology.matching import SourceTermIndex, source_term_key, target_has_rendering
+from book_agent.domain.terminology.matching import (
+    SourceTermIndex,
+    inside_identifier,
+    source_term_key,
+    target_has_rendering,
+)
+from book_agent.domain.terminology.matching import _token_spans as token_spans
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,13 +103,22 @@ def find_term_violations(
         if not occurrences:
             continue
         counts: dict[str, int] = {}
+        # A translated term inside a code identifier (scratch_agents, tool_call_id) is not the term;
+        # an identifier locked as-is ("@tool") is, so it keeps every occurrence.
+        prose_counts: dict[str, int] = {}
+        spans = token_spans(source_text or "")
         for occurrence in occurrences:
             counts[occurrence.key] = counts.get(occurrence.key, 0) + 1
+            if not inside_identifier(source_text or "", spans, occurrence):
+                prose_counts[occurrence.key] = prose_counts.get(occurrence.key, 0) + 1
         for position, term in usable:
             key = source_term_key(term.source_term)
             if key not in counts:
                 continue
-            if _needs_literal_source(term) and not _literal_in(term.source_term, source_text or ""):
+            if _needs_literal_source(term):
+                if not _literal_in(term.source_term, source_text or ""):
+                    continue
+            elif key not in prose_counts:
                 continue
             renderings = tuple(r for r in term.renderings if r and r.strip())
             if target_has_rendering(target_text or "", renderings):

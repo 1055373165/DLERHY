@@ -31,6 +31,20 @@ class FindTermViolationsTests(unittest.TestCase):
         units = [("s1", "An Inverted Head & Shoulders formed.", "形成了反转头肩形态。")]
         self.assertEqual(find_term_violations(units, [HEAD, INVERTED]), [])
 
+    def test_a_term_inside_a_code_identifier_is_not_the_term(self) -> None:
+        agent = LockedTerm(source_term="agent", renderings=("智能体",))
+        tool_call = LockedTerm(source_term="tool call", renderings=("工具调用",))
+        mcp = LockedTerm(source_term="Model Context Protocol", renderings=("模型上下文协议",))
+        units = [
+            ("s1", "The package is called scratch_agents.", "这个包叫 scratch_agents。"),
+            ("s2", "It carries the matching tool_call_id.", "它带有匹配的 tool_call_id。"),
+            ("s3", "Run npx @modelcontextprotocol/inspector first.", "先运行 npx @modelcontextprotocol/inspector。"),
+            ("s4", "Then call agent.run() again.", "然后再次调用 agent.run()。"),
+        ]
+        self.assertEqual(find_term_violations(units, [agent, tool_call, mcp]), [])
+        # The same words in prose are still the term.
+        self.assertEqual(len(find_term_violations([("s5", "The agent decides.", "它来决定。")], [agent])), 1)
+
     def test_empty_targets_are_skipped_only_on_request(self) -> None:
         units = [("s1", "The bull ran.", "")]
         self.assertEqual(len(find_term_violations(units, [BULL])), 1)
