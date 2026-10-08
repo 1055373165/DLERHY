@@ -5,6 +5,7 @@ import unittest
 from book_agent.translation.contracts import AlignmentSuggestion, TranslationTargetSegment, TranslationWorkerOutput
 from book_agent.translation.output_validation import (
     COVERAGE_INCOMPLETE,
+    EMPHASIS_UNBALANCED,
     LENGTH_RATIO_ABNORMAL,
     SOURCE_ECHOED,
     TARGET_EMPTY,
@@ -36,6 +37,33 @@ def _output(*, alignments, segments=("t1",), texts=None, segment_type="sentence"
 
 
 class OutputValidatorTests(unittest.TestCase):
+    def test_an_unpaired_emphasis_marker_is_rejected(self) -> None:
+        """"其*智能体程序（agent program）": the reader would see the star."""
+        source = "In practice, its *agent program* is a reasoning LLM."
+        bad = OutputValidator().validate(
+            ["s1"],
+            _output(alignments=[(["s1"], ["t1"])], texts={"t1": "在实践中，其*智能体程序（agent program）是一个推理 LLM。"}),
+            source_texts={"s1": source},
+        )
+        self.assertEqual(bad.error_code, EMPHASIS_UNBALANCED)
+        self.assertIn("unpaired", " ".join(bad.findings({"s1": "S1"})))
+        self.assertEqual(bad.to_json()["unbalanced_emphasis"], [{"sentence_ids": ["s1"], "markers": ["*"]}])
+
+        good = OutputValidator().validate(
+            ["s1"],
+            _output(alignments=[(["s1"], ["t1"])], texts={"t1": "在实践中，其*智能体程序*（agent program）是一个推理 LLM。"}),
+            source_texts={"s1": source},
+        )
+        self.assertTrue(good.ok)
+
+    def test_stars_the_source_has_are_not_unbalanced(self) -> None:
+        report = OutputValidator().validate(
+            ["s1"],
+            _output(alignments=[(["s1"], ["t1"])], texts={"t1": "调用 f(*args, **kwargs)，结果是 2*3。"}),
+            source_texts={"s1": "Call f(*args, **kwargs); the result is 2*3."},
+        )
+        self.assertTrue(report.ok)
+
     def test_full_coverage_is_ok(self) -> None:
         report = OutputValidator().validate(["s1", "s2"], _output(alignments=[(["s1", "s2"], ["t1"])]))
 

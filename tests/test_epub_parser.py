@@ -582,6 +582,17 @@ class EPUBParserTests(unittest.TestCase):
         el = fromstring("<p>A <b>bold</b> and <code>code</code> and <i>italic</i> mix</p>")
         self.assertEqual(_extract_rich_text(el), "A **bold** and `code` and *italic* mix")
 
+    def test_extract_rich_text_keeps_spaces_outside_the_markers(self) -> None:
+        """"<em>arXiv, </em>2502.02649": a space inside the tag would leave the closing star after a
+        space, where it no longer reads as a marker; it goes outside."""
+        from xml.etree.ElementTree import fromstring
+        from book_agent.domain.structure.epub import _extract_rich_text
+
+        el = fromstring("<p>“Developed.” <em>arXiv, </em>2502.02649.</p>")
+        self.assertEqual(_extract_rich_text(el), "“Developed.” *arXiv,* 2502.02649.")
+        el = fromstring("<p>see<b> bold </b>here and <code> x </code>.</p>")
+        self.assertEqual(_extract_rich_text(el), "see **bold** here and `x` .")
+
 
 if __name__ == "__main__":
     unittest.main()

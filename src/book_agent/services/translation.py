@@ -33,7 +33,8 @@ from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemor
 from book_agent.infra.repositories.events import emit_event
 from book_agent.infra.repositories.translation import TranslationPacketBundle, TranslationRepository
 from book_agent.services.context_compile import ChapterContextCompileOptions, ChapterContextCompiler
-from book_agent.domain.quality.zh_text_fixes import strip_markdown_emphasis, strip_unsourced_bullet
+from book_agent.domain.quality.zh_text_fixes import strip_unsourced_bullet
+from book_agent.domain.structure.inline_marks import drop_stray_markers
 from book_agent.domain.terminology.enforcement import LockedTerm, find_term_violations
 from book_agent.services.glossary_service import GlossaryService
 from book_agent.services.memory_service import MemoryService
@@ -399,7 +400,8 @@ class TranslationService:
             ]
             if len(sources) != 1 or sources[0] in texts:
                 return None
-            text = strip_unsourced_bullet(strip_markdown_emphasis(segment.text_zh or "").strip(), [source_by_id[sources[0]]])
+            source = source_by_id[sources[0]]
+            text = strip_unsourced_bullet(drop_stray_markers(segment.text_zh or "", [source]).strip(), [source])
             if not text:
                 return None
             texts[sources[0]] = text
@@ -821,8 +823,6 @@ class TranslationService:
         temp_to_target_id: dict[str, str] = {}
         target_segments: list[TargetSegment] = []
         valid_sentence_ids = {sentence.id for sentence in bundle.current_sentences}
-        # The model sometimes sets a heading or phrase in markdown bold; a reader would see "**".
-        source_has_markdown = any("**" in (sentence.source_text or "") for sentence in bundle.current_sentences)
         source_by_id = {sentence.id: sentence.source_text or "" for sentence in bundle.current_sentences}
         sources_by_temp_id: dict[str, list[str]] = {}
         for suggestion in output.alignment_suggestions:
@@ -831,13 +831,16 @@ class TranslationService:
         for ordinal, segment in enumerate(output.target_segments, start=1):
             target_id = stable_id("target-segment", translation_run.id, ordinal)
             temp_to_target_id[segment.temp_id] = target_id
-            text_zh = segment.text_zh if source_has_markdown else strip_markdown_emphasis(segment.text_zh)
-            # A numbered item's translation opened with "• ": the reader would see two markers.
             segment_sources = [
                 source_by_id[sentence_id]
                 for sentence_id in dict.fromkeys([*segment.source_sentence_ids, *sources_by_temp_id.get(segment.temp_id, [])])
                 if sentence_id in source_by_id
             ]
+            # Emphasis markers the source has no pair of (the model set a heading in "**bold**" for a
+            # PDF book, or left one star of a pair): the reader would see the asterisks. An EPUB's
+            # own *em* and **strong** pairs stay; the reading copy renders them.
+            text_zh = drop_stray_markers(segment.text_zh, segment_sources or list(source_by_id.values()))
+            # A numbered item's translation opened with "• ": the reader would see two markers.
             if segment_sources:
                 text_zh = strip_unsourced_bullet(text_zh, segment_sources)
             target_segments.append(

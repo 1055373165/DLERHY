@@ -13,6 +13,27 @@ INVERTED = LockedTerm("Inverted Head and Shoulders", ("反转头肩形态",))
 
 
 class FindTermViolationsTests(unittest.TestCase):
+    def test_a_term_inside_a_quoted_english_title_is_not_required(self) -> None:
+        """The Illustrated Guide's reference "Fully Autonomous AI Agents Should Not Be Developed." was
+        forced into "Fully Autonomous AI 智能体 Should Not Be Developed." by the agent lock."""
+        agent = LockedTerm(source_term="agent", renderings=("智能体",))
+        units = [
+            ("s3", "“Fully Autonomous AI Agents Should Not Be Developed.” *arXiv, *2502.02649.",
+             "“Fully Autonomous AI Agents Should Not Be Developed.” *arXiv,* 2502.02649。"),
+            ("s4", "4 Gabriel, Iason et al. 2024. \"The Agent Ethics of Advanced AI Assistants.\" *arXiv,*2404.16244.",
+             "4 Gabriel, Iason 等，2024。\"The Agent Ethics of Advanced AI Assistants.\" *arXiv,* 2404.16244。"),
+        ]
+        self.assertEqual(find_term_violations(units, [agent]), [])
+
+    def test_the_term_outside_the_title_and_in_prose_quotes_is_still_required(self) -> None:
+        agent = LockedTerm(source_term="agent", renderings=("智能体",))
+        units = [
+            ("s1", "The paper “Fully Autonomous AI Agents Should Not Be Developed” warns every agent builder.",
+             "论文“Fully Autonomous AI Agents Should Not Be Developed”提醒每一位 agent 开发者。"),
+            ("s2", "As we said, an “agent” acts on its environment.", "如前所述，“agent”会作用于环境。"),
+        ]
+        self.assertEqual([violation.unit_id for violation in find_term_violations(units, [agent])], ["s1", "s2"])
+
     def test_accepted_rendering_ignoring_spacing_and_case_is_honoured(self) -> None:
         units = [("s1", "Watch for RSI divergences.", "注意 rsi背离。"), ("s2", "RSI divergence again.", "再次出现RSI背离现象")]
         self.assertEqual(find_term_violations(units, [RSI]), [])

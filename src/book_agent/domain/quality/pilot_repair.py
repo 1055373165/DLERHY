@@ -169,6 +169,8 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     ),
     "L5.term_left_in_english": (RepairPath(TOOL_GLOSSARY, "lock_and_retranslate", costs_model=True),),
     "L5.review_blocking": (_RECHECK,),
+    # The source's English title put back in place of the altered one; retranslation only if that fails.
+    "L5.cited_title_altered": (RepairPath(TOOL_SEGMENT_EDIT, "restore_cited_title", SCOPE_CHECK), _RETRANSLATE),
     "L5.label_rendering": (
         RepairPath(TOOL_GLOSSARY, "unify_label_rendering"),
         RepairPath(TOOL_GLOSSARY, "lock_label_and_retranslate", costs_model=True),
@@ -187,8 +189,21 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L7.untranslated_prose": (RepairPath(TOOL_STRUCTURE, "relabel_code_face_as_code"), _RETRANSLATE),
     "L7.cjk_latin_spacing": (RepairPath(TOOL_SEGMENT_EDIT, "cjk_latin_spacing", SCOPE_CHECK),),
     "L7.halfwidth_punctuation": (RepairPath(TOOL_SEGMENT_EDIT, "fullwidth_punctuation", SCOPE_CHECK),),
+    # An unpaired emphasis marker in a translation: dropped where the source has no such marker.
+    # (A reading copy written before markers were rendered is written again: ``needs_reexport``.)
+    "L7.emphasis_marker": (RepairPath(TOOL_SEGMENT_EDIT, "balance_emphasis_markers", SCOPE_CHECK), _RETRANSLATE),
     "L7.review_blocking": (_RECHECK,),
 }
+
+
+def needs_reexport(layers: Sequence[Mapping[str, Any]]) -> bool:
+    """The reading copy on disk shows a problem the export no longer writes (``"reexport": true`` in
+    a finding's evidence): writing it again is the repair, whatever else the loop keeps."""
+    return any(
+        bool((finding.get("evidence") or {}).get("reexport"))
+        for layer in layers or ()
+        for finding in layer.get("findings") or ()
+    )
 
 
 STRUCTURE_HINT_PREFIX = "structure_edit."
@@ -282,6 +297,7 @@ GENERIC_CAUSES: tuple[GenericCause, ...] = (
     GenericCause("L4.code_comment_as_text", "L4.code_comment_as_text", "parser", "代码注释被拆到了代码块外面"),
     GenericCause("L4.inline_code_markup", "L4.inline_code_markup", "export", "行内代码的反引号没有渲染成代码样式"),
     GenericCause("L7.leaked_marker", "L7.leaked_marker", "export", "程序提示（如「图片锚点保留」）写进了读者看到的译文"),
+    GenericCause("L7.emphasis_marker", "L7.emphasis_marker", "translation", "译文里的强调标记（*、**）没有成对，读者看到了星号"),
     GenericCause("L7.stray_glyph", "L7.stray_glyph", "parser", "符号字体的字符被解码成了 ¡ 或乱码"),
     GenericCause(
         "L7.cjk_latin_spacing",
