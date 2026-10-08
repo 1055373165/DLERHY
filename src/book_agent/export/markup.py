@@ -321,6 +321,11 @@ def render_block_markdown(
         list_metadata = block.source_metadata or {}
         if list_metadata.get("list_kind") == "dash":
             list_text = _LEADING_DASH_MARKER.sub(r"\1", list_text, count=1)
+        elif list_metadata.get("list_kind") == "number":
+            # "1. " from the source's number; never a bullet glyph next to it.
+            number = _LEADING_NUMBER_MARKER.match(source_text or "")
+            body = _LEADING_BULLET_GLYPH.sub(r"\1", _LEADING_NUMBER_MARKER.sub(r"\1", list_text, count=1), count=1)
+            list_text = f"{number.group(2)}. {body.strip()}" if number else body
         marker = "" if re.match(r"^\s*(?:[-*+]\s+|\d+\.\s+)", list_text) else "- "
         indent = "  " if list_metadata.get("list_level") == 2 else ""
         parts = [f"{indent}{marker}{list_text}".rstrip()]
@@ -762,7 +767,10 @@ def render_block_html(
         block_class = f"{block_class} {'dashed' if kind == 'dash' else 'numbered'}"
         if list_metadata.get("list_level") == 2:
             block_class = f"{block_class} sub-item"
-        display_html = format_inline_text(pattern.sub(r"\1", display_text, count=1), code_spans=bool(block.target_text))
+        # The marker is drawn: a bullet glyph the translation put in front of a numbered item ("• 由路由…")
+        # would show as a second marker.
+        unmarked = _LEADING_BULLET_GLYPH.sub(r"\1", pattern.sub(r"\1", display_text, count=1), count=1)
+        display_html = format_inline_text(unmarked, code_spans=bool(block.target_text))
         return (
             f"<section class='block {html.escape(block_class)}'>"
             f"<div class='zh' data-marker='{html.escape(marker)}'>{display_html}</div>"

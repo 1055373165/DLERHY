@@ -33,7 +33,7 @@ from book_agent.infra.repositories.chapter_memory import ChapterTranslationMemor
 from book_agent.infra.repositories.events import emit_event
 from book_agent.infra.repositories.translation import TranslationPacketBundle, TranslationRepository
 from book_agent.services.context_compile import ChapterContextCompileOptions, ChapterContextCompiler
-from book_agent.domain.quality.zh_text_fixes import strip_markdown_emphasis
+from book_agent.domain.quality.zh_text_fixes import strip_markdown_emphasis, strip_unsourced_bullet
 from book_agent.domain.terminology.enforcement import LockedTerm, find_term_violations
 from book_agent.services.glossary_service import GlossaryService
 from book_agent.services.memory_service import MemoryService
@@ -741,16 +741,30 @@ class TranslationService:
         valid_sentence_ids = {sentence.id for sentence in bundle.current_sentences}
         # The model sometimes sets a heading or phrase in markdown bold; a reader would see "**".
         source_has_markdown = any("**" in (sentence.source_text or "") for sentence in bundle.current_sentences)
+        source_by_id = {sentence.id: sentence.source_text or "" for sentence in bundle.current_sentences}
+        sources_by_temp_id: dict[str, list[str]] = {}
+        for suggestion in output.alignment_suggestions:
+            for temp_id in suggestion.target_temp_ids:
+                sources_by_temp_id.setdefault(temp_id, []).extend(suggestion.source_sentence_ids)
         for ordinal, segment in enumerate(output.target_segments, start=1):
             target_id = stable_id("target-segment", translation_run.id, ordinal)
             temp_to_target_id[segment.temp_id] = target_id
+            text_zh = segment.text_zh if source_has_markdown else strip_markdown_emphasis(segment.text_zh)
+            # A numbered item's translation opened with "• ": the reader would see two markers.
+            segment_sources = [
+                source_by_id[sentence_id]
+                for sentence_id in dict.fromkeys([*segment.source_sentence_ids, *sources_by_temp_id.get(segment.temp_id, [])])
+                if sentence_id in source_by_id
+            ]
+            if segment_sources:
+                text_zh = strip_unsourced_bullet(text_zh, segment_sources)
             target_segments.append(
                 TargetSegment(
                     id=target_id,
                     chapter_id=bundle.packet.chapter_id,
                     translation_run_id=translation_run.id,
                     ordinal=ordinal,
-                    text_zh=segment.text_zh if source_has_markdown else strip_markdown_emphasis(segment.text_zh),
+                    text_zh=text_zh,
                     segment_type=_normalize_segment_type(segment.segment_type),
                     confidence=segment.confidence,
                     final_status=TargetSegmentStatus.DRAFT,

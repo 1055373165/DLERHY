@@ -202,6 +202,12 @@ class TextFixTests(unittest.TestCase):
         self.assertEqual(fixes.strip_markdown_emphasis("见 `a**b**c`，**重点**"), "见 `a**b**c`，重点")
         self.assertEqual(fixes.strip_leaked_markers("**明确知识边界**"), "明确知识边界")
 
+    def test_a_bullet_the_source_does_not_have_is_taken_out(self) -> None:
+        # Build an AI Agent 9.5.3: "1 A router agent receives the user's request." came back "• 由…".
+        self.assertEqual(fixes.strip_unsourced_bullet("• 由路由智能体接收用户请求。", ["1 A router agent receives the user’s request."]), "由路由智能体接收用户请求。")
+        self.assertEqual(fixes.strip_unsourced_bullet("• 智能体树组合", ["• Agent tree composition"]), "• 智能体树组合")
+        self.assertEqual(fixes.strip_unsourced_bullet("由路由智能体接收", ["1 A router agent"]), "由路由智能体接收")
+
     def test_whitespace_after_chinese_punctuation(self) -> None:
         self.assertEqual(fixes.fix_odd_whitespace("第一句。 第二句  还有　"), "第一句。第二句 还有")
 

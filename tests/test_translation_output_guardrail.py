@@ -132,6 +132,20 @@ class OutputGuardrailTests(unittest.TestCase):
         completed = [event for event in events if event.kind == LLM_CALL_COMPLETED]
         self.assertEqual(completed[0].payload["token_in"], 200)
 
+    def test_a_bullet_the_source_does_not_have_is_not_persisted(self) -> None:
+        def bulleted(task: TranslationTask) -> TranslationWorkerOutput:
+            output = _segments(task)
+            for segment in output.target_segments:
+                segment.text_zh = f"• {segment.text_zh}"
+            return output
+
+        worker = ScriptedWorker([bulleted])
+        with self.session_factory() as session:
+            artifacts = self._service(session, worker, repairs=0).execute_packet(self.packet_id)
+            texts = [segment.text_zh for segment in artifacts.target_segments]
+        self.assertTrue(texts)
+        self.assertTrue(all(text.startswith("译::") for text in texts), texts)
+
     def test_exhausted_repair_budget_persists_the_last_answer_with_its_error_code(self) -> None:
         worker = ScriptedWorker([lambda task: _segments(task, echo=True), lambda task: _segments(task, echo=True)])
         with self.session_factory() as session:
