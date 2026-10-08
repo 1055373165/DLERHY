@@ -733,14 +733,20 @@ class StructureEditService:
         )
         self._set_ordinals([(item, item.ordinal + 1) for item in later])
         span = dict(block.source_span_json or {})
+        # What is split off a heading is the text after it ("stability and control" + "Depending on
+        # external APIs ..."): a paragraph. It used to stay a heading, and the reading copy then
+        # joined it with the headings around it into one paragraph ("...开放 LLM。稳定与可控").
+        split_type = BlockType.PARAGRAPH if block.block_type == BlockType.HEADING else block.block_type
         split_off = self.session.get(Block, new_block_id)
         if split_off is None:
-            kept = {"source_path", "source_page_start", "source_page_end", "source_bbox_json", "pdf_page_family", "heading_level"}
+            kept = {"source_path", "source_page_start", "source_page_end", "source_bbox_json", "pdf_page_family"}
+            if split_type == BlockType.HEADING:
+                kept.add("heading_level")
             split_off = Block(
                 id=new_block_id,
                 chapter_id=block.chapter_id,
                 ordinal=block.ordinal + 1,
-                block_type=block.block_type,
+                block_type=split_type,
                 parse_revision_id=block.parse_revision_id,
                 source_text=second,
                 normalized_text=" ".join(second.split()),
@@ -755,7 +761,11 @@ class StructureEditService:
             self.session.add(split_off)
         else:
             split_off.ordinal = block.ordinal + 1
-            split_off.block_type = block.block_type
+            split_off.block_type = split_type
+            if split_type != BlockType.HEADING and "heading_level" in (split_off.source_span_json or {}):
+                split_off.source_span_json = {
+                    key: value for key, value in (split_off.source_span_json or {}).items() if key != "heading_level"
+                }
             split_off.source_text = second
             split_off.normalized_text = " ".join(second.split())
             split_off.protected_policy = block.protected_policy
