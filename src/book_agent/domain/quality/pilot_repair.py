@@ -102,6 +102,9 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     # The part's name read again from its page, split out of the introduction and set as a heading.
     "L1.part_title_unnamed": (RepairPath(TOOL_STRUCTURE, "split_part_name", costs_model=True),),
     "L1.review_blocking": (_RECHECK,),
+    # The chapters read again by the current EPUB parser (structure refresh): blocks keep their
+    # translations where their text is unchanged; only new blocks (definition terms) are translated.
+    "L1.epub_structure_outdated": (RepairPath(TOOL_STRUCTURE, "refresh_epub_structure", SCOPE_CHECK, costs_model=True),),
     # Structure the reading copy draws (lists, sidebars, split paragraphs, listing captions): the parser
     # side's QA rules name these paths in their repair hints; the findings carry the block ids.
     "L1.sublist_as_text": (RepairPath(TOOL_STRUCTURE, "nest_list_items", costs_model=True),),
@@ -253,6 +256,12 @@ GENERIC_CAUSES: tuple[GenericCause, ...] = (
         "L1.heading_merged_into_text",
         "parser",
         "行内小标题（小写词组紧跟在句点后）没有从段落里拆出来",
+    ),
+    GenericCause(
+        "L1.epub_structure_outdated",
+        "L1.epub_structure_outdated",
+        "parser",
+        "EPUB 解析器旧版本没有保留列表、术语表（dt）和注意/侧栏框的结构",
     ),
     GenericCause("L1.heading_is_prose", "L1.heading_is_prose", "parser", "以句号结尾的整句被识别成了标题"),
     GenericCause(

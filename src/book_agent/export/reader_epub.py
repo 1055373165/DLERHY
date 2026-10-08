@@ -56,9 +56,13 @@ h3,h4{font-size:1.1em;margin:1em 0 .5em}
 .zh{text-align:justify}
 .list_item .zh{padding-left:1.2em;text-indent:-1.2em}
 .list_item.dashed .zh::before,.list_item.numbered .zh::before{content:attr(data-marker) " "}
+.list_item.bulleted .zh::before{content:"\\2022  "}
 .list_item.sub-item{margin-left:1.2em}
 .paragraph.list-continuation{margin-left:1.2em}
 .book-sidebar{border:1px solid #bbb;background:#f6f3ea;border-radius:.4em;padding:.6em .8em;margin:1em 0}
+.definition-term .zh{font-weight:bold}
+.definition-description{margin-left:1.4em}
+.book-sidebar.book-note,.book-sidebar.book-tip,.book-sidebar.book-warning,.book-sidebar.book-caution,.book-sidebar.book-important{border-left:3px solid #0f6c7a}
 .sidebar-title .zh{font-weight:bold}
 .listing-caption{font-weight:bold;font-size:.9em;margin-bottom:.3em}
 .quote{border-left:3px solid #999;padding-left:.8em;color:#333}

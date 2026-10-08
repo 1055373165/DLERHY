@@ -312,6 +312,7 @@ def load_pilot_inputs(
     document = session.get(Document, document_id)
     if document is None:
         raise LookupError(f"document not found: {document_id}")
+    is_epub = getattr(document.source_type, "value", document.source_type) == "epub"
     chapter_ids = [str(chapter_id) for chapter_id in chapter_ids]
     service = ExportService(ExportRepository(session))
     bundle, render_blocks, sections = service.reading_copy_view(document_id, chapter_ids=chapter_ids)
@@ -422,6 +423,9 @@ def load_pilot_inputs(
                         for merged_id in block.source_metadata.get("export_merged_block_ids") or ()
                     ),
                     caption_absent_accepted=bool(block.source_metadata.get("figure_caption_absent")),
+                    epub_structure_version=(
+                        int(block.source_metadata.get("epub_structure_version") or 1) if is_epub else None
+                    ),
                 )
             )
 

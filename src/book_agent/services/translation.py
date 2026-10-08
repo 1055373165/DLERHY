@@ -350,11 +350,26 @@ class TranslationService:
         current = [sentence for sentence in prepared.task.current_sentences if sentence.id in set(wanted)]
         if len(current) != len(wanted):
             return None
+        # A sentence that is only code ("`run`", a definition term naming a method) is kept as it is:
+        # the model would drop its backticks or add an explanation.
+        verbatim = {
+            sentence.id: (sentence.source_text or "").strip()
+            for sentence in current
+            if _CODE_ONLY_SENTENCE.fullmatch((sentence.source_text or "").strip())
+        }
+        current = [sentence for sentence in current if sentence.id not in verbatim]
+        if not current:
+            return verbatim
         # Each sentence its own target: the guardrail sends a joined answer (a table's cells as one
         # markdown row) back to the model.
         prepared = replace(
             prepared,
-            task=replace(prepared.task, current_sentences=current, line_locked_sentence_ids=tuple(sentence.id for sentence in current)),
+            task=replace(
+                prepared.task,
+                context_packet=_only_blocks_of(prepared.task.context_packet, {sentence.id for sentence in current}),
+                current_sentences=current,
+                line_locked_sentence_ids=tuple(sentence.id for sentence in current),
+            ),
         )
         try:
             worker_result = self.call_worker(prepared)
@@ -398,6 +413,10 @@ class TranslationService:
                 for sentence_id in dict.fromkeys([*segment.source_sentence_ids, *sources_by_temp_id.get(segment.temp_id, [])])
                 if sentence_id in source_by_id
             ]
+            if not sources:
+                # A segment for a context sentence (the model answered more of the packet than asked):
+                # not one of these sentences, so not used; the packet keeps its own translation.
+                continue
             if len(sources) != 1 or sources[0] in texts:
                 return None
             source = source_by_id[sources[0]]
@@ -405,7 +424,7 @@ class TranslationService:
             if not text:
                 return None
             texts[sources[0]] = text
-        return texts if set(texts) == set(source_by_id) else None
+        return {**verbatim, **texts} if set(texts) == set(source_by_id) else None
 
     def prepare_packet(
         self,
@@ -1093,6 +1112,36 @@ class TranslationService:
         if isinstance(payload, TranslationWorkerOutput):
             return TranslationWorkerResult(output=payload, usage=TranslationUsage())
         raise TypeError(f"Unsupported translation worker payload: {type(payload)!r}")
+
+
+# One inline code span and nothing else: "`run`", "`base_url`".
+_CODE_ONLY_SENTENCE = re.compile(r"`[^`\n]+`[.:]?")
+
+
+def _only_blocks_of(packet: Any, sentence_ids: set[str]) -> Any:
+    """The packet with only the blocks of these sentences as its current text; the packet's other
+    blocks become the context before and after them.
+
+    Asked for a few new sentences (a definition term the parser now keeps, a table's cells), the
+    model otherwise answers the whole packet's current text and gives a neighbouring paragraph's
+    translation to the term ("Terminal-based" -> "你会一步步构建出一个 TinyAgent ...").
+    """
+    blocks = list(getattr(packet, "current_blocks", None) or [])
+    wanted = [index for index, block in enumerate(blocks) if set(block.sentence_ids) & sentence_ids]
+    if not wanted or len(wanted) == len(blocks):
+        return packet
+    first, last = wanted[0], wanted[-1]
+    return packet.model_copy(
+        update={
+            "current_blocks": [
+                block.model_copy(update={"sentence_ids": [sid for sid in block.sentence_ids if sid in sentence_ids]})
+                for block in blocks[first : last + 1]
+                if set(block.sentence_ids) & sentence_ids
+            ],
+            "prev_blocks": [*packet.prev_blocks, *blocks[:first]],
+            "next_blocks": [*blocks[last + 1 :], *packet.next_blocks],
+        }
+    )
 
 
 def _merge_usage(first: TranslationUsage, second: TranslationUsage) -> TranslationUsage:
