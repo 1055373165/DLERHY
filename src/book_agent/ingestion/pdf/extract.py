@@ -762,17 +762,23 @@ def split_merged_table_row(
     return split
 
 
-def _own_lines_of_clip(raw_text: str, block_lines: Sequence[str]) -> str:
+def _own_lines_of_clip(raw_text: str, block_lines: Sequence[str], other_lines: Sequence[str] = ()) -> str:
     """The clipped text of a code block without the lines of other blocks the clip cut into.
 
     A clip keeps every character inside the block's box, so an annotation set beside a listing
     whose box reaches into the listing's comes back cut at the box edge ("Move back by the ov").
-    A line of the block's own text is kept (with its indentation); one that is not part of the
-    block's text is dropped.
+    A clipped line that is not the block's own text but the cut-short start of another block's line
+    on the page is dropped; every other line stays as the clip read it (with its indentation).
     """
     own = _normalize_text(" ".join(block_lines))
-    kept = [line for line in raw_text.split("\n") if not _normalize_text(line) or _normalize_text(line) in own]
-    return "\n".join(kept)
+    others = [line for line in other_lines if line]
+
+    def foreign(line: str) -> bool:
+        text = _normalize_text(line)
+        # Cut short at the box edge: a strict start of another block's line, never a whole line.
+        return bool(text) and text not in own and any(other.startswith(text) and other != text for other in others)
+
+    return "\n".join(line for line in raw_text.split("\n") if not foreign(line))
 
 
 def table_page_lines(page: Any) -> list[tuple[float, float, float, float, str]]:
@@ -950,7 +956,13 @@ class PyMuPDFTextExtractor:
                             clip_rect = _fitz.Rect(*block_bbox)
                             raw_text = page.get_text("text", clip=clip_rect)
                             if raw_text:
-                                raw_text = _own_lines_of_clip(raw_text, lines).rstrip()
+                                other_lines = [
+                                    _normalize_text("".join(span.get("text", "") for span in line.get("spans", [])))
+                                    for other in text_dict.get("blocks", [])
+                                    if other is not block
+                                    for line in other.get("lines", [])
+                                ]
+                                raw_text = _own_lines_of_clip(raw_text, lines, other_lines).rstrip()
                         except Exception:
                             raw_text = None
 

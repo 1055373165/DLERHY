@@ -73,10 +73,13 @@ class CodeFaceParseTest(unittest.TestCase):
     def test_a_clip_keeps_only_the_blocks_own_lines(self) -> None:
         raw = "    while start < len(text):\n        end = start + chunk_size\nMove back by the ov\n        return chunks"
         own = ["while start < len(text):", "end = start + chunk_size", "return chunks"]
+        annotation = ["Move back by the overlap amount", "to maintain context between"]
         self.assertEqual(
-            _own_lines_of_clip(raw, own),
+            _own_lines_of_clip(raw, own, annotation),
             "    while start < len(text):\n        end = start + chunk_size\n        return chunks",
         )
+        # A line the dict view spells differently (a continuation arrow) is still the block's own.
+        self.assertEqual(_own_lines_of_clip("\u27a5{param.name}", ["{param.name}"], annotation), "\u27a5{param.name}")
 
 
 class CodeFaceExportTest(unittest.TestCase):
