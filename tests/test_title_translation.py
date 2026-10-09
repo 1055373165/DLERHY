@@ -154,6 +154,26 @@ class ChapterLabelTests(unittest.TestCase):
             "赞誉：《AI 智能体图解指南》（An Illustrated Guide to AI Agents）",
         )
 
+    def test_the_title_heading_with_emphasis_is_not_repeated_in_the_body(self) -> None:
+        from book_agent.export.models import MergedRenderBlock
+        from book_agent.services.export import ExportService
+
+        def block(block_id: str, block_type: str, target: str) -> MergedRenderBlock:
+            return MergedRenderBlock(
+                block_id=block_id, chapter_id="c", block_type=block_type, render_mode="zh_primary_with_optional_source",
+                artifact_kind=None, title=None, source_text=target, target_text=target, source_metadata={},
+                source_sentence_ids=[], target_segment_ids=[], is_expected_source_only=False, notice=None,
+            )
+
+        blocks = [
+            block("h", "heading", "赞誉：《AI 智能体图解指南》（*An Illustrated Guide to AI Agents*）"),
+            block("p", "paragraph", "两位作者是杰出的构建者。"),
+        ]
+        body = ExportService._merged_body_blocks(
+            ExportService.__new__(ExportService), blocks, "赞誉：《AI 智能体图解指南》（An Illustrated Guide to AI Agents）"
+        )
+        self.assertEqual([item.block_id for item in body], ["p"])
+
 
 if __name__ == "__main__":
     unittest.main()
