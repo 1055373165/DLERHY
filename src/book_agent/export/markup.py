@@ -212,7 +212,9 @@ def render_block_markdown(
     *,
     include_notice: bool = False,
     include_source_caption: bool = True,
+    heading_shift: int = 0,
 ) -> str:
+    """``heading_shift``: levels a chapter inside a book's part sits lower (its sections one level down)."""
     if is_callout_block(block):
         return render_callout_markdown(block)
     source_text = block.source_text or ""
@@ -314,7 +316,8 @@ def render_block_markdown(
         if len(heading_text) <= 150:
             # The chapter is "##": an x.y section "###", x.y.z "####", a run-in heading below it.
             level = (block.source_metadata or {}).get("heading_level")
-            marks = "#" * (min(max(level, 2), 5) + 1) if isinstance(level, int) else "###"
+            depth = (min(max(level, 2), 5) + 1) if isinstance(level, int) else 3
+            marks = "#" * min(depth + heading_shift, 6)
             return f"{marks} {heading_text}".strip()
     if block.block_type == BlockType.TABLE.value:
         table_source = target_text or source_text
@@ -367,13 +370,17 @@ def render_block_markdown(
 def render_block_markdown_bilingual(
     block: MergedRenderBlock,
     asset_path_by_block_id: dict[str, str] | None = None,
+    *,
+    heading_shift: int = 0,
 ) -> str:
     """A block of the bilingual Markdown: the Chinese reading-copy block, then its English as a quote.
 
     Code, equations, pictures and tables are shown once (they are the source, or translated cell by
     cell); a reference keeps its source in the Chinese block already.
     """
-    chinese = render_block_markdown(block, asset_path_by_block_id, include_notice=False, include_source_caption=False)
+    chinese = render_block_markdown(
+        block, asset_path_by_block_id, include_notice=False, include_source_caption=False, heading_shift=heading_shift
+    )
     english = _bilingual_source_text(block)
     if not chinese or not english:
         return chinese
