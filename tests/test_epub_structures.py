@@ -181,6 +181,24 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(nested, "  - 图像")
         term = markup.render_block_markdown(_render_block("Environment", {"definition_term": True}, target="环境"))
         self.assertEqual(term, "**环境**")
+        # A term already in bold is not bolded again ("****等宽粗体****").
+        bold = markup.render_block_markdown(_render_block("**Constant width bold**", {"definition_term": True}, target="**等宽粗体**"))
+        self.assertEqual(bold, "**等宽粗体**")
+
+    def test_bilingual_markdown_quotes_the_english_under_each_passage(self) -> None:
+        paragraph = markup.render_block_markdown_bilingual(_render_block("The world.", {}, target="世界。"))
+        self.assertEqual(paragraph, "世界。\n\n> The world.")
+        # In a list the quote is indented to the item's text, so it stays in the item.
+        item = markup.render_block_markdown_bilingual(
+            _render_block("The user asks.", {"list_kind": "number", "list_level": 1, "list_number": 10}, block_type="list_item", target="用户提问。")
+        )
+        self.assertEqual(item, "10. 用户提问。\n\n    > The user asks.")
+        nested = markup.render_block_markdown_bilingual(
+            _render_block("• images", {"list_kind": "bullet", "list_level": 2}, block_type="list_item", target="• 图像")
+        )
+        self.assertEqual(nested, "  - 图像\n\n    > images")
+        # Nothing to add when the text was kept as it is.
+        self.assertEqual(markup.render_block_markdown_bilingual(_render_block("GPT-4", {}, target="GPT-4")), "GPT-4")
 
 
 class OnlyNewSentencesTest(unittest.TestCase):

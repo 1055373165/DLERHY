@@ -351,8 +351,10 @@ def render_block_markdown(
     elif block.block_type == BlockType.CAPTION.value:
         parts = [f"*{target_text or source_text}*"]
     elif (block.source_metadata or {}).get("definition_term") or (block.source_metadata or {}).get("sidebar_title"):
-        # A definition list's term, a note's or sidebar's title: set off in bold.
-        parts = [f"**{(target_text or source_text).strip()}**"]
+        # A definition list's term, a note's or sidebar's title: set off in bold (once: "**粗体**" stays).
+        term = (target_text or source_text).strip()
+        bold = term.startswith("**") and term.endswith("**") and len(term) > 4 and "**" not in term[2:-2]
+        parts = [term if bold else f"**{term}**"]
     else:
         parts = [list_markdown or (target_text or source_text)]
 
@@ -376,11 +378,15 @@ def render_block_markdown_bilingual(
     if not chinese or not english:
         return chinese
     quote = markdown_blockquote(english)
-    if block.block_type == BlockType.LIST_ITEM.value:
-        # Under the item, so the list goes on.
-        indent = "  " * _list_level(block.source_metadata or {})
+    marker = _LIST_ITEM_MARKER.match(chinese) if block.block_type == BlockType.LIST_ITEM.value else None
+    if marker:
+        # Indented to the item's text ("- " two spaces, "10. " four), so it stays in the item and the list goes on.
+        indent = " " * len(marker.group(0))
         quote = "\n".join(f"{indent}{line}" for line in quote.splitlines())
     return f"{chinese}\n\n{quote}"
+
+
+_LIST_ITEM_MARKER = re.compile(r"^ *(?:[-*+]|\d+\.) +")
 
 
 def _bilingual_source_text(block: MergedRenderBlock) -> str:
