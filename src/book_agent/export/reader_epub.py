@@ -43,7 +43,7 @@ _TAGS = re.compile(r"<[^>]+>")
 _TOC_STYLE = (
     "<style>.reader-toc{margin:0 0 28px;padding:18px 22px;border:1px solid rgba(0,0,0,.1);border-radius:14px;"
     "background:rgba(255,255,255,.7)}.reader-toc h2{margin:0 0 10px;font-size:1.05rem}"
-    ".reader-toc ol{margin:0;padding-left:1.4em;line-height:1.9}.reader-toc a{color:inherit}</style>"
+    ".reader-toc ol{margin:0;padding-left:0;list-style:none;line-height:1.9}.reader-toc ol ol{padding-left:1.6em}.reader-toc a{color:inherit}</style>"
 )
 # E-readers get their own plain stylesheet: the web export's layout (viewport units, grids,
 # sticky sidebars) is meaningless on a paged reader and some engines reject it.
