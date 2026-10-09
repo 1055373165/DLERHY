@@ -12,7 +12,7 @@ describe("downloadDocumentExport", () => {
     vi.restoreAllMocks();
   });
 
-  it("enqueues an export run when no export exists, then downloads it", async () => {
+  it("enqueues an export run when no export exists, then lets the browser download it", async () => {
     let downloadAttempts = 0;
     const calls: string[] = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -23,10 +23,7 @@ describe("downloadDocumentExport", () => {
         if (downloadAttempts === 1) {
           return jsonResponse({ detail: "No successful merged_markdown exports are available for download." }, 404);
         }
-        return new Response("# 译文", {
-          status: 200,
-          headers: { "Content-Disposition": 'attachment; filename="book.md"' },
-        });
+        return new Response(null, { status: 204 });
       }
       if (url.endsWith("/documents/doc-1/export")) {
         expect(JSON.parse(String(init?.body))).toEqual({ export_type: "merged_markdown" });
@@ -38,18 +35,22 @@ describe("downloadDocumentExport", () => {
       throw new Error(`Unhandled fetch: ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
-    Object.defineProperty(URL, "createObjectURL", { configurable: true, writable: true, value: vi.fn(() => "blob:1") });
-    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, writable: true, value: vi.fn() });
+    const clicked: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      clicked.push(this.href);
+    });
 
-    const filename = await downloadDocumentExport("doc-1", "merged_markdown", { pollIntervalMs: 1 });
+    await downloadDocumentExport("doc-1", "merged_markdown", { pollIntervalMs: 1, packaging: "bilingual" });
 
-    expect(filename).toBe("book.md");
+    // The page only checks; the file itself is the browser's download (a download manager can take it).
     expect(calls.map((call) => call.replace(/^(\w+) .*\/v1/, "$1 "))).toEqual([
-      "GET /documents/doc-1/exports/download?export_type=merged_markdown&package=single",
+      "GET /documents/doc-1/exports/download?export_type=merged_markdown&package=bilingual&check=true",
       "POST /documents/doc-1/export",
       "GET /runs/run-1",
-      "GET /documents/doc-1/exports/download?export_type=merged_markdown&package=single",
+      "GET /documents/doc-1/exports/download?export_type=merged_markdown&package=bilingual&check=true",
     ]);
+    expect(clicked).toHaveLength(1);
+    expect(clicked[0]).toMatch(/\/v1\/documents\/doc-1\/exports\/download\?export_type=merged_markdown&package=bilingual$/);
   });
 
   it("reports a failed export run instead of downloading", async () => {
