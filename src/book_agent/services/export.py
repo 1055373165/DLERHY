@@ -36,6 +36,7 @@ from book_agent.domain.enums import (
     SourceType,
 )
 from book_agent.domain.models.review import Export, ReviewIssue
+from book_agent.domain.structure import inline_marks
 from book_agent.domain.structure import web as web_page
 from book_agent.domain.structure.artifact_grouping import resolve_artifact_group_context_ids
 from book_agent.domain.structure.callouts import CALLOUT_ICON_KEY, is_callout_metadata
@@ -1606,6 +1607,9 @@ class ExportService:
                 and block.block_type == BlockType.HEADING.value
             ):
                 text = block.target_text or block.source_text or ""
+                if "*" in text:
+                    # The title reads without its emphasis markers (titles.resolve_chapter_title).
+                    text = inline_marks.plain_text(text)
                 candidate = _normalize_render_text(
                     titles.normalize_numbered_title(text, source_title=block.source_text) or text
                 )
