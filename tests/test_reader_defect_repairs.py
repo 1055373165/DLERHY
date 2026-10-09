@@ -119,6 +119,27 @@ class TableRowsRepairTests(PilotRepairBenchCase):
                 ["rebuild_table"],
             )
 
+    def test_a_malformed_answer_for_the_cells_keeps_the_rebuilt_table(self) -> None:
+        """The Illustrated Guide's structure refresh of 18 chapters was undone by one malformed model
+        answer for one packet's new sentences: that packet is retranslated whole instead."""
+        table_id = self._inject_merged_table()
+        self.translate()
+        self.worker.malformed_calls = 1
+
+        payload, final = self.repair()
+
+        kept = self.attempts(payload, "kept")
+        rebuilt = next(attempt for attempt in kept if attempt["path"] == "reextract_table")
+        self.assertEqual(rebuilt["params"]["rows"], 3)
+        self.assertEqual(rebuilt["params"]["cells_only_packets"], [])
+        self.assertEqual(_findings(final, "L3.table_rows_merged"), [])
+        with self.bench.session_factory() as session:
+            cells = session.scalars(
+                select(Sentence).where(Sentence.block_id == table_id, Sentence.retired_by_revision_id.is_(None), Sentence.translatable.is_(True))
+            ).all()
+            cell_texts = active_target_texts(session, [cell.id for cell in cells])
+            self.assertTrue(all(cell_texts.get(cell.id) for cell in cells), [cell.source_text for cell in cells])
+
 
 def _block(block_id: str, block_type: str, source: str, target: str = "", html: str = "", **kw) -> QaBlock:
     return QaBlock(
