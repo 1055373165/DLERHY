@@ -351,8 +351,10 @@ def render_block_markdown(
     elif block.block_type == BlockType.CAPTION.value:
         parts = [f"*{target_text or source_text}*"]
     elif (block.source_metadata or {}).get("definition_term") or (block.source_metadata or {}).get("sidebar_title"):
-        # A definition list's term, a note's or sidebar's title: set off in bold.
-        parts = [f"**{(target_text or source_text).strip()}**"]
+        # A definition list's term, a note's or sidebar's title: set off in bold (once: "**粗体**" stays).
+        term = (target_text or source_text).strip()
+        bold = term.startswith("**") and term.endswith("**") and len(term) > 4 and "**" not in term[2:-2]
+        parts = [term if bold else f"**{term}**"]
     else:
         parts = [list_markdown or (target_text or source_text)]
 
@@ -360,6 +362,49 @@ def render_block_markdown(
     # toggle with the English source. Bilingual comparison is a
     # separate export type.
     return "\n\n".join(part for part in parts if part)
+
+
+def render_block_markdown_bilingual(
+    block: MergedRenderBlock,
+    asset_path_by_block_id: dict[str, str] | None = None,
+) -> str:
+    """A block of the bilingual Markdown: the Chinese reading-copy block, then its English as a quote.
+
+    Code, equations, pictures and tables are shown once (they are the source, or translated cell by
+    cell); a reference keeps its source in the Chinese block already.
+    """
+    chinese = render_block_markdown(block, asset_path_by_block_id, include_notice=False, include_source_caption=False)
+    english = _bilingual_source_text(block)
+    if not chinese or not english:
+        return chinese
+    quote = markdown_blockquote(english)
+    marker = _LIST_ITEM_MARKER.match(chinese) if block.block_type == BlockType.LIST_ITEM.value else None
+    if marker:
+        # Indented to the item's text ("- " two spaces, "10. " four), so it stays in the item and the list goes on.
+        indent = " " * len(marker.group(0))
+        quote = "\n".join(f"{indent}{line}" for line in quote.splitlines())
+    return f"{chinese}\n\n{quote}"
+
+
+_LIST_ITEM_MARKER = re.compile(r"^ *(?:[-*+]|\d+\.) +")
+
+
+def _bilingual_source_text(block: MergedRenderBlock) -> str:
+    if block.render_mode in {
+        "source_artifact_full_width",
+        "translated_wrapper_with_preserved_artifact",
+        "reference_preserve_with_translated_label",
+    }:
+        return ""
+    if block.block_type == BlockType.TABLE.value:
+        return ""
+    source = str(block.source_text or "").strip()
+    target = str(block.target_text or "").strip()
+    if not source or not target or source == target or source in ARTIFACT_PLACEHOLDER_TEXTS:
+        return ""
+    if block.block_type == BlockType.LIST_ITEM.value:
+        source = _LEADING_BULLET_GLYPH.sub(r"\1", source, count=1)
+    return source
 
 
 _CAPTION_SENTENCE_END = re.compile(r"(?<=[。！？])|(?<=[.!?])\s")

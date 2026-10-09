@@ -205,6 +205,32 @@ class DownloadTests(unittest.TestCase):
         refused = self.client.get(f"{base}?export_type=review_package&package=preview")
         self.assertEqual(refused.status_code, 422)
 
+    def test_the_bilingual_markdown_downloads_zipped_with_its_pictures(self) -> None:
+        base = f"/v1/documents/{self.document_id}/exports/download"
+        response = self._get(f"{base}?export_type=merged_markdown&package=bilingual")
+        self.assertEqual(response.headers["content-type"], "application/zip")
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            names = archive.namelist()
+            self.assertTrue(any(name.endswith("fig.png") for name in names))
+            [markdown_name] = [name for name in names if name.endswith(".md")]
+            self.assertIn("中英文对照-Markdown", markdown_name)
+            markdown = archive.read(markdown_name).decode("utf-8")
+        # Each passage in Chinese, its English quoted under it; the chapter title too.
+        lines = markdown.splitlines()
+        paragraph = next(index for index, line in enumerate(lines) if line.startswith("ZH::") and "Chapter" not in line)
+        self.assertEqual(lines[paragraph + 2], "> " + lines[paragraph].removeprefix("ZH::"))
+        self.assertIn("> Chapter One", markdown)
+        # The Chinese Markdown stays Chinese only.
+        chinese = self._get(f"{base}?export_type=merged_markdown&package=zip")
+        with zipfile.ZipFile(io.BytesIO(chinese.content)) as archive:
+            [chinese_name] = [name for name in archive.namelist() if name.endswith(".md")]
+            self.assertNotIn("> Chapter One", archive.read(chinese_name).decode("utf-8"))
+        refused = self.client.get(f"{base}?export_type=merged_html&package=bilingual")
+        self.assertEqual(refused.status_code, 422)
+        # An export from before the bilingual edition: 404, so the app exports the Markdown again.
+        (self.export_root / self.document_id / "merged-document.bilingual.md").unlink()
+        self.assertEqual(self.client.get(f"{base}?export_type=merged_markdown&package=bilingual").status_code, 404)
+
     def test_pdf_export_is_refused_with_a_reason_when_the_renderer_is_missing(self) -> None:
         with patch("importlib.util.find_spec", return_value=None):
             response = self.client.post(f"/v1/documents/{self.document_id}/export", json={"export_type": "rebuilt_pdf"})
