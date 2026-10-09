@@ -138,6 +138,22 @@ class ChapterLabelTests(unittest.TestCase):
         self.assertEqual(localized_structural_title_fallback("Introduction"), "引言")
         self.assertEqual(localized_structural_title_fallback("Dedication"), "献词")
 
+    def test_a_title_with_emphasis_reads_without_asterisks(self) -> None:
+        # The Illustrated Guide's "Praise for <em>An Illustrated Guide to AI Agents</em>".
+        from types import SimpleNamespace
+
+        from book_agent.export.titles import resolve_chapter_title
+
+        document = SimpleNamespace(source_type=SourceType.EPUB)
+        chapter = SimpleNamespace(
+            title_src="Praise for *An Illustrated Guide to AI Agents*",
+            title_tgt="赞誉：《AI 智能体图解指南》（*An Illustrated Guide to AI Agents*）",
+        )
+        self.assertEqual(
+            resolve_chapter_title(document, chapter, []),
+            "赞誉：《AI 智能体图解指南》（An Illustrated Guide to AI Agents）",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
