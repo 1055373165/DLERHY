@@ -205,6 +205,14 @@ class DownloadTests(unittest.TestCase):
         refused = self.client.get(f"{base}?export_type=review_package&package=preview")
         self.assertEqual(refused.status_code, 422)
 
+    def test_downloads_are_never_cached(self) -> None:
+        # A download cut off mid-transfer and kept in the browser's cache fails every retry.
+        base = f"/v1/documents/{self.document_id}/exports/download"
+        for query in ("export_type=merged_html", "export_type=merged_markdown", "export_type=merged_markdown&package=bilingual"):
+            self.assertEqual(self._get(f"{base}?{query}").headers["cache-control"], "no-store")
+        chapter = self._get(f"/v1/documents/{self.document_id}/chapters/{self.chapter_id}/exports/download")
+        self.assertEqual(chapter.headers["cache-control"], "no-store")
+
     def test_the_bilingual_markdown_downloads_zipped_with_its_pictures(self) -> None:
         base = f"/v1/documents/{self.document_id}/exports/download"
         response = self._get(f"{base}?export_type=merged_markdown&package=bilingual")

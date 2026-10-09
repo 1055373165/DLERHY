@@ -511,13 +511,15 @@ def download_document_chapter_export(
     ),
     session: Session = Depends(get_db_session),
 ) -> Response:
-    return chapter_export_response(
-        _workflow_service(request, session).export_repository,
-        document_id,
-        chapter_id,
-        export_type,
-        artifact_roots=_artifact_roots(request),
-        package=package,
+    return _not_cached(
+        chapter_export_response(
+            _workflow_service(request, session).export_repository,
+            document_id,
+            chapter_id,
+            export_type,
+            artifact_roots=_artifact_roots(request),
+            package=package,
+        )
     )
 
 
@@ -537,13 +539,25 @@ def download_document_export(
     ),
     session: Session = Depends(get_db_session),
 ) -> Response:
-    return document_export_response(
-        _workflow_service(request, session).export_repository,
-        document_id,
-        export_type,
-        artifact_roots=_artifact_roots(request),
-        package=package,
+    return _not_cached(
+        document_export_response(
+            _workflow_service(request, session).export_repository,
+            document_id,
+            export_type,
+            artifact_roots=_artifact_roots(request),
+            package=package,
+        )
     )
+
+
+def _not_cached(response: Response) -> Response:
+    """Downloads are built per request (a fresh zip, a fresh single file): a browser keeps none of them.
+
+    A cached download that was cut off (the server restarted mid-transfer) otherwise fails every
+    retry of that URL in the browser with net::ERR_FAILED.
+    """
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 def _pdf_renderer_installed() -> bool:
