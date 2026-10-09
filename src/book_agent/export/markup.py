@@ -1302,3 +1302,15 @@ def build_merged_toc(
 
 def usage_summary_css() -> str:
     return stylesheets.load("usage_summary.css")
+
+
+def book_usage_html(summary: str | None) -> str:
+    """The book's model usage under its title (``services.usage_statement.DocumentUsage``)."""
+    if not summary:
+        return ""
+    return (
+        "<section class='book-usage' aria-label='翻译用量'>"
+        "<span class='book-usage-label'>翻译用量</span>"
+        f"<span class='book-usage-value'>{html.escape(summary)}</span>"
+        "</section>"
+    )

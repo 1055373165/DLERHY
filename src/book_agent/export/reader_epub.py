@@ -33,6 +33,8 @@ _USAGE_SUMMARY = re.compile(r"<section class='usage-summary'.*?</ul>\s*</section
 _CHAPTER_START = re.compile(r"<section class='chapter' id='(?P<id>[^']+)'>")
 _CHAPTER_TITLE = re.compile(r"<div class='chapter-head'>\s*<h2[^>]*>(?P<title>.*?)</h2>", re.DOTALL)
 _HERO = re.compile(r"<header class='hero'[^>]*>.*?</header>", re.DOTALL)
+# The book's model usage under its title (export.markup.book_usage_html): kept for the reader.
+_BOOK_USAGE = re.compile(r"<section class='book-usage'[^>]*>.*?</section>", re.DOTALL)
 _HERO_TITLE = re.compile(r"<h1[^>]*>(?P<title>.*?)</h1>", re.DOTALL)
 _MAIN_END = re.compile(r"</main>", re.IGNORECASE)
 _TAGS = re.compile(r"<[^>]+>")
@@ -51,6 +53,8 @@ h2{font-size:1.35em;margin:1.2em 0 .6em;line-height:1.3}
 h3,h4{font-size:1.1em;margin:1em 0 .5em}
 .title-page{margin-top:30%;text-align:center}
 .title-page .meta{margin-top:1.5em;color:#555}
+.title-page .book-usage{margin-top:3em;font-size:.8em;color:#666}
+.title-page .book-usage-label{display:block;margin-bottom:.3em;font-weight:bold}
 .chapter-head h2{margin-top:0}
 .block{margin:.8em 0}
 .zh{text-align:justify}
@@ -121,7 +125,8 @@ def split_merged_book(document: str) -> tuple[str, list[ReaderChapter]]:
 
 
 def reader_html(document: str) -> str:
-    """The merged book for readers: no translation statistics, a table of contents after the title."""
+    """The merged book for readers: no per-run statistics, a table of contents after the title and
+    the book's model usage."""
     document = _USAGE_SUMMARY.sub("", document)
     _, chapters = split_merged_book(document)
     if len(chapters) < 2:
@@ -131,7 +136,9 @@ def reader_html(document: str) -> str:
     toc = f"<nav class='reader-toc' aria-label='目录'><h2>目录</h2><ol>{items}</ol></nav>"
     hero = _HERO.search(document)
     if hero is not None:
-        document = document[: hero.end()] + toc + document[hero.end():]
+        usage = _BOOK_USAGE.match(document, hero.end())
+        at = usage.end() if usage is not None else hero.end()
+        document = document[:at] + toc + document[at:]
     return document.replace("</head>", _TOC_STYLE + "</head>", 1)
 
 
@@ -261,9 +268,10 @@ def build_reader_epub(
     pages: list[tuple[str, str, str]] = []  # (id, href, title)
     files: dict[str, str] = {}
     hero = _HERO.search(document)
+    usage = _BOOK_USAGE.search(document)
     title_body = f"<section class='title-page'><h1>{html.escape(title)}</h1>" + (
         f"<p class='meta'>{html.escape(author)}</p>" if author else ""
-    ) + "</section>"
+    ) + (usage.group(0) if usage is not None else "") + "</section>"
     if hero is not None:
         files["text/title.xhtml"] = _xhtml_page(title, to_xhtml(title_body), lang=lang)
         pages.append(("title", "text/title.xhtml", title))

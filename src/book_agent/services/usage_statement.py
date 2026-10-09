@@ -23,7 +23,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
-from book_agent.domain.models import Document
+from book_agent.domain.models import Chapter, Document
 from book_agent.domain.models.auth import DEFAULT_ORG_ID, Org
 from book_agent.domain.models.ops import DocumentRun, Event
 from book_agent.services.billing_category import paid_by_us, pilot_run_ids
@@ -293,3 +293,48 @@ def pilot_cost_statement(session: Session, *, month: str | None = None) -> Pilot
         cost_usd=round(sum(line.cost_usd for line in ordered), 6),
         pilots=ordered,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentUsage:
+    """Every model call one book took: translation, model review, quality checks and repairs, the
+    free pilot included. What the reading copies show at their top."""
+
+    call_count: int
+    token_in: int
+    token_out: int
+    cost_usd: float
+
+    @property
+    def total_tokens(self) -> int:
+        return self.token_in + self.token_out
+
+    def summary_zh(self) -> str:
+        return (
+            f"模型调用 {self.call_count:,} 次 · Token {self.total_tokens:,}"
+            f"（输入 {self.token_in:,} · 输出 {self.token_out:,}）· 花费 US$ {self.cost_usd:,.2f}"
+        )
+
+
+def document_usage(session: Session, document_id: str) -> DocumentUsage | None:
+    """The book's model usage from the ledger (``llm.call.completed``): a call belongs to the book
+    through its run, the ``document_id`` it carries (as in ``usage_statement``) or its chapter (a
+    repair or retranslation outside a run). None without calls."""
+    run_ids = [str(run_id) for run_id in session.scalars(select(DocumentRun.id).where(DocumentRun.document_id == document_id))]
+    chapter_ids = [str(chapter_id) for chapter_id in session.scalars(select(Chapter.id).where(Chapter.document_id == document_id))]
+    belongs = Event.payload["document_id"].as_string() == str(document_id)
+    if run_ids:
+        belongs = Event.run_id.in_(run_ids) | belongs
+    if chapter_ids:
+        belongs = Event.chapter_id.in_(chapter_ids) | belongs
+    calls, token_in, token_out, cost_usd = session.execute(
+        select(
+            func.count(),
+            func.coalesce(func.sum(Event.payload["token_in"].as_integer()), 0),
+            func.coalesce(func.sum(Event.payload["token_out"].as_integer()), 0),
+            func.coalesce(func.sum(Event.payload["cost_usd"].as_float()), 0.0),
+        ).where(Event.kind == LLM_CALL_COMPLETED, belongs)
+    ).one()
+    if not calls:
+        return None
+    return DocumentUsage(int(calls), int(token_in or 0), int(token_out or 0), round(float(cost_usd or 0.0), 6))

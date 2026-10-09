@@ -665,7 +665,16 @@ def _bilingual_document_response(
 
     book_title = safe_title_for_filename(document_display_title(document), wrap_book_quotes=True)
     if package == PACKAGE_SINGLE:
-        book = _bilingual_book_html(document, chapters, latest_by_chapter, artifact_roots=artifact_roots)
+        from book_agent.services.usage_statement import document_usage
+
+        usage = document_usage(export_repository.session, str(document.id))
+        book = _bilingual_book_html(
+            document,
+            chapters,
+            latest_by_chapter,
+            artifact_roots=artifact_roots,
+            usage=usage.summary_zh() if usage is not None else None,
+        )
         if book is not None:
             return _html_response(book, f"{book_title}-中英文对照.html")
 
@@ -722,6 +731,7 @@ def _bilingual_book_html(
     latest_by_chapter: dict[str, Any],
     *,
     artifact_roots: tuple[Path, ...],
+    usage: str | None = None,
 ) -> str | None:
     from book_agent.export.standalone import BookChapter, assemble_bilingual_book, drop_unused_katex, local_references
 
@@ -745,6 +755,7 @@ def _bilingual_book_html(
         title=display_title,
         subtitle=source_title if source_title and source_title != display_title else None,
         chapters=parts,
+        usage=usage,
     )
     book = drop_unused_katex(book)
     return None if local_references(book) else book
