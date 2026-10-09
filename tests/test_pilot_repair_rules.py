@@ -149,6 +149,27 @@ class JudgeTests(unittest.TestCase):
         self.assertTrue(rules.judge(before, after, ["u1"], {"L6.untranslated_sentence"}).keep)
 
 
+    def test_a_content_restoring_repair_keeps_the_content_over_its_fresh_translations_problems(self) -> None:
+        # The Illustrated Guide's structure refresh brought back 467 definition terms and index
+        # entries; a few new lines in English and locked terms not used in them reverted it all.
+        outdated = finding("L1.epub_structure_outdated", "c1", severity="major")
+        before = rules.QaSnapshot.from_layers(layers(outdated))
+        fresh = [
+            finding("L7.untranslated_prose", "p1", severity="major", packet="pk1"),
+            finding("L5.locked_term", "t1", severity="major", packet="pk2"),
+        ]
+        after_layers = layers(*fresh, counts={"L1.epub_structure_outdated": 0})
+        verdict = rules.judge(before, rules.QaSnapshot.from_layers(after_layers), ["c1"], {"L1.epub_structure_outdated"})
+        self.assertFalse(verdict.keep)
+        self.assertTrue(rules.restored_content_followups(verdict, before, after_layers, ["pk1", "pk2"]))
+        # Not when a new finding is outside the packets it translated, or of a check no round repairs.
+        self.assertFalse(rules.restored_content_followups(verdict, before, after_layers, ["pk1"]))
+        other = layers(finding("L3.table_garbled", "g1", severity="blocking", packet="pk1"), counts={"L1.epub_structure_outdated": 0})
+        other_verdict = rules.judge(before, rules.QaSnapshot.from_layers(other), ["c1"], {"L1.epub_structure_outdated"})
+        self.assertFalse(rules.restored_content_followups(other_verdict, before, other, ["pk1"]))
+        self.assertEqual([path.restores_content for path in rules.paths_for("L1.epub_structure_outdated")], [True])
+
+
 class QuestionTests(unittest.TestCase):
     def test_one_concrete_yes_no_question_with_the_pages(self) -> None:
         title, question = rules.escalation_question(
