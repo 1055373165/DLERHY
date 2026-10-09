@@ -163,6 +163,10 @@ export interface ChapterOwnerWorkloadResponse {
   latest_issue_at?: string | null;
 }
 
+export interface ChapterReparseRequest {
+  dry_run?: boolean;
+}
+
 export interface ChapterSummaryResponse {
   chapter_id: string;
   ordinal: number;
@@ -323,6 +327,11 @@ export interface DecisionResponse {
   decided_by: string;
   turn_id?: string | null;
   created_at?: string | null;
+}
+
+export interface DefectUpdate {
+  status: string;
+  note?: string | null;
 }
 
 export interface DocumentChapterWorklistDetailResponse {
@@ -978,6 +987,10 @@ export interface RecoverySkillsResponse {
 
 export interface RecoverySkillsUpdateRequest {
   skills?: Record<string, boolean>;
+}
+
+export interface RepairRequest {
+  budget_usd?: number | null;
 }
 
 export interface RunAuditEventPageResponse {
