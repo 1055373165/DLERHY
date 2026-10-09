@@ -3351,8 +3351,11 @@ def _demote_headings_the_book_does_not_list(
                 outline=outline,
                 page=_source_page(block),
             ):
-                block = render_repair.replace_render_block_as_paragraph(block, flag="export_book_run_in_heading")
-                block = replace(block, source_metadata={**block.source_metadata, "run_in_heading": True})
+                if book_outline.reads_as_prose(block.source_text):
+                    block = render_repair.replace_render_block_as_paragraph(block, flag="export_book_heading_demoted")
+                else:
+                    block = render_repair.replace_render_block_as_paragraph(block, flag="export_book_run_in_heading")
+                    block = replace(block, source_metadata={**block.source_metadata, "run_in_heading": True})
         demoted.append(block)
     return demoted
 

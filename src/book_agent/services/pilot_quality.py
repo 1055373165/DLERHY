@@ -446,6 +446,11 @@ def load_pilot_inputs(
                         int(block.source_metadata.get("epub_structure_version") or 1) if is_epub else None
                     ),
                     folded_headings=folded_headings if block.block_type != "heading" else (),
+                    heading_level=(
+                        block.source_metadata.get("heading_level")
+                        if block.block_type == "heading" and isinstance(block.source_metadata.get("heading_level"), int)
+                        else None
+                    ),
                 )
             )
 

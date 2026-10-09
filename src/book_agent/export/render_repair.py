@@ -1322,6 +1322,9 @@ def should_merge_adjacent_book_paragraph_fragments(
     if is_callout_metadata(previous.source_metadata) or is_callout_metadata(current.source_metadata):
         # A callout is one box: never joined to the block before or after it.
         return False
+    if previous.source_metadata.get("run_in_heading") or current.source_metadata.get("run_in_heading"):
+        # A run-in title (a heading the book's outline does not list) opens its own paragraph.
+        return False
     if previous.block_type != BlockType.PARAGRAPH.value or current.block_type != BlockType.PARAGRAPH.value:
         return False
     if previous.render_mode not in {"zh_primary_with_optional_source", "zh_primary_with_inline_protected_spans"}:

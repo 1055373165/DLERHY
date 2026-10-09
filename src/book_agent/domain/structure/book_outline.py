@@ -104,6 +104,17 @@ def is_lead_in_sentence(text: str | None) -> bool:
     return bool(_LEAD_IN_RE.search(normalized)) and len(_WORD_RE.findall(normalized)) >= 4
 
 
+# A run-in title is a few words; more, or a line that runs on ("…implement similar func-"), is body text.
+_RUN_IN_MAX_WORDS = 8
+_RUNS_ON_RE = re.compile(r"[-‐,;]\s*$")
+
+
+def reads_as_prose(text: str | None) -> bool:
+    """Body text parsed as a heading: a long line, or one cut off mid-sentence."""
+    normalized = " ".join((text or "").split())
+    return len(_WORD_RE.findall(normalized)) > _RUN_IN_MAX_WORDS or bool(_RUNS_ON_RE.search(normalized))
+
+
 def is_run_in_heading(
     text: str | None,
     level: int | None,
@@ -134,25 +145,39 @@ class OutlineMismatch:
 
 def compare_sections(
     book_sections: Sequence[BookOutlineEntry],
-    reading_copy_headings: Sequence[tuple[str, int | None]],
+    reading_copy_headings: Sequence[tuple[str, int | None, int | None]],
+    *,
+    outline: OutlineIndex | None = None,
 ) -> list[OutlineMismatch]:
-    """The book's numbered sections the reading copy's headings miss, and numbered headings the book does not list.
+    """The reading copy's headings against the book's sections.
 
-    ``reading_copy_headings``: (source text, page) of every heading the reading copy shows, in order.
-    Titles are compared without their numbers (a book may renumber a section its outline lists).
+    ``book_sections``: the book's numbered sections in the part compared; ``reading_copy_headings``:
+    (source text, page, heading level) of every heading the reading copy shows there, in order;
+    ``outline``: the whole outline, to tell a listed unnumbered title. Titles are compared without
+    their numbers (a book may renumber a section its outline lists).
+
+    "missing": a section the book lists that has no heading. "extra": a numbered heading the book does
+    not list. "unlisted": an unnumbered heading at the x.y.z depth or below the book does not list
+    (a run-in title in the reading copy's outline).
     """
-    shown = {title_key(text) for text, _page in reading_copy_headings}
+    outline = outline or outline_index(book_sections)
+    shown = {title_key(text) for text, _page, _level in reading_copy_headings}
     listed = {title_key(entry.title) for entry in book_sections}
     mismatches = [
         OutlineMismatch("missing", entry.title, entry.page)
         for entry in book_sections
         if title_key(entry.title) and title_key(entry.title) not in shown
     ]
-    mismatches.extend(
-        OutlineMismatch("extra", " ".join(text.split()), page)
-        for text, page in reading_copy_headings
-        if is_numbered_section(text) and title_key(text) and title_key(text) not in listed
-    )
+    for text, page, level in reading_copy_headings:
+        key = title_key(text)
+        if not key:
+            continue
+        title = " ".join(text.split())
+        if is_numbered_section(text):
+            if key not in listed:
+                mismatches.append(OutlineMismatch("extra", title, page))
+        elif isinstance(level, int) and level >= 3 and not outline.lists(text, page):
+            mismatches.append(OutlineMismatch("unlisted", title, page))
     return mismatches
 
 
