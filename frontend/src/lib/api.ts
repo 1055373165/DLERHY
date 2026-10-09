@@ -552,7 +552,7 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
 }
 
 async function requestBinary(path: string): Promise<Response> {
-  const response = await apiFetch(path);
+  const response = await apiFetch(path, { cache: "no-store" });
   if (!response.ok) {
     throw await parseError(response);
   }
@@ -922,7 +922,9 @@ async function fetchDocumentExport(
     exportType
   )}&package=${packaging}`;
   const deadline = Date.now() + timeoutMs;
-  let response = await apiFetch(downloadPath);
+  // Never from the browser's cache: a cached download cut off mid-transfer fails every retry.
+  const fetchDownload = () => apiFetch(downloadPath, { cache: "no-store" });
+  let response = await fetchDownload();
   while (response.status === 404) {
     const started = await apiFetch(`/documents/${encodeURIComponent(documentId)}/export`, {
       method: "POST",
@@ -932,7 +934,7 @@ async function fetchDocumentExport(
     if (started.status === 409 && Date.now() < deadline) {
       // The book is busy (its translation may be producing this very format): wait and look again.
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-      response = await apiFetch(downloadPath);
+      response = await fetchDownload();
       continue;
     }
     if (!started.ok) {
@@ -943,7 +945,7 @@ async function fetchDocumentExport(
     if (finished.status !== "succeeded" && finished.status !== "succeeded_with_warnings") {
       throw new Error(`导出未完成（${finished.stop_reason ?? finished.status}）。`);
     }
-    response = await apiFetch(downloadPath);
+    response = await fetchDownload();
     break;
   }
   if (!response.ok) {
