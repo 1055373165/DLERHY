@@ -362,6 +362,45 @@ def render_block_markdown(
     return "\n\n".join(part for part in parts if part)
 
 
+def render_block_markdown_bilingual(
+    block: MergedRenderBlock,
+    asset_path_by_block_id: dict[str, str] | None = None,
+) -> str:
+    """A block of the bilingual Markdown: the Chinese reading-copy block, then its English as a quote.
+
+    Code, equations, pictures and tables are shown once (they are the source, or translated cell by
+    cell); a reference keeps its source in the Chinese block already.
+    """
+    chinese = render_block_markdown(block, asset_path_by_block_id, include_notice=False, include_source_caption=False)
+    english = _bilingual_source_text(block)
+    if not chinese or not english:
+        return chinese
+    quote = markdown_blockquote(english)
+    if block.block_type == BlockType.LIST_ITEM.value:
+        # Under the item, so the list goes on.
+        indent = "  " * _list_level(block.source_metadata or {})
+        quote = "\n".join(f"{indent}{line}" for line in quote.splitlines())
+    return f"{chinese}\n\n{quote}"
+
+
+def _bilingual_source_text(block: MergedRenderBlock) -> str:
+    if block.render_mode in {
+        "source_artifact_full_width",
+        "translated_wrapper_with_preserved_artifact",
+        "reference_preserve_with_translated_label",
+    }:
+        return ""
+    if block.block_type == BlockType.TABLE.value:
+        return ""
+    source = str(block.source_text or "").strip()
+    target = str(block.target_text or "").strip()
+    if not source or not target or source == target or source in ARTIFACT_PLACEHOLDER_TEXTS:
+        return ""
+    if block.block_type == BlockType.LIST_ITEM.value:
+        source = _LEADING_BULLET_GLYPH.sub(r"\1", source, count=1)
+    return source
+
+
 _CAPTION_SENTENCE_END = re.compile(r"(?<=[。！？])|(?<=[.!?])\s")
 
 

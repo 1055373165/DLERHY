@@ -905,7 +905,7 @@ async function waitForRunToFinish(
   }
 }
 
-export type DownloadPackage = "single" | "zip" | "epub" | "preview";
+export type DownloadPackage = "single" | "zip" | "epub" | "preview" | "bilingual";
 
 type ExportFetchOptions = { pollIntervalMs?: number; timeoutMs?: number; packaging?: DownloadPackage };
 
@@ -968,7 +968,8 @@ export async function downloadDocumentExport(
     review_package: ".zip",
     web_html: ".html",
   };
-  const extension = packaging === "epub" ? ".epub" : packaging === "zip" ? ".zip" : fallbackExtension[exportType];
+  const extension =
+    packaging === "epub" ? ".epub" : packaging === "zip" || packaging === "bilingual" ? ".zip" : fallbackExtension[exportType];
   return saveBinaryResponse(response, `book-agent-${exportType}${extension}`);
 }
 

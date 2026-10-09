@@ -24,6 +24,7 @@ const DOWNLOAD_OPTIONS = [
   { key: "zh-md", label: "中文版 · Markdown", exportType: "merged_markdown", packaging: "single", enabled: true },
   { key: "zh-pdf", label: "中文版 · PDF", exportType: "rebuilt_pdf", packaging: "single", enabled: true },
   { key: "bi-html", label: "中英文对照版 · HTML", exportType: "bilingual_html", packaging: "single", enabled: true },
+  { key: "bi-md", label: "中英文对照版 · Markdown", exportType: "merged_markdown", packaging: "bilingual", enabled: true },
 ] as const;
 
 const PAGE_SIZE_OPTIONS = [12, 24, 50, 100] as const;

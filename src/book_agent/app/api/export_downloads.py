@@ -35,6 +35,8 @@ PACKAGE_EPUB = "epub"
 # For reading in the app: HTML as one self-contained file, Markdown as text with its
 # images inlined, PDF as the file itself, all served inline rather than as attachments.
 PACKAGE_PREVIEW = "preview"
+# The Chinese–English Markdown, written beside the Chinese Markdown export (export_type=merged_markdown).
+PACKAGE_BILINGUAL = "bilingual"
 PREVIEW_TYPES = frozenset(
     {
         ExportType.MERGED_HTML,
@@ -487,6 +489,11 @@ def document_export_response(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="package=epub is built from the merged Chinese HTML export (export_type=merged_html).",
         )
+    if package == PACKAGE_BILINGUAL and export_type != ExportType.MERGED_MARKDOWN:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="package=bilingual is the Chinese–English Markdown (export_type=merged_markdown).",
+        )
     preview = package == PACKAGE_PREVIEW
     if preview:
         if export_type not in PREVIEW_TYPES:
@@ -563,6 +570,20 @@ def document_export_response(
                 detail="package=epub is built from the merged Chinese HTML export (export_type=merged_html).",
             )
         return _reader_epub_response(document, file_path, canonical_path, f"{book_title}-{label}.epub")
+    if package == PACKAGE_BILINGUAL:
+        from book_agent.services.export import BILINGUAL_MARKDOWN_FILE_NAME
+
+        bilingual_path = canonical_path.parent / BILINGUAL_MARKDOWN_FILE_NAME
+        if not bilingual_path.is_file():
+            # Exports made before the bilingual Markdown existed: 404, as for a missing export, and a
+            # new export writes it.
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="This Markdown export has no Chinese–English edition yet; export the Markdown again.",
+            )
+        file_path = bilingual_path
+        label = "中英文对照-Markdown"
+        main_filename = f"{book_title}-{label}.md"
     if preview and export_type == ExportType.MERGED_MARKDOWN:
         from book_agent.export.standalone import inline_markdown_images
 

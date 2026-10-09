@@ -1381,6 +1381,8 @@ class ExportService:
         self,
         bundle: DocumentExportBundle,
         asset_path_by_block_id: dict[str, str] | None = None,
+        *,
+        bilingual: bool = False,
     ) -> str:
         visible_chapters = self._reading_copy_chapters(bundle)
         title = (document_display_title(bundle.document) or bundle.document.id or "Merged Reading Edition").strip()
@@ -1389,7 +1391,11 @@ class ExportService:
         # Chinese reading edition — the book's title and author, the book's model usage, then a table
         # of contents made from the chapters and sections in Chinese (the book's printed contents
         # page, with its page numbers and "■" separators, is left out).
+        # The bilingual edition sets each passage's English, as a quote, under its Chinese.
         lines: list[str] = [f"# {title}", ""]
+        source_title = " ".join(str(document_source_title(bundle.document) or "").split())
+        if bilingual and source_title and source_title != title:
+            lines.extend([markup.markdown_blockquote(source_title), ""])
         if author:
             lines.extend([f"_作者：{author}_", ""])
         usage = self._document_usage_text(bundle)
@@ -1405,9 +1411,17 @@ class ExportService:
                     render_blocks,
                     title_text,
                     asset_path_by_block_id,
+                    bilingual=bilingual,
                 )
             )
         return "\n".join(lines).rstrip() + "\n"
+
+    def _build_bilingual_document_markdown(
+        self,
+        bundle: DocumentExportBundle,
+        asset_path_by_block_id: dict[str, str] | None = None,
+    ) -> str:
+        return self._build_merged_document_markdown(bundle, asset_path_by_block_id, bilingual=True)
 
     # The book's printed table of contents: a chapter so titled, or one set mostly on contents pages.
     _CONTENTS_TITLES = frozenset({"contents", "table of contents", "brief contents", "目录", "目次"})
@@ -1469,6 +1483,8 @@ class ExportService:
         render_blocks: list[MergedRenderBlock],
         title_text: str | None,
         asset_path_by_block_id: dict[str, str] | None = None,
+        *,
+        bilingual: bool = False,
     ) -> list[str]:
         if not title_text and not render_blocks:
             return []
@@ -1481,17 +1497,24 @@ class ExportService:
         heading = f"## {title}" if title else f"## Chapter {visible_ordinal}"
         body_blocks = self._merged_body_blocks(render_blocks, title)
         lines = [heading, ""]
+        chapter_source_title = " ".join(str(bundle.chapter.title_src or "").split())
+        if bilingual and title and chapter_source_title and chapter_source_title != title:
+            lines.extend([markup.markdown_blockquote(chapter_source_title), ""])
         # The front matter repeats the cover on the title page ("Jungjun Hur、Younghee Song 著" twice,
         # the English title set as a line of code); the file already opens with title and author.
         front_matter = visible_ordinal == 1 and titles.extract_main_chapter_number(title) is None
         source_title = " ".join(str(document_source_title(bundle.document) or "").split()).casefold()
         seen: set[str] = set()
         for block in body_blocks:
-            block_markdown = markup.render_block_markdown(
-                block,
-                asset_path_by_block_id,
-                include_notice=False,
-                include_source_caption=False,
+            block_markdown = (
+                markup.render_block_markdown_bilingual(block, asset_path_by_block_id)
+                if bilingual
+                else markup.render_block_markdown(
+                    block,
+                    asset_path_by_block_id,
+                    include_notice=False,
+                    include_source_caption=False,
+                )
             )
             if not block_markdown:
                 continue
@@ -3304,6 +3327,9 @@ class ExportService:
 
 
 
+BILINGUAL_MARKDOWN_FILE_NAME = "merged-document.bilingual.md"
+
+
 @dataclass(frozen=True, slots=True)
 class DocumentRenderer:
     """How one whole-document export type is rendered, described, and recorded.
@@ -3343,11 +3369,17 @@ def _web_page_reading_blocks(render_blocks: list[MergedRenderBlock]) -> list[Mer
     return kept
 
 
-def _render_merged(builder_name: str) -> Callable[[ExportService, DocumentExportBundle, Path, Path, dict], str]:
+def _render_merged(
+    builder_name: str, *, companions: dict[str, str] | None = None
+) -> Callable[[ExportService, DocumentExportBundle, Path, Path, dict], str]:
+    """``companions``: further files written beside the export from the same assets ({file name: builder})."""
+
     def render(service: ExportService, bundle: DocumentExportBundle, output_dir: Path, file_path: Path, _upstream: dict) -> str:
         asset_path_by_block_id = service._export_epub_assets_for_document_bundle(bundle, output_dir)
         text = getattr(service, builder_name)(bundle, asset_path_by_block_id)
         atomic_write_text(file_path, text)
+        for file_name, companion_builder in (companions or {}).items():
+            atomic_write_text(file_path.parent / file_name, getattr(service, companion_builder)(bundle, asset_path_by_block_id))
         return text
 
     return render
@@ -3420,7 +3452,11 @@ _DOCUMENT_RENDERERS: dict[ExportType, DocumentRenderer] = {
         export_type=ExportType.MERGED_MARKDOWN,
         file_name="merged-document.md",
         manifest_name="merged-document.markdown.manifest.json",
-        render=_render_merged("_build_merged_document_markdown"),
+        # The bilingual Markdown is written beside it, sharing its pictures (package=bilingual).
+        render=_render_merged(
+            "_build_merged_document_markdown",
+            companions={BILINGUAL_MARKDOWN_FILE_NAME: "_build_bilingual_document_markdown"},
+        ),
         manifest=_merged_manifest(ExportType.MERGED_MARKDOWN),
         apply_status_updates=lambda service, bundle: service._apply_document_export_status_updates(
             bundle, ExportType.MERGED_MARKDOWN
