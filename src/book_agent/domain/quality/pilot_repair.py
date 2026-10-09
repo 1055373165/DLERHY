@@ -77,6 +77,10 @@ class RepairPath:
     costs_model: bool = False
     # The parameters need a model's judgment (the pilot repair agent proposes them).
     needs_agent: bool = False
+    # Brings back source content the reader was missing (an EPUB's definition terms): the fresh
+    # translation of that content may need the later rounds' term and retranslation repairs, which
+    # must not cost the restored content (``restored_content_followups``).
+    restores_content: bool = False
 
     @property
     def name(self) -> str:
@@ -106,7 +110,9 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L1.review_blocking": (_RECHECK,),
     # The chapters read again by the current EPUB parser (structure refresh): blocks keep their
     # translations where their text is unchanged; only new blocks (definition terms) are translated.
-    "L1.epub_structure_outdated": (RepairPath(TOOL_STRUCTURE, "refresh_epub_structure", SCOPE_CHECK, costs_model=True),),
+    "L1.epub_structure_outdated": (
+        RepairPath(TOOL_STRUCTURE, "refresh_epub_structure", SCOPE_CHECK, costs_model=True, restores_content=True),
+    ),
     # Structure the reading copy draws (lists, sidebars, split paragraphs, listing captions): the parser
     # side's QA rules name these paths in their repair hints; the findings carry the block ids.
     "L1.sublist_as_text": (RepairPath(TOOL_STRUCTURE, "nest_list_items", costs_model=True),),
@@ -593,6 +599,35 @@ def self_inflicted_packets(
     if not fresh or not all(packet in retranslated for packet in packets):
         return []
     return sorted(set(packets))
+
+
+# What a fresh translation of restored content can get wrong that the later rounds repair (a line
+# left in English, a locked term not used, a term rendered several ways).
+RESTORED_CONTENT_FOLLOWUP_CHECKS = RETRANSLATION_FLAKE_CHECKS | frozenset(
+    {"L5.locked_term", "L5.term_left_in_english", "L5.term_variants", "L5.mixed_rendering"}
+)
+
+
+def restored_content_followups(
+    verdict: Verdict, before: QaSnapshot, after_layers: Sequence[Mapping[str, Any]], translated: Iterable[str]
+) -> bool:
+    """Whether a content-restoring repair judged worse is kept all the same: its targets went away,
+    every check that got worse is one the later rounds repair, and every new finding of those checks
+    is in a packet the attempt just translated. Reverting it would take the restored content (the
+    Illustrated Guide's 467 definition terms and index sub-entries) away again over a few lines the
+    next round fixes."""
+    translated = set(translated)
+    if verdict.keep or not verdict.worse_checks or not verdict.resolved_keys or not translated:
+        return False
+    worse = set(verdict.worse_checks)
+    if "blocking" in worse or not worse <= RESTORED_CONTENT_FOLLOWUP_CHECKS:
+        return False
+    fresh = [
+        finding
+        for finding in findings_of(after_layers, (BLOCKING, MAJOR, MINOR))
+        if finding.get("check_id") in worse and str(finding.get("key")) not in before.keys
+    ]
+    return bool(fresh) and all(str((finding.get("location") or {}).get("packet_id") or "") in translated for finding in fresh)
 
 
 # ---------------------------------------------------------------------------

@@ -56,6 +56,7 @@ from book_agent.domain.quality.pilot_repair import (
     LessonLedger,
     NoLedger,
     QaSnapshot,
+    Verdict,
     WorkItem,
     classify,
     escalation_question,
@@ -64,6 +65,7 @@ from book_agent.domain.quality.pilot_repair import (
     needs_reexport,
     repairable_findings,
     plan_work,
+    restored_content_followups,
     self_inflicted_packets,
 )
 from book_agent.domain.structure.parse_health import BLOCKING, MAJOR
@@ -439,6 +441,10 @@ class PilotRepairService:
                 new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope)
                 after = QaSnapshot.from_layers(new_layers)
                 verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings})
+            if item.path.restores_content and restored_content_followups(verdict, before, new_layers, result.packet_ids):
+                # The restored content stays; its fresh translation's problems are the next round's work.
+                result.params = {**result.params, "kept_despite": verdict.reason}
+                verdict = Verdict(True, "improved", verdict.resolved_keys)
             outcome = _AttemptOutcome("kept" if verdict.keep else "reverted", None if verdict.keep else verdict.reason, new_layers, verdict.resolved_keys)
             # A repair must not leave translations the export cannot align (ALIGNMENT_FAILURE).
             misaligned_after = alignment_anomalies(self.session, ctx.chapter_ids)
