@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote
 
+from book_agent.export.markup import book_usage_html
+
 _ATTRIBUTE_URL = re.compile(r"""(?P<attr>\b(?:src|href))=(?P<quote>['"])(?P<url>[^'"]+)(?P=quote)""")
 _SCHEME = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 _KATEX_TAGS = re.compile(
@@ -147,13 +149,18 @@ _BOOK_STYLE = """<style>
 .book-chapter{scroll-margin-top:16px}
 .book-chapter + .book-chapter{margin-top:48px;padding-top:32px;border-top:1px solid rgba(0,0,0,.12)}
 .back-to-toc{display:block;margin:12px 0 0;text-align:right;font-size:.85rem}
+.book-usage{max-width:860px;margin:0 auto 20px;padding:10px 24px;font-size:.9rem;line-height:1.6;color:#314152}
+.book-usage-label{margin-right:10px;font-weight:700}
 </style>"""
 
 
-def assemble_bilingual_book(*, title: str, subtitle: str | None, chapters: list[BookChapter]) -> str:
+def assemble_bilingual_book(
+    *, title: str, subtitle: str | None, chapters: list[BookChapter], usage: str | None = None
+) -> str:
     """One bilingual HTML book from per-chapter bilingual exports (styles from the first chapter).
 
-    Per-chapter translation statistics are left out: they describe the run, not the book.
+    Per-chapter translation statistics are left out: they describe the run, not the book. The
+    book's own model usage (``usage``, services.usage_statement.DocumentUsage) is shown under its title.
     """
     if not chapters:
         raise ValueError("no chapters to assemble")
@@ -186,6 +193,7 @@ def assemble_bilingual_book(*, title: str, subtitle: str | None, chapters: list[
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         f"<title>{html.escape(title)}</title>{styles}{_BOOK_STYLE}</head><body><main class='page'>"
         f"<header class='hero'><div class='hero-kicker'>中英文对照</div><h1>{html.escape(title)}</h1>{subtitle_html}</header>"
+        f"{book_usage_html(usage)}"
         f"<nav class='book-toc' id='toc'><h2>目录</h2><ol>{''.join(toc)}</ol></nav>"
         f"{''.join(sections)}</main>{''.join(scripts)}</body></html>"
     )

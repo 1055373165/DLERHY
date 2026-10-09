@@ -654,99 +654,13 @@ class ExportService:
         "claude-haiku-4": (1.00, 5.00),
     }
 
-    def _estimate_run_cost_usd(self, run: object) -> float | None:
-        stored = getattr(run, "cost_usd", None)
-        if stored is not None:
-            try:
-                return float(stored)
-            except (TypeError, ValueError):
-                pass
-        token_in = int(getattr(run, "token_in", 0) or 0)
-        token_out = int(getattr(run, "token_out", 0) or 0)
-        if token_in == 0 and token_out == 0:
-            return None
-        model_name = str(getattr(run, "model_name", "") or "").strip().lower()
-        if not model_name:
-            return None
-        prices = self._MODEL_COST_TABLE_PER_MILLION.get(model_name)
-        if prices is None:
-            for key, candidate in self._MODEL_COST_TABLE_PER_MILLION.items():
-                if model_name.startswith(key):
-                    prices = candidate
-                    break
-        if prices is None:
-            return None
-        input_price, output_price = prices
-        return round(
-            (token_in / 1_000_000.0) * input_price
-            + (token_out / 1_000_000.0) * output_price,
-            6,
-        )
+    def _document_usage_text(self, bundle: DocumentExportBundle) -> str | None:
+        """The book's model usage as the reading copies show it at their top (every model call the
+        book took, the pilot and repairs included); None before any call."""
+        from book_agent.services.usage_statement import document_usage
 
-    def _sum_run_cost_usd(self, runs: list[object]) -> float:
-        total = 0.0
-        for run in runs:
-            estimate = self._estimate_run_cost_usd(run)
-            if estimate is not None:
-                total += estimate
-        return round(total, 6)
-
-    def _format_usage_summary_lines(self, runs: list[object]) -> list[tuple[str, str]]:
-        summary = evidence.translation_usage_summary_from_runs(runs)
-        run_count = int(summary.get("run_count") or 0)
-        if run_count == 0:
-            return []
-        succeeded = int(summary.get("succeeded_run_count") or 0)
-        token_in = int(summary.get("total_token_in") or 0)
-        token_out = int(summary.get("total_token_out") or 0)
-        total_tokens = token_in + token_out
-        priced_runs = sum(1 for run in runs if self._estimate_run_cost_usd(run) is not None)
-        estimated_cost = self._sum_run_cost_usd(runs)
-        any_stored_cost = any(getattr(run, "cost_usd", None) is not None for run in runs)
-        avg_latency = summary.get("avg_latency_ms")
-        total_latency_ms = int(summary.get("total_latency_ms") or 0)
-        lines: list[tuple[str, str]] = []
-        lines.append(("翻译调用", f"{run_count:,} 次（成功 {succeeded:,}）"))
-        lines.append((
-            "Token 消耗",
-            f"输入 {token_in:,} · 输出 {token_out:,} · 合计 {total_tokens:,}",
-        ))
-        if priced_runs == 0:
-            lines.append(("调用费用", "未配置单价，无法估算"))
-        else:
-            suffix = ""
-            if not any_stored_cost:
-                suffix = "（按公开单价估算）"
-            elif priced_runs < run_count:
-                suffix = f"（{priced_runs:,}/{run_count:,} 次已计费）"
-            lines.append(("调用费用", f"US$ {estimated_cost:,.4f}{suffix}"))
-        if avg_latency is not None:
-            lines.append((
-                "延迟",
-                f"平均 {float(avg_latency):,.0f} ms · 累计 {total_latency_ms:,} ms",
-            ))
-        latest_run_at = summary.get("latest_run_at")
-        if latest_run_at:
-            lines.append(("最近一次调用", str(latest_run_at)))
-        return lines
-
-    def _build_usage_summary_html(self, runs: list[object]) -> str:
-        rows = self._format_usage_summary_lines(runs)
-        if not rows:
-            return ""
-        items = "".join(
-            "<li class='usage-row'>"
-            f"<span class='usage-label'>{html.escape(label)}</span>"
-            f"<span class='usage-value'>{html.escape(value)}</span>"
-            "</li>"
-            for label, value in rows
-        )
-        return (
-            "<section class='usage-summary' aria-label='Translation usage summary'>"
-            "<div class='usage-kicker'>翻译统计</div>"
-            f"<ul class='usage-list'>{items}</ul>"
-            "</section>"
-        )
+        usage = document_usage(self.repository.session, str(bundle.document.id))
+        return usage.summary_zh() if usage is not None else None
 
     def _open_blocking_followup_actions(
         self,
@@ -1434,9 +1348,7 @@ class ExportService:
         author_value = display_author_value(bundle.document.author)
         author = html.escape(author_value) if author_value is not None else ""
         author_html = f"<div class='meta'>{author}</div>" if author else ""
-        usage_html = self._build_usage_summary_html(
-            evidence.collect_document_translation_runs(bundle)
-        )
+        usage_html = markup.book_usage_html(self._document_usage_text(bundle))
         return (
             "<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>"
             f"<title>{title}</title>"
@@ -1474,12 +1386,15 @@ class ExportService:
         title = (document_display_title(bundle.document) or bundle.document.id or "Merged Reading Edition").strip()
         author = display_author_value(bundle.document.author)
 
-        # Chinese reading edition — the book's title and author, then a table of contents made from
-        # the chapters and sections in Chinese (the book's printed contents page, with its page
-        # numbers and "■" separators, is left out). No export metadata or translation statistics.
+        # Chinese reading edition — the book's title and author, the book's model usage, then a table
+        # of contents made from the chapters and sections in Chinese (the book's printed contents
+        # page, with its page numbers and "■" separators, is left out).
         lines: list[str] = [f"# {title}", ""]
         if author:
             lines.extend([f"_作者：{author}_", ""])
+        usage = self._document_usage_text(bundle)
+        if usage:
+            lines.extend([f"> 翻译用量：{usage}", ""])
         lines.extend(self._markdown_contents(visible_chapters))
 
         for visible_ordinal, chapter_bundle, render_blocks, title_text in visible_chapters:
