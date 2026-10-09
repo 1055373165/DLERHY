@@ -350,8 +350,8 @@ def render_block_markdown(
         parts = [f"{indent}{marker}{list_text}".rstrip()]
     elif block.block_type == BlockType.CAPTION.value:
         parts = [f"*{target_text or source_text}*"]
-    elif (block.source_metadata or {}).get("definition_term") or (block.source_metadata or {}).get("sidebar_title"):
-        # A definition list's term, a note's or sidebar's title: set off in bold (once: "**粗体**" stays).
+    elif any((block.source_metadata or {}).get(key) for key in ("definition_term", "sidebar_title", "run_in_heading")):
+        # A definition list's term, a note's or sidebar's title, a run-in title: set off in bold (once: "**粗体**" stays).
         term = (target_text or source_text).strip()
         bold = term.startswith("**") and term.endswith("**") and len(term) > 4 and "**" not in term[2:-2]
         parts = [term if bold else f"**{term}**"]
@@ -880,6 +880,9 @@ def render_block_html(
         return ""
     if list_metadata.get("sidebar_title"):
         block_class = f"{block_class} sidebar-title"
+    if list_metadata.get("run_in_heading"):
+        # A small title under a section that the book's contents do not list: bold, not in the outline.
+        block_class = f"{block_class} run-in-heading"
     if list_metadata.get("definition_term"):
         block_class = f"{block_class} definition-term"
     elif list_metadata.get("definition_description"):

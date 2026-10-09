@@ -65,6 +65,7 @@ h3,h4{font-size:1.1em;margin:1em 0 .5em}
 .paragraph.list-continuation{margin-left:1.2em}
 .book-sidebar{border:1px solid #bbb;background:#f6f3ea;border-radius:.4em;padding:.6em .8em;margin:1em 0}
 .definition-term .zh{font-weight:bold}
+.run-in-heading .zh{font-weight:bold}
 .definition-description{margin-left:1.4em}
 .book-sidebar.book-note,.book-sidebar.book-tip,.book-sidebar.book-warning,.book-sidebar.book-caution,.book-sidebar.book-important{border-left:3px solid #0f6c7a}
 .sidebar-title .zh{font-weight:bold}

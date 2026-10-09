@@ -36,7 +36,7 @@ from book_agent.domain.enums import (
     SourceType,
 )
 from book_agent.domain.models.review import Export, ReviewIssue
-from book_agent.domain.structure import inline_marks
+from book_agent.domain.structure import book_outline, inline_marks
 from book_agent.domain.structure import web as web_page
 from book_agent.domain.structure.artifact_grouping import resolve_artifact_group_context_ids
 from book_agent.domain.structure.callouts import CALLOUT_ICON_KEY, is_callout_metadata
@@ -2174,6 +2174,7 @@ class ExportService:
         for index, block in enumerate(render_blocks):
             repaired_blocks.extend(self._repair_book_pdf_render_blocks(bundle, index, block))
         repaired_blocks = _drop_refresh_fragments_parsed_as_blocks(bundle, repaired_blocks)
+        repaired_blocks = _demote_headings_the_book_does_not_list(bundle, repaired_blocks)
 
         normalized: list[MergedRenderBlock] = []
         index = 0
@@ -3325,6 +3326,43 @@ class ExportService:
         )
         return (self.output_root.parent / "document-images" / document_id / f"{block_id}{asset_suffix}").resolve()
 
+
+
+def _demote_headings_the_book_does_not_list(
+    bundle: ChapterExportBundle,
+    blocks: list[MergedRenderBlock],
+) -> list[MergedRenderBlock]:
+    """Only the book's sections are headings: a run-in title below them reads as a bold paragraph,
+    a sentence leading into a list as a paragraph (``book_outline``)."""
+    headings = [block for block in blocks if block.block_type == BlockType.HEADING.value]
+    if not headings:
+        return blocks
+    numbered_chapter = book_outline.has_numbered_subsections(block.source_text for block in headings)
+    outline = book_outline.outline_index(book_outline.outline_entries(bundle.document.metadata_json))
+    demoted: list[MergedRenderBlock] = []
+    for block in blocks:
+        if block.block_type == BlockType.HEADING.value:
+            if book_outline.is_lead_in_sentence(block.source_text):
+                block = render_repair.replace_render_block_as_paragraph(block, flag="export_book_heading_demoted")
+            elif book_outline.is_run_in_heading(
+                block.source_text,
+                (block.source_metadata or {}).get("heading_level"),
+                numbered_chapter=numbered_chapter,
+                outline=outline,
+                page=_source_page(block),
+            ):
+                if book_outline.reads_as_prose(block.source_text):
+                    block = render_repair.replace_render_block_as_paragraph(block, flag="export_book_heading_demoted")
+                else:
+                    block = render_repair.replace_render_block_as_paragraph(block, flag="export_book_run_in_heading")
+                    block = replace(block, source_metadata={**block.source_metadata, "run_in_heading": True})
+        demoted.append(block)
+    return demoted
+
+
+def _source_page(block: MergedRenderBlock) -> int | None:
+    page = (block.source_metadata or {}).get("source_page_start")
+    return page if isinstance(page, int) else None
 
 
 BILINGUAL_MARKDOWN_FILE_NAME = "merged-document.bilingual.md"

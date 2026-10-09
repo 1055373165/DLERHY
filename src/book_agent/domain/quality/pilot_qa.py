@@ -129,6 +129,7 @@ _SPECS = (
     CheckSpec("L1.export_chapter_missing", BLOCKING, "中文版里这一章没有单独成章", REPAIR_EXPORT_CODE),
     CheckSpec("L1.export_title", MAJOR, "中文版目录里的章节标题有问题", REPAIR_RETRANSLATE),
     CheckSpec("L1.part_title_unnamed", MAJOR, "“第 N 部分”只有编号，部分的名称并进了正文", REPAIR_STRUCTURE),
+    CheckSpec("L1.sections_vs_outline", MAJOR, "中文版的目录与书籍自带的目录（书签）不一致", REPAIR_STRUCTURE),
     CheckSpec("L1.heading_is_prose", MAJOR, "正文句子被当成了标题", REPAIR_STRUCTURE),
     CheckSpec("L1.running_header_as_text", MAJOR, "页眉被当成了正文或脚注", REPAIR_STRUCTURE),
     CheckSpec("L1.heading_merged_into_text", MAJOR, "小标题和正文粘在了一起", REPAIR_STRUCTURE),
@@ -254,6 +255,8 @@ class QaBlock:
     folded_headings: tuple[tuple[str, str], ...] = ()
     # A figure whose page gives it no caption, accepted as such (the repair's ``accept_uncaptioned_figure``).
     caption_absent_accepted: bool = False
+    # Headings: the level the parser gave it (1 chapter, 2 x.y, 3 x.y.z and below).
+    heading_level: int | None = None
     # EPUB blocks: the structure version the parser read them with (``epub.EPUB_STRUCTURE_VERSION``;
     # 1 for blocks parsed before it was recorded). None for other sources.
     epub_structure_version: int | None = None
@@ -804,6 +807,58 @@ def check_pilot_chapters(inputs: PilotQaInputs) -> list[CheckRun]:
     return [not_body, contents, folded]
 
 
+def check_sections_vs_outline(inputs: PilotQaInputs) -> CheckRun:
+    """The reading copy's outline (its headings) against the book's own (the PDF's bookmarks).
+
+    A numbered section the bookmarks list that the reading copy has no heading for is missing from
+    its contents (major); a numbered heading the bookmarks do not list is reported (minor), since a
+    printing may add a section its bookmarks lack. Run-in titles under the sections are not headings
+    in the reading copy (``book_outline.is_run_in_heading``), so they do not count.
+    """
+    from book_agent.domain.structure import book_outline
+
+    run = CheckRun("L1.sections_vs_outline")
+    health = inputs.health
+    if health is None or not health.is_pdf or not health.outline:
+        return run
+    blocks_by_chapter: dict[str, list[QaBlock]] = defaultdict(list)
+    for block in inputs.blocks:
+        blocks_by_chapter[block.chapter_id].append(block)
+    entries = [book_outline.BookOutlineEntry(entry.level, entry.title, entry.page) for entry in health.outline]
+    sections = book_outline.numbered_section_entries(entries)
+    outline = book_outline.outline_index(entries)
+    for chapter in inputs.chapters:
+        if chapter.page_start is None or chapter.page_end is None:
+            continue
+        listed = [entry for entry in sections if entry.page is not None and chapter.page_start <= entry.page <= chapter.page_end]
+        if not listed:
+            # Front matter, a contents page, or a chapter the bookmarks do not divide.
+            continue
+        headings = [
+            (block.source_text, block.page, block.heading_level)
+            for block in blocks_by_chapter.get(chapter.id, [])
+            if block.block_type == "heading"
+        ]
+        for mismatch in book_outline.compare_sections(listed, headings, outline=outline):
+            missing = mismatch.kind == "missing"
+            run.findings.append(
+                Finding(
+                    check_id=run.check_id,
+                    severity=MINOR if mismatch.kind == "extra" else MAJOR,
+                    target={"kind": "chapter", "id": chapter.id},
+                    location=Location(chapter_id=chapter.id, page=mismatch.page),
+                    message=(
+                        f"书籍目录里的小节「{_snippet(mismatch.title, 60)}」在中文版目录里找不到"
+                        if missing
+                        else f"中文版目录里的「{_snippet(mismatch.title, 60)}」不在书籍自带的目录里"
+                        + ("（书中的加粗小标题被当成了目录条目）" if mismatch.kind == "unlisted" else "")
+                    ),
+                    evidence={"source": mismatch.title, "detail": mismatch.kind},
+                )
+            )
+    return run
+
+
 def check_epub_structure(inputs: PilotQaInputs) -> CheckRun:
     """A chapter of an EPUB read by an older parser: its lists show without markers, its definition
     terms are missing, its notes are a heading over loose paragraphs. One finding per chapter."""
@@ -1303,6 +1358,9 @@ def _find_midsentence_splits(blocks: Sequence[QaBlock], run: CheckRun) -> None:
         text = (block.source_text or "").lstrip()
         if block.block_type != "paragraph" or not text[:1].islower() or "list-continuation" in block.html:
             continue
+        if "run-in-heading" in block.html:
+            # A small-caps run-in title ("traces") the export sets as a bold paragraph: it starts lower case.
+            continue
         between: list[QaBlock] = []
         cursor = index - 1
         while cursor >= 0 and (blocks[cursor].block_type in _BETWEEN_HALVES_TYPES or _is_figure(blocks[cursor])):
@@ -1312,7 +1370,7 @@ def _find_midsentence_splits(blocks: Sequence[QaBlock], run: CheckRun) -> None:
             continue
         first = blocks[cursor]
         tail = (first.source_text or "").rstrip().rstrip("\"'”’)")
-        if first.block_type not in {"paragraph", "list_item"} or not tail:
+        if first.block_type not in {"paragraph", "list_item"} or not tail or "run-in-heading" in first.html:
             continue
         if not (tail[-1].isalpha() or tail[-1] in _RUNS_ON_AFTER):
             continue
@@ -2713,6 +2771,7 @@ def run_layers(inputs: PilotQaInputs, extra_checks: Sequence[ExtraCheck] = ()) -
         *check_pilot_chapters(inputs),
         *check_exported_chapters(inputs),
         check_epub_structure(inputs),
+        check_sections_vs_outline(inputs),
         *check_headings_and_headers(inputs),
         check_heading_glued_to_text_end(inputs),
         check_headings_as_text(inputs),
