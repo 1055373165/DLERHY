@@ -107,10 +107,10 @@ export function LibraryPage() {
     setOpenMenu(null);
     const opt = DOWNLOAD_OPTIONS.find((o) => o.key === key);
     if (!opt) return;
-    setFeedback({ tone: "success", text: `正在生成 ${opt.label}...` });
+    setFeedback({ tone: "success", text: `正在准备 ${opt.label}...` });
     try {
-      const filename = await downloadDocumentExport(documentId, opt.exportType, { packaging: opt.packaging });
-      setFeedback({ tone: "success", text: `已下载：${filename}` });
+      await downloadDocumentExport(documentId, opt.exportType, { packaging: opt.packaging });
+      setFeedback({ tone: "success", text: `已开始下载 ${opt.label}，进度见浏览器的下载列表。` });
     } catch (err) {
       setFeedback({ tone: "error", text: err instanceof Error ? err.message : "下载失败" });
     }

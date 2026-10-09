@@ -537,6 +537,10 @@ def download_document_export(
             "preview: for reading in the app (HTML as one file, Markdown with images inlined, PDF inline)."
         ),
     ),
+    check: bool = Query(
+        default=False,
+        description="204 when this download would be served (404/410/422 as for the download), without building it.",
+    ),
     session: Session = Depends(get_db_session),
 ) -> Response:
     return _not_cached(
@@ -546,6 +550,7 @@ def download_document_export(
             export_type,
             artifact_roots=_artifact_roots(request),
             package=package,
+            check_only=check,
         )
     )
 

@@ -163,6 +163,15 @@ class ApiAuthTests(unittest.TestCase):
         self.assertEqual(self.client.get(f"/v1/runs/{run_id}/stream", params={"access_token": self.keys["viewer"]}).status_code, 501)
         self.assertEqual(self.client.get(f"/v1/runs/{run_id}", params={"access_token": self.keys["viewer"]}).status_code, 401)
 
+    def test_a_browser_download_accepts_a_query_token(self) -> None:
+        document_id = self._upload("editor").json()["document_id"]
+        url = f"/v1/documents/{document_id}/exports/download"
+        params = {"export_type": "merged_html", "check": "true"}
+        self.assertEqual(self.client.get(url, params=params).status_code, 401)
+        # Authenticated: there is no export yet (404), and another organisation's key sees nothing either.
+        self.assertEqual(self.client.get(url, params={**params, "access_token": self.keys["viewer"]}).status_code, 404)
+        self.assertEqual(self.client.get(url, params={**params, "access_token": "not-a-key"}).status_code, 401)
+
 
 class CreateApiKeyCliTests(unittest.TestCase):
     def test_creates_org_and_key_without_a_translation_provider(self) -> None:

@@ -907,7 +907,13 @@ async function waitForRunToFinish(
 
 export type DownloadPackage = "single" | "zip" | "epub" | "preview" | "bilingual";
 
-type ExportFetchOptions = { pollIntervalMs?: number; timeoutMs?: number; packaging?: DownloadPackage };
+type ExportFetchOptions = {
+  pollIntervalMs?: number;
+  timeoutMs?: number;
+  packaging?: DownloadPackage;
+  // Only ask whether the download would be served (204), building nothing.
+  checkOnly?: boolean;
+};
 
 /**
  * The latest export of a document. Downloads only serve existing (and current)
@@ -916,11 +922,9 @@ type ExportFetchOptions = { pollIntervalMs?: number; timeoutMs?: number; packagi
 async function fetchDocumentExport(
   documentId: string,
   exportType: DocumentDownloadType,
-  { pollIntervalMs = 2000, timeoutMs = 10 * 60 * 1000, packaging = "single" }: ExportFetchOptions = {}
+  { pollIntervalMs = 2000, timeoutMs = 10 * 60 * 1000, packaging = "single", checkOnly = false }: ExportFetchOptions = {}
 ): Promise<Response> {
-  const downloadPath = `/documents/${encodeURIComponent(documentId)}/exports/download?export_type=${encodeURIComponent(
-    exportType
-  )}&package=${packaging}`;
+  const downloadPath = `${documentDownloadPath(documentId, exportType, packaging)}${checkOnly ? "&check=true" : ""}`;
   const deadline = Date.now() + timeoutMs;
   // Never from the browser's cache: a cached download cut off mid-transfer fails every retry.
   const fetchDownload = () => apiFetch(downloadPath, { cache: "no-store" });
@@ -954,25 +958,40 @@ async function fetchDocumentExport(
   return response;
 }
 
-/** Download the latest export of a document (exporting it first when needed). */
+function documentDownloadPath(documentId: string, exportType: DocumentDownloadType, packaging: DownloadPackage): string {
+  return `/documents/${encodeURIComponent(documentId)}/exports/download?export_type=${encodeURIComponent(
+    exportType
+  )}&package=${packaging}`;
+}
+
+/**
+ * Download the latest export of a document (exporting it first when needed).
+ *
+ * The page only checks that the file is there; the browser downloads it itself, with its own
+ * progress. A download manager extension (Chrono and the like) takes a zip the page fetches away
+ * from it, and the page's request then fails with net::ERR_FAILED.
+ */
 export async function downloadDocumentExport(
   documentId: string,
   exportType: DocumentDownloadType,
   options: ExportFetchOptions = {}
-): Promise<string> {
+): Promise<void> {
   const packaging = options.packaging ?? "single";
-  const response = await fetchDocumentExport(documentId, exportType, options);
-  const fallbackExtension: Record<DocumentDownloadType, string> = {
-    merged_markdown: ".md",
-    merged_html: ".html",
-    bilingual_html: ".html",
-    rebuilt_pdf: ".pdf",
-    review_package: ".zip",
-    web_html: ".html",
-  };
-  const extension =
-    packaging === "epub" ? ".epub" : packaging === "zip" || packaging === "bilingual" ? ".zip" : fallbackExtension[exportType];
-  return saveBinaryResponse(response, `book-agent-${exportType}${extension}`);
+  await fetchDocumentExport(documentId, exportType, { ...options, checkOnly: true });
+  startBrowserDownload(documentDownloadPath(documentId, exportType, packaging));
+}
+
+/** Let the browser download an API file: a link to it, clicked (the file comes as an attachment). */
+function startBrowserDownload(path: string): void {
+  const apiKey = getStoredApiKey();
+  const separator = path.includes("?") ? "&" : "?";
+  const anchor = document.createElement("a");
+  // A browser download cannot send the key as a header; download routes take it as a query key.
+  anchor.href = withApiBase(apiKey ? `${path}${separator}access_token=${encodeURIComponent(apiKey)}` : path);
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
 }
 
 export type ReadableExportType = "merged_html" | "bilingual_html" | "merged_markdown" | "rebuilt_pdf" | "web_html";

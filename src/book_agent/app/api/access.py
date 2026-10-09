@@ -6,8 +6,8 @@ depends on ``enforce_access``:
 - with ``oidc_issuer`` set, a bearer JWT from that issuer works too
   (``services/oidc.py``: org and role come from token claims);
 - the key comes from ``Authorization: Bearer <key>`` or ``X-API-Key``; the
-  run event stream also accepts ``?access_token=`` because EventSource
-  cannot send headers;
+  run event stream and export downloads also accept ``?access_token=``
+  because EventSource and a browser download cannot send headers;
 - roles: ``viewer`` may read, ``editor`` may also write, ``admin`` may also
   manage provider credentials and API keys;
 - every document, run, issue, approval, action and export named in the path
@@ -64,8 +64,11 @@ def _presented_key(request: Request) -> str | None:
         return authorization[7:].strip()
     if request.headers.get("x-api-key"):
         return request.headers["x-api-key"].strip()
-    # EventSource and <img> cannot send headers: the run stream and a pilot question's page image take a query key.
-    if request.method == "GET" and (request.url.path.endswith("/stream") or "/pilot-repair/evidence/" in request.url.path):
+    # EventSource, <img> and a browser download cannot send headers: the run stream, a pilot question's
+    # page image and an export download take a query key.
+    if request.method == "GET" and (
+        request.url.path.endswith(("/stream", "/exports/download")) or "/pilot-repair/evidence/" in request.url.path
+    ):
         return request.query_params.get("access_token")
     return None
 

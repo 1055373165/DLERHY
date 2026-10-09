@@ -473,12 +473,15 @@ def document_export_response(
     *,
     artifact_roots: tuple[Path, ...],
     package: str = PACKAGE_SINGLE,
+    check_only: bool = False,
 ) -> Response:
     """Serve a document's latest successful export.
 
     HTML exports come as one self-contained file by default (images embedded;
     the bilingual version assembled from the chapter exports into one book).
     ``package=zip`` returns the stored files and their assets folder instead.
+    ``check_only``: 204 when the download would be served, the same 404/410/422 when not, and
+    nothing built.
     """
     try:
         document = export_repository.get_document(document_id)
@@ -503,7 +506,9 @@ def document_export_response(
             )
         package = PACKAGE_SINGLE
     if export_type == ExportType.BILINGUAL_HTML:
-        return _bilingual_document_response(export_repository, document, artifact_roots=artifact_roots, package=package)
+        return _bilingual_document_response(
+            export_repository, document, artifact_roots=artifact_roots, package=package, check_only=check_only
+        )
     lookup_type = export_type
 
     try:
@@ -563,13 +568,6 @@ def document_export_response(
         primary_record.file_path, roots=artifact_roots, document_id=document_id
     ) or file_path
 
-    if package == PACKAGE_EPUB:
-        if ext.lower() != ".html":
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="package=epub is built from the merged Chinese HTML export (export_type=merged_html).",
-            )
-        return _reader_epub_response(document, file_path, canonical_path, f"{book_title}-{label}.epub")
     if package == PACKAGE_BILINGUAL:
         from book_agent.services.export import BILINGUAL_MARKDOWN_FILE_NAME
 
@@ -584,6 +582,16 @@ def document_export_response(
         file_path = bilingual_path
         label = "中英文对照-Markdown"
         main_filename = f"{book_title}-{label}.md"
+    if package == PACKAGE_EPUB and ext.lower() != ".html":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="package=epub is built from the merged Chinese HTML export (export_type=merged_html).",
+        )
+    if check_only:
+        # The download would be served: nothing is built (the app then lets the browser download it).
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    if package == PACKAGE_EPUB:
+        return _reader_epub_response(document, file_path, canonical_path, f"{book_title}-{label}.epub")
     if preview and export_type == ExportType.MERGED_MARKDOWN:
         from book_agent.export.standalone import inline_markdown_images
 
@@ -663,6 +671,7 @@ def _bilingual_document_response(
     *,
     artifact_roots: tuple[Path, ...],
     package: str = PACKAGE_SINGLE,
+    check_only: bool = False,
 ) -> Response:
     """The bilingual book: one HTML assembled from every chapter's latest export, or the chapter files zipped."""
     records = export_repository.list_document_exports_filtered(
@@ -684,6 +693,11 @@ def _bilingual_document_response(
             detail="No successful bilingual_html chapter exports are available for download.",
         )
 
+    if check_only:
+        for chapter in chapters:
+            assert_record_serviceable(latest_by_chapter[chapter.id])
+            assert_record_current(latest_by_chapter[chapter.id])
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     book_title = safe_title_for_filename(document_display_title(document), wrap_book_quotes=True)
     if package == PACKAGE_SINGLE:
         from book_agent.services.usage_statement import document_usage
