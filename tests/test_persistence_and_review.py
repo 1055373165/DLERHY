@@ -2702,7 +2702,8 @@ class PersistenceAndReviewTests(unittest.TestCase):
         self.assertNotIn("## Reading Map", markdown_text)
         self.assertNotIn("## Chapter 1:", markdown_text)
         self.assertNotIn("_Source title:", markdown_text)
-        self.assertIn("![Agent loop architecture](assets/agent-loop.png)", markdown_text)
+        # The alt text is the Chinese caption, as the reader reads it.
+        self.assertIn("![ZH::Figure 1.1 Agent loop architecture](assets/agent-loop.png)", markdown_text)
         self.assertIn("```python", markdown_text)
         self.assertIn('return "ok"', markdown_text)
         self.assertIn("| ZH::Tier | ZH::Latency |", markdown_text)

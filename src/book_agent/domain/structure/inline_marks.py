@@ -145,9 +145,10 @@ def _without_code(text: str) -> str:
 
 _CJK = "㐀-鿿豈-﫿　-〿＀-￯"
 # What a stray emphasis marker looks like once pairing is done: a double star, or a star against
-# a Chinese character or full-width punctuation ("其*智能体程序（agent", "注意力**").
+# a Chinese character or full-width punctuation ("其*智能体程序（agent", "注意力**"), or an opening
+# star after a curly quote whose closing star the translation lost ("Needs，”*arXiv，2504").
 # "**kwargs" is Python's keyword splat, not a marker.
-STRAY_MARKER_RE = re.compile(rf"\*\*+(?![A-Za-z_])|(?<=[{_CJK}])\*|\*(?=[{_CJK}])")
+STRAY_MARKER_RE = re.compile(rf"\*\*+(?![A-Za-z_])|(?<=[{_CJK}])\*|\*(?=[{_CJK}])|(?<=[“”‘’])\*(?=[A-Za-z])")
 # Text that would read as an emphasis pair but did not pair ("*arXiv, *2502" with letters after).
 _PAIR_LOOKALIKE_RE = re.compile(r"(?<![A-Za-z0-9_*\\])\*[^\s*][^*\n]{0,80}?[^\s*]\*(?!\*)")
 

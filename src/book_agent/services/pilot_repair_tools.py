@@ -93,6 +93,7 @@ from book_agent.infra.repositories.translation import TranslationRepository
 from book_agent.services.glossary_service import GlossaryService
 from book_agent.services.segment_edit import SegmentEditService
 from book_agent.services.structure_edits import StructureEditRejected, StructureEditService
+from book_agent.workers.providers.openai_compatible import ProviderResponseFormatError
 
 logger = logging.getLogger(__name__)
 
@@ -327,16 +328,28 @@ class PilotRepairToolbox:
                     f"(${self.ctx.budget.spent_usd:.4f} of ${self.ctx.budget.budget_usd or 0:.4f}, "
                     f"{self.ctx.budget.packets}/{self.ctx.budget.max_packets} packets)"
                 )
+            previous_status = getattr(self.session.get(TranslationPacket, packet_id), "status", None)
             packet = ops.mark_packet_ready_for_rerun(packet_id)
             if packet.status != PacketStatus.BUILT:
                 continue
             watermark = int(self.session.scalar(select(func.coalesce(func.max(Event.id), 0))) or 0)
-            artifacts = translation.execute_packet(
-                packet_id,
-                rerun_hints=tuple(hint for hint in hints if hint)[:8],
-                auto_commit_memory=False,
-                run_id=self.ctx.run_id,
-            )
+            try:
+                artifacts = translation.execute_packet(
+                    packet_id,
+                    rerun_hints=tuple(hint for hint in hints if hint)[:8],
+                    auto_commit_memory=False,
+                    run_id=self.ctx.run_id,
+                )
+            except ProviderResponseFormatError:
+                # A malformed answer leaves this packet as it was (the next round's checks still see
+                # it); the other packets of the edit go on.
+                logger.warning("packet %s: the retranslation answer was malformed; left as it was", packet_id, exc_info=True)
+                if previous_status is not None:
+                    packet.status = previous_status
+                    self.session.flush()
+                self.ctx.budget.packets += 1
+                self._charge_since(watermark)
+                continue
             # The new attempt is the packet's translation; older attempts must not stay active
             # (repositories/translation.py: supersede_other_attempts).
             if artifacts.translation_run.status == RunStatus.SUCCEEDED:
@@ -407,9 +420,15 @@ class PilotRepairToolbox:
                     f"(${self.ctx.budget.spent_usd:.4f} of ${self.ctx.budget.budget_usd or 0:.4f})"
                 )
             watermark = int(self.session.scalar(select(func.coalesce(func.max(Event.id), 0))) or 0)
-            texts = translation.translate_sentences(
-                packet_id, [sentence.id for sentence in missing], rerun_hints=tuple(hint for hint in hints if hint)[:8], run_id=self.ctx.run_id
-            )
+            try:
+                texts = translation.translate_sentences(
+                    packet_id, [sentence.id for sentence in missing], rerun_hints=tuple(hint for hint in hints if hint)[:8], run_id=self.ctx.run_id
+                )
+            except ProviderResponseFormatError:
+                # One malformed answer must not undo the edit that made these sentences (a structure
+                # refresh of many chapters): the packet is retranslated whole instead.
+                logger.info("packet %s: the answer for its new sentences was malformed; retranslating it", packet_id, exc_info=True)
+                texts = None
             self.ctx.budget.packets += 1
             self._charge_since(watermark)
             if not texts:

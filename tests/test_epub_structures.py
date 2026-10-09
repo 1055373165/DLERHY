@@ -314,5 +314,105 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(len({block_id for block_id, *_rest in after}), 7)
 
 
+
+class WholeBookRefreshTest(unittest.TestCase):
+    """The Illustrated Guide's whole-book run translated 18 chapters with the old structure: only the
+    pilot chapters had been refreshed, and the run's re-read before translating was for PDFs only.
+    An EPUB's untranslated chapters read by an older parser are refreshed before anything is translated."""
+
+    def setUp(self) -> None:
+        from book_agent.infra.db.base import Base
+        from book_agent.infra.db.session import build_engine, build_session_factory
+        from book_agent.infra.repositories.bootstrap import BootstrapRepository
+        from book_agent.orchestrator.bootstrap import BootstrapOrchestrator
+        from sqlalchemy.pool import StaticPool
+
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tempdir.cleanup)
+        self.engine = build_engine(
+            f"sqlite+pysqlite:///{Path(self.tempdir.name) / 'whole.db'}",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        self.addCleanup(self.engine.dispose)
+        Base.metadata.create_all(self.engine)
+        self.session_factory = build_session_factory(engine=self.engine)
+        self.epub_path = Path(self.tempdir.name) / "sample.epub"
+        self._write(OLD_PARSE)
+        artifacts = BootstrapOrchestrator().bootstrap_epub(self.epub_path)
+        with self.session_factory() as session:
+            BootstrapRepository(session).save(artifacts)
+            session.commit()
+            self._mark_old_parser(session)
+        self.document_id = artifacts.document.id
+        self._write(NEW_PARSE)
+
+    _write = RefreshTest._write
+    _state = RefreshTest._state
+
+    def _mark_old_parser(self, session) -> None:
+        from sqlalchemy import select
+
+        from book_agent.domain.models import Block
+
+        for block in session.scalars(select(Block)).all():
+            span = dict(block.source_span_json or {})
+            span.pop("epub_structure_version", None)
+            block.source_span_json = span
+        session.commit()
+
+    def _run(self, session) -> tuple[str, object]:
+        from book_agent.domain.enums import DocumentRunType
+        from book_agent.domain.models.ops import DocumentRun
+        from book_agent.infra.repositories.run_control import RunControlRepository
+        from book_agent.orchestrator.run_plan import plan_for_run
+        from book_agent.services.run_control import RunControlService
+
+        run_id = RunControlService(RunControlRepository(session)).create_run(
+            document_id=self.document_id,
+            run_type=DocumentRunType.TRANSLATE_FULL,
+            requested_by="test",
+            status_detail_json={"run_request": {}},
+        ).run_id
+        session.commit()
+        run = session.get(DocumentRun, run_id)
+        return run_id, plan_for_run(run.run_type, run.status_detail_json)
+
+    def test_untranslated_old_chapters_are_refreshed_before_the_run_translates(self) -> None:
+        from book_agent.app.runtime.document_run_executor import DocumentRunExecutor
+        from book_agent.domain.models.ops import DocumentRun
+        from book_agent.services.chapter_reparse import ChapterReparseService
+
+        with self.session_factory() as session:
+            outdated = ChapterReparseService(session).epub_outdated_chapter_ids(self.document_id)
+            self.assertEqual(len(outdated), 1)
+            run_id, plan = self._run(session)
+        executor = DocumentRunExecutor(
+            session_factory=self.session_factory, export_root=Path(self.tempdir.name) / "exports", translation_worker=None
+        )
+        executor._maybe_reparse_untranslated(run_id, plan)
+        with self.session_factory() as session:
+            outcome = session.get(DocumentRun, run_id).status_detail_json["chapter_reparse"]
+            self.assertEqual(outcome["epub_structure_refreshed_chapter_ids"], outdated)
+            texts = [text for _id, _ordinal, text, _target in self._state(session)]
+            self.assertIn("Environment", texts)
+            self.assertIn("Actuators", texts)
+            self.assertEqual(ChapterReparseService(session).epub_outdated_chapter_ids(self.document_id), [])
+
+    def test_a_translated_chapter_is_not_refreshed_by_the_run(self) -> None:
+        from book_agent.infra.repositories.translation import TranslationRepository
+        from book_agent.services.chapter_reparse import ChapterReparseService
+        from book_agent.services.translation import TranslationService
+        from book_agent.domain.models.translation import TranslationPacket
+        from sqlalchemy import select
+
+        with self.session_factory() as session:
+            service = TranslationService(TranslationRepository(session))
+            for packet in session.scalars(select(TranslationPacket)).all():
+                service.execute_packet(packet.id)
+            session.commit()
+            self.assertEqual(ChapterReparseService(session).epub_outdated_chapter_ids(self.document_id), [])
+
+
 if __name__ == "__main__":
     unittest.main()

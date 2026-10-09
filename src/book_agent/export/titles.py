@@ -11,6 +11,7 @@ from book_agent.domain.enums import (
     BlockType,
     SourceType,
 )
+from book_agent.domain.structure import inline_marks
 from book_agent.export import render_repair
 from book_agent.export.common import (
     _APPENDIX_TITLE_PATTERN,
@@ -68,6 +69,10 @@ def resolve_chapter_title(
     chapter's blocks in order, carrying the Chinese text where there is one.
     """
     title = _resolve_chapter_title(document, chapter, blocks)
+    if title and "*" in title:
+        # A title is plain text everywhere it shows (heading, contents, EPUB navigation): the
+        # emphasis of "Praise for <em>An Illustrated Guide…</em>" must not show as asterisks.
+        title = inline_marks.plain_text(title)
     if document.source_type == SourceType.WEB:
         return title
     return normalize_numbered_title(title, source_title=getattr(chapter, "title_src", None))

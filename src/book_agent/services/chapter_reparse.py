@@ -254,6 +254,25 @@ class ChapterReparseService:
             return False
         return parser_changed_since_import(document) and bool(self.untranslated_chapter_ids(document_id))
 
+    def epub_outdated_chapter_ids(self, document_id: str) -> list[str]:
+        """The whole-book run's question for an EPUB: its untranslated chapters whose blocks an older
+        parser read (``epub_structure_version`` below the current one: lists without markers, definition
+        terms dropped, notes as a heading over loose paragraphs). The structure refresh re-reads them."""
+        from book_agent.domain.structure.epub import EPUB_STRUCTURE_VERSION
+
+        document = self.session.get(Document, document_id)
+        if document is None or document.source_type != SourceType.EPUB:
+            return []
+        outdated: list[str] = []
+        for chapter_id in self.untranslated_chapter_ids(document_id):
+            versions = [
+                int((block.source_span_json or {}).get("epub_structure_version") or 1)
+                for block in self._active_blocks(chapter_id)
+            ]
+            if versions and min(versions) < EPUB_STRUCTURE_VERSION:
+                outdated.append(chapter_id)
+        return outdated
+
     # --- the re-parse ----------------------------------------------------------------------
 
     def _parse(self, document: Document) -> Any:

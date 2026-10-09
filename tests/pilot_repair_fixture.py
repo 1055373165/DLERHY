@@ -144,7 +144,8 @@ class FakeZhWorker:
     ``variant_sentences`` render LLM as 大型语言模型; ``omit_sentences`` get no translation;
     ``leak_sentences`` carry 图片锚点保留; ``unspaced_sentences`` drop the CJK–Latin spaces.
     ``retranslation_leaks`` makes every retranslation carry a program note (a repair that makes
-    another check worse). ``cost_per_call`` is the usage each call reports.
+    another check worse). ``cost_per_call`` is the usage each call reports. ``malformed_calls``
+    answers that many next calls with a reply the provider could not read (ProviderResponseFormatError).
     """
 
     variant_sentences: set[str] = field(default_factory=set)
@@ -153,6 +154,7 @@ class FakeZhWorker:
     unspaced_sentences: set[str] = field(default_factory=set)
     retranslation_leaks: bool = False
     cost_per_call: float | None = None
+    malformed_calls: int = 0
     calls: list[dict[str, Any]] = field(default_factory=list)
     translated_once: set[str] = field(default_factory=set)
 
@@ -183,6 +185,12 @@ class FakeZhWorker:
 
     def translate(self, task: TranslationTask) -> TranslationWorkerResult:
         packet_id = task.context_packet.packet_id
+        if self.malformed_calls > 0:
+            from book_agent.workers.providers.openai_compatible import ProviderResponseFormatError
+
+            self.malformed_calls -= 1
+            self.calls.append({"packet_id": packet_id, "malformed": True})
+            raise ProviderResponseFormatError("Provider response did not match TranslationWorkerOutput schema.")
         retranslation = packet_id in self.translated_once
         self.calls.append(
             {"packet_id": packet_id, "retranslation": retranslation, "hints": list(task.context_packet.open_questions)}

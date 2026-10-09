@@ -586,7 +586,23 @@ class DocumentRunExecutor:
                 outcome = {"skipped": "translation_started"}
             else:
                 service = ChapterReparseService(session)
-                if not service.needs_reparse(run.document_id):
+                epub_outdated = service.epub_outdated_chapter_ids(run.document_id)
+                if epub_outdated:
+                    # An EPUB's chapters the pilot did not cover, read before lists, definition terms
+                    # and boxes were kept: refreshed now, while nothing in them is translated yet.
+                    try:
+                        with session.begin_nested():
+                            artifacts = self._workflow_service(session).refresh_epub_structure(
+                                run.document_id, chapter_ids=epub_outdated
+                            )
+                        outcome = {
+                            "epub_structure_refreshed_chapter_ids": list(artifacts.refreshed_chapter_ids),
+                            "created_block_count": len(artifacts.created_block_ids),
+                        }
+                    except Exception as exc:  # the run goes on with the structure it has
+                        logger.exception("EPUB structure refresh before the whole-book run %s failed", run_id)
+                        outcome = {"error": f"{type(exc).__name__}: {exc}"[:500]}
+                elif not service.needs_reparse(run.document_id):
                     outcome = {"skipped": "parser_unchanged"}
                 else:
                     try:

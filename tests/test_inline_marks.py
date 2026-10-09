@@ -81,6 +81,18 @@ class StrayMarkerTest(unittest.TestCase):
         self.assertEqual(inline_marks.stray_markers("其*智能体程序*（agent）"), [])
         self.assertEqual(inline_marks.stray_markers("f(*args, **kwargs) 和 2*3"), [])
 
+    def test_an_opening_star_after_a_curly_quote_whose_close_was_lost(self) -> None:
+        # The Illustrated Guide's citations: "Needs," *arXiv, *2504" lost its closing star.
+        source = "Qian, Cheng et al. 2025. “ToolRL: Reward Is All Tool Learning Needs,” *arXiv, *2504.13958."
+        target = "Qian, Cheng 等，2025。“ToolRL: Reward Is All Tool Learning Needs，”*arXiv，2504.13958。"
+        self.assertEqual(inline_marks.stray_markers(target), ["*"])
+        self.assertEqual(inline_marks.stray_markers(source), [])
+        self.assertEqual(
+            inline_marks.drop_stray_markers(target, [source]),
+            "Qian, Cheng 等，2025。“ToolRL: Reward Is All Tool Learning Needs，”arXiv，2504.13958。",
+        )
+        self.assertEqual(inline_marks.stray_markers("他说“*你好*”"), [])
+
     def test_a_translation_is_judged_against_its_source(self) -> None:
         self.assertEqual(inline_marks.unbalanced_against("其*智能体程序（agent）", ["its *agent program*"]), ["*"])
         self.assertEqual(inline_marks.unbalanced_against("其*智能体程序*（agent）", ["its *agent program*"]), [])
