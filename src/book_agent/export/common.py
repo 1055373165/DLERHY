@@ -314,7 +314,8 @@ _PROSE_ARTIFACT_STOPWORDS = {
 # 6: a chapter's bilingual file is labelled 中英对照 and carries no run statistics.
 # 7: the book's model usage at the top; the bilingual Markdown beside the Markdown; a PDF book's
 #    run-in titles its bookmarks do not list are bold text, not headings in the outline.
-EXPORT_RENDERER_VERSION = 7
+# 8: a book's parts list their chapters under them (Markdown levels, contents, EPUB navigation, PDF bookmarks).
+EXPORT_RENDERER_VERSION = 8
 
 _FRONTMATTER_TITLES = {
     "acknowledgment",

@@ -31,7 +31,8 @@ from urllib.parse import unquote
 
 _USAGE_SUMMARY = re.compile(r"<section class='usage-summary'.*?</ul>\s*</section>", re.DOTALL)
 _CHAPTER_START = re.compile(r"<section class='chapter' id='(?P<id>[^']+)'>")
-_CHAPTER_TITLE = re.compile(r"<div class='chapter-head'>\s*<h2[^>]*>(?P<title>.*?)</h2>", re.DOTALL)
+# A chapter's title: <h2>, or <h3> for a chapter inside one of the book's parts.
+_CHAPTER_TITLE = re.compile(r"<div class='chapter-head'>\s*<h(?P<level>[23])[^>]*>(?P<title>.*?)</h(?P=level)>", re.DOTALL)
 _HERO = re.compile(r"<header class='hero'[^>]*>.*?</header>", re.DOTALL)
 # The book's model usage under its title (export.markup.book_usage_html): kept for the reader.
 _BOOK_USAGE = re.compile(r"<section class='book-usage'[^>]*>.*?</section>", re.DOTALL)
@@ -100,6 +101,31 @@ class ReaderChapter:
     anchor: str
     title: str
     body: str
+    # 1 for a chapter inside one of the book's parts: listed under the part.
+    depth: int = 0
+
+
+def nested_list(entries: list[tuple[int, str]], *, tag: str = "ol") -> str:
+    """``<ol>`` of (depth, item HTML), an entry one deeper than the one before listed inside it."""
+    out: list[str] = [f"<{tag}>"]
+    depth = 0
+    for index, (entry_depth, item) in enumerate(entries):
+        entry_depth = min(entry_depth, depth + 1) if index else 0
+        if index:
+            if entry_depth > depth:
+                out.append(f"<{tag}>")
+            else:
+                out.append("</li>")
+                for _ in range(depth - entry_depth):
+                    out.append(f"</{tag}></li>")
+        out.append(f"<li>{item}")
+        depth = entry_depth
+    if entries:
+        out.append("</li>")
+        for _ in range(depth):
+            out.append(f"</{tag}></li>")
+    out.append(f"</{tag}>")
+    return "".join(out)
 
 
 def split_merged_book(document: str) -> tuple[str, list[ReaderChapter]]:
@@ -120,6 +146,7 @@ def split_merged_book(document: str) -> tuple[str, list[ReaderChapter]]:
                 anchor=start.group("id"),
                 title=_text(heading.group("title")) if heading else f"第 {index + 1} 部分",
                 body=body,
+                depth=int(heading.group("level")) - 2 if heading else 0,
             )
         )
     return title, chapters
@@ -133,8 +160,8 @@ def reader_html(document: str) -> str:
     if len(chapters) < 2:
         # One chapter (a web page, a short story) needs no table of contents.
         return document
-    items = "".join(f"<li><a href='#{html.escape(c.anchor)}'>{html.escape(c.title)}</a></li>" for c in chapters)
-    toc = f"<nav class='reader-toc' aria-label='目录'><h2>目录</h2><ol>{items}</ol></nav>"
+    items = nested_list([(c.depth, f"<a href='#{html.escape(c.anchor)}'>{html.escape(c.title)}</a>") for c in chapters])
+    toc = f"<nav class='reader-toc' aria-label='目录'><h2>目录</h2>{items}</nav>"
     hero = _HERO.search(document)
     if hero is not None:
         usage = _BOOK_USAGE.match(document, hero.end())
@@ -219,6 +246,22 @@ def to_xhtml(fragment: str, rewrite_url=lambda tag, attr, value: value) -> str:
 # --- EPUB --------------------------------------------------------------------------------
 
 
+def _nested_nav_points(entries: list[tuple[int, str]]) -> str:
+    """NCX navPoints (each an opened ``<navPoint …>`` with its label), a part's chapters inside the part."""
+    out: list[str] = []
+    depth = 0
+    for index, (entry_depth, opened) in enumerate(entries):
+        entry_depth = min(entry_depth, depth + 1) if index else 0
+        if index:
+            for _ in range(depth - entry_depth + 1):
+                out.append("</navPoint>")
+        out.append(opened)
+        depth = entry_depth
+    if entries:
+        out.extend("</navPoint>" for _ in range(depth + 1))
+    return "".join(out)
+
+
 def _xhtml_page(title: str, body: str, *, lang: str) -> str:
     return (
         '<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE html>\n'
@@ -267,6 +310,7 @@ def build_reader_epub(
     modified = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     pages: list[tuple[str, str, str]] = []  # (id, href, title)
+    depth_by_page: dict[str, int] = {}
     files: dict[str, str] = {}
     hero = _HERO.search(document)
     usage = _BOOK_USAGE.search(document)
@@ -280,22 +324,30 @@ def build_reader_epub(
         href = f"text/chapter-{index:03d}.xhtml"
         files[href] = _xhtml_page(chapter.title, to_xhtml(chapter.body, rewrite), lang=lang)
         pages.append((f"chapter-{index:03d}", href, chapter.title))
+        depth_by_page[f"chapter-{index:03d}"] = chapter.depth
 
-    nav_items = "".join(
-        f'<li><a href="{href.removeprefix("text/")}">{html.escape(page_title)}</a></li>'
-        for page_id, href, page_title in pages
-        if page_id != "title"
+    nav_items = nested_list(
+        [
+            (depth_by_page.get(page_id, 0), f'<a href="{href.removeprefix("text/")}">{html.escape(page_title)}</a>')
+            for page_id, href, page_title in pages
+            if page_id != "title"
+        ]
     )
     files["text/nav.xhtml"] = (
         '<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE html>\n'
         f'<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="{lang}" xml:lang="{lang}">'
         f"<head><meta charset=\"utf-8\"/><title>目录</title></head><body>"
-        f'<nav epub:type="toc" id="toc"><h1>目录</h1><ol>{nav_items}</ol></nav></body></html>'
+        f'<nav epub:type="toc" id="toc"><h1>目录</h1>{nav_items}</nav></body></html>'
     )
-    nav_points = "".join(
-        f'<navPoint id="np-{n}" playOrder="{n}"><navLabel><text>{html.escape(page_title)}</text></navLabel>'
-        f'<content src="{href}"/></navPoint>'
-        for n, (page_id, href, page_title) in enumerate(pages, start=1)
+    nav_points = _nested_nav_points(
+        [
+            (
+                depth_by_page.get(page_id, 0),
+                f'<navPoint id="np-{n}" playOrder="{n}"><navLabel><text>{html.escape(page_title)}</text></navLabel>'
+                f'<content src="{href}"/>',
+            )
+            for n, (page_id, href, page_title) in enumerate(pages, start=1)
+        ]
     )
     toc_ncx = (
         '<?xml version="1.0" encoding="utf-8"?>\n'

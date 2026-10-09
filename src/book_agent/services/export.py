@@ -9,7 +9,7 @@ import re
 import filecmp
 import shutil
 import zipfile
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -44,6 +44,7 @@ from book_agent.domain.structure.table_cells import split_shared_cell_translatio
 from book_agent.domain.structure.epub import (
     _parse_xml_document,
 )
+from book_agent.export import book_parts
 from book_agent.export import (
     alignment,
     code_text,
@@ -1340,9 +1341,14 @@ class ExportService:
         asset_path_by_block_id: dict[str, str] | None = None,
     ) -> str:
         visible_chapters = self._reading_copy_chapters(bundle)
+        # A book in parts: a part's chapters are titled one level below it (<h3>), so the contents,
+        # the EPUB's navigation and the PDF's bookmarks nest them under the part.
+        depths = book_parts.part_depths([title_text for _o, _b, _r, title_text in visible_chapters])
         chapters_html = "".join(
-            self._render_chapter_for_merged_html(chapter_bundle, visible_ordinal, render_blocks, title_text, asset_path_by_block_id)
-            for visible_ordinal, chapter_bundle, render_blocks, title_text in visible_chapters
+            self._render_chapter_for_merged_html(
+                chapter_bundle, visible_ordinal, render_blocks, title_text, asset_path_by_block_id, depth=depth
+            )
+            for (visible_ordinal, chapter_bundle, render_blocks, title_text), depth in zip(visible_chapters, depths)
         )
         title = html.escape(document_display_title(bundle.document) or bundle.document.id)
         author_value = display_author_value(bundle.document.author)
@@ -1401,9 +1407,11 @@ class ExportService:
         usage = self._document_usage_text(bundle)
         if usage:
             lines.extend([f"> 翻译用量：{usage}", ""])
-        lines.extend(self._markdown_contents(visible_chapters))
+        # A book in parts: each part's chapters (and their sections) one level below the part.
+        depths = book_parts.part_depths([title_text for _o, _b, _r, title_text in visible_chapters])
+        lines.extend(self._markdown_contents(visible_chapters, depths))
 
-        for visible_ordinal, chapter_bundle, render_blocks, title_text in visible_chapters:
+        for (visible_ordinal, chapter_bundle, render_blocks, title_text), depth in zip(visible_chapters, depths):
             lines.extend(
                 self._render_chapter_for_merged_markdown(
                     chapter_bundle,
@@ -1412,6 +1420,7 @@ class ExportService:
                     title_text,
                     asset_path_by_block_id,
                     bilingual=bilingual,
+                    depth=depth,
                 )
             )
         return "\n".join(lines).rstrip() + "\n"
@@ -1460,20 +1469,24 @@ class ExportService:
     def _markdown_contents(
         self,
         visible_chapters: list[tuple[int, ChapterExportBundle, list[MergedRenderBlock], str | None]],
+        depths: Sequence[int] | None = None,
     ) -> list[str]:
-        """The Markdown's "目录": each chapter's title and, under it, its numbered sections ("2.1 ...")."""
+        """The Markdown's "目录": each chapter's title and, under it, its numbered sections ("2.1 ...");
+        a part's chapters under the part."""
         entries: list[str] = []
-        for _ordinal, _chapter_bundle, render_blocks, title_text in visible_chapters:
+        depths = depths or [0] * len(visible_chapters)
+        for (_ordinal, _chapter_bundle, render_blocks, title_text), depth in zip(visible_chapters, depths):
             title = str(title_text or "").strip()
-            if not title or (entries and entries[-1] == f"- {title}"):
+            indent = "  " * depth
+            if not title or (entries and entries[-1] == f"{indent}- {title}"):
                 continue
-            entries.append(f"- {title}")
+            entries.append(f"{indent}- {title}")
             for block in self._merged_body_blocks(render_blocks, title):
                 if block.block_type != BlockType.HEADING.value or (block.source_metadata or {}).get("heading_level") != 2:
                     continue
                 heading = " ".join(str(block.target_text or block.source_text or "").split())
                 if heading and len(heading) <= 150 and _SECTION_ENTRY.match(heading):
-                    entries.append(f"  - {heading}")
+                    entries.append(f"{indent}  - {heading}")
         return ["## 目录", "", *entries, ""] if entries else []
 
     def _render_chapter_for_merged_markdown(
@@ -1485,7 +1498,9 @@ class ExportService:
         asset_path_by_block_id: dict[str, str] | None = None,
         *,
         bilingual: bool = False,
+        depth: int = 0,
     ) -> list[str]:
+        """``depth``: 1 for a chapter inside one of the book's parts (its headings one level down)."""
         if not title_text and not render_blocks:
             return []
         title = str(title_text or "").strip()
@@ -1494,7 +1509,8 @@ class ExportService:
         # (e.g. "第一章") just yields the redundant "Chapter 1: 第一章"
         # that confuses readers. Fall back to an ordinal-only heading
         # only when the chapter has no title at all.
-        heading = f"## {title}" if title else f"## Chapter {visible_ordinal}"
+        marks = "#" * (2 + depth)
+        heading = f"{marks} {title}" if title else f"{marks} Chapter {visible_ordinal}"
         body_blocks = self._merged_body_blocks(render_blocks, title)
         lines = [heading, ""]
         chapter_source_title = " ".join(str(bundle.chapter.title_src or "").split())
@@ -1507,13 +1523,14 @@ class ExportService:
         seen: set[str] = set()
         for block in body_blocks:
             block_markdown = (
-                markup.render_block_markdown_bilingual(block, asset_path_by_block_id)
+                markup.render_block_markdown_bilingual(block, asset_path_by_block_id, heading_shift=depth)
                 if bilingual
                 else markup.render_block_markdown(
                     block,
                     asset_path_by_block_id,
                     include_notice=False,
                     include_source_caption=False,
+                    heading_shift=depth,
                 )
             )
             if not block_markdown:
@@ -1736,6 +1753,8 @@ class ExportService:
         render_blocks: list[MergedRenderBlock],
         title_text: str | None,
         asset_path_by_block_id: dict[str, str] | None = None,
+        *,
+        depth: int = 0,
     ) -> str:
         body_blocks = self._merged_body_blocks(
             list(render_blocks), str(title_text or "").strip()
@@ -1755,9 +1774,10 @@ class ExportService:
         title = html.escape(title_text) if title_text else ""
         # No "Chapter N" kicker and no English source-title subline —
         # the merged reading edition is Chinese-only.
+        tag = f"h{2 + depth}"
         chapter_head = (
             "<div class='chapter-head'>"
-            f"<h2>{title}</h2>"
+            f"<{tag}>{title}</{tag}>"
             "</div>"
             if title
             else ""
@@ -2875,7 +2895,8 @@ class ExportService:
                     page.emulate_media(media="print")
                     page.goto(print_source.resolve().as_uri(), wait_until="load")
                     with atomic_path(pdf_path) as temporary:
-                        page.pdf(path=str(temporary), print_background=True, format="A4")
+                        # Bookmarks from the chapter titles: a part's chapters (<h3>) under the part (<h2>).
+                        page.pdf(path=str(temporary), print_background=True, format="A4", outline=True, tagged=True)
                 finally:
                     browser.close()
         except ExportUnavailableError:
