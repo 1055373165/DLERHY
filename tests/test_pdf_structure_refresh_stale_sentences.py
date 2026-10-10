@@ -1,4 +1,5 @@
-"""PDF structure refresh reports blocks whose sentences no longer match their text."""
+"""PDF structure refresh reports blocks whose sentences no longer match their text, and adds the
+blocks the new parse finds that no existing block stands for."""
 
 import tempfile
 import unittest
@@ -15,23 +16,29 @@ from book_agent.services.bootstrap import BootstrapArtifacts, ParseService, Segm
 from book_agent.services.pdf_structure_refresh import PdfStructureRefreshService
 
 
-def _stub_parser(text: str):
+def _stub_parser(text: str | list[tuple[str, str]]):
+    """One paragraph, or (anchor, text) paragraphs in reading order."""
+    paragraphs = [("p1-b1", text)] if isinstance(text, str) else text
+
     class _StubPdfParser:
         def parse(self, _file_path, profile=None):
-            block = ParsedBlock(
-                block_type=BlockType.PARAGRAPH.value,
-                text=text,
-                source_path="pdf://page/1",
-                ordinal=1,
-                anchor="p1-b1",
-                metadata={"source_page_start": 1, "source_page_end": 1, "pdf_block_role": "body"},
-                parse_confidence=0.95,
-            )
+            blocks = [
+                ParsedBlock(
+                    block_type=BlockType.PARAGRAPH.value,
+                    text=paragraph,
+                    source_path="pdf://page/1",
+                    ordinal=ordinal,
+                    anchor=anchor,
+                    metadata={"source_page_start": 1, "source_page_end": 1, "pdf_block_role": "body"},
+                    parse_confidence=0.95,
+                )
+                for ordinal, (anchor, paragraph) in enumerate(paragraphs, start=1)
+            ]
             chapter = ParsedChapter(
                 chapter_id="pdf-chapter-001",
                 href="pdf://page/1",
                 title="Chapter",
-                blocks=[block],
+                blocks=blocks,
                 metadata={"source_page_start": 1, "source_page_end": 1},
             )
             return ParsedDocument(title="Refresh", author="Author", language="en", chapters=[chapter], metadata={})
@@ -40,7 +47,7 @@ def _stub_parser(text: str):
 
 
 class PdfStructureRefreshStaleSentenceTests(unittest.TestCase):
-    ORIGINAL = "Agents need memory. Context windows are finite."
+    ORIGINAL: str | list[tuple[str, str]] = "Agents need memory. Context windows are finite."
 
     def setUp(self) -> None:
         tempdir = tempfile.TemporaryDirectory()
@@ -80,7 +87,7 @@ class PdfStructureRefreshStaleSentenceTests(unittest.TestCase):
             session.commit()
         self.document_id = parse_artifacts.document.id
 
-    def _refresh(self, text: str):
+    def _refresh(self, text: str | list[tuple[str, str]]):
         with self.session_factory() as session:
             artifacts = PdfStructureRefreshService(
                 session,
@@ -102,6 +109,59 @@ class PdfStructureRefreshStaleSentenceTests(unittest.TestCase):
 
         self.assertEqual(artifacts.stale_sentence_block_ids, [])
         self.assertNotIn("refresh_sentences_stale", block.source_span_json)
+
+
+class PdfStructureRefreshNewBlockTests(PdfStructureRefreshStaleSentenceTests):
+    # The old parse glued the page's first paragraph to its running head.
+    ORIGINAL = [
+        ("p1-b1", "5 A retrospective Meanwhile, the hype is everywhere. Now what?"),
+        ("p1-b3", "After some brainstorming, a couple of ideas emerge."),
+    ]
+
+    test_changed_text_marks_sentences_stale = None
+    test_whitespace_only_change_keeps_sentences_current = None
+
+    def test_a_paragraph_the_new_parse_finds_is_added_in_reading_order_and_translated_later(self) -> None:
+        from book_agent.domain.models import Sentence
+        from book_agent.services.parse_revision_fork import ParseRevisionForkService
+
+        artifacts, _block = self._refresh(
+            [
+                ("p1-b1", "5 A retrospective"),
+                ("p1-b2", "Meanwhile, the hype is everywhere. Now what?"),
+                ("p1-b3", "After some brainstorming, a couple of ideas emerge."),
+            ]
+        )
+        self.assertEqual(len(artifacts.created_block_ids), 1)
+        with self.session_factory() as session:
+            blocks = sorted(
+                BootstrapRepository(session).load_document_bundle(self.document_id).chapters[0].blocks,
+                key=lambda block: block.ordinal,
+            )
+            self.assertEqual(
+                [(block.ordinal, block.source_anchor) for block in blocks],
+                [(1, "pdf://page/1#p1-b1"), (2, "pdf://page/1#p1-b2"), (3, "pdf://page/1#p1-b3")],
+            )
+            created = blocks[1]
+            self.assertEqual(created.id, artifacts.created_block_ids[0])
+            self.assertTrue(created.source_span_json["refresh_sentences_stale"])
+
+            # The fork after the refresh gives it its sentences.
+            fork = ParseRevisionForkService(session)
+            self.assertIn(created.id, fork.stale_block_ids(self.document_id))
+            fork.resegment_blocks(self.document_id, reason="test")
+            sentences = session.query(Sentence).filter(Sentence.block_id == created.id).all()
+            self.assertEqual([sentence.source_text for sentence in sentences], ["Meanwhile, the hype is everywhere.", "Now what?"])
+
+    def test_text_an_existing_block_already_holds_is_not_added_twice(self) -> None:
+        artifacts, _block = self._refresh(
+            [
+                ("p1-b1", "5 A retrospective Meanwhile, the hype is everywhere. Now what?"),
+                ("p1-b2", "Meanwhile, the hype is everywhere. Now what?"),
+                ("p1-b3", "After some brainstorming, a couple of ideas emerge."),
+            ]
+        )
+        self.assertEqual(artifacts.created_block_ids, [])
 
 
 if __name__ == "__main__":
