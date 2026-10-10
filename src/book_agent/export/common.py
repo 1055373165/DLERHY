@@ -315,7 +315,8 @@ _PROSE_ARTIFACT_STOPWORDS = {
 # 7: the book's model usage at the top; the bilingual Markdown beside the Markdown; a PDF book's
 #    run-in titles its bookmarks do not list are bold text, not headings in the outline.
 # 8: a book's parts list their chapters under them (Markdown levels, contents, EPUB navigation, PDF bookmarks).
-EXPORT_RENDERER_VERSION = 8
+# 9: the book's model usage as three lines (calls; tokens with input · output; cost).
+EXPORT_RENDERER_VERSION = 9
 
 _FRONTMATTER_TITLES = {
     "acknowledgment",

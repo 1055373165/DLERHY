@@ -1,3 +1,2 @@
 .book-usage{margin:0 0 22px;padding:12px 18px;border:1px solid rgba(184,197,218,.75);border-radius:14px;background:#f6f9fc;font-family:var(--font-ui,system-ui,sans-serif);font-size:14px;line-height:1.6;color:#314152;}
-.book-usage .book-usage-label{display:inline-block;margin-right:10px;font-size:12px;letter-spacing:.08em;font-weight:700;color:var(--accent,#0f6c7a);}
-.book-usage .book-usage-value{font-variant-numeric:tabular-nums;}
+.book-usage .book-usage-lines{margin:0;padding-left:1.2em;font-variant-numeric:tabular-nums;}

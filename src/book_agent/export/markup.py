@@ -1360,12 +1360,10 @@ def usage_summary_css() -> str:
 
 
 def book_usage_html(summary: str | None) -> str:
-    """The book's model usage under its title (``services.usage_statement.DocumentUsage``)."""
-    if not summary:
+    """The book's model usage under its title, a line each for calls, tokens and cost
+    (``services.usage_statement.DocumentUsage.summary_zh``)."""
+    lines = [line.strip() for line in (summary or "").splitlines() if line.strip()]
+    if not lines:
         return ""
-    return (
-        "<section class='book-usage' aria-label='翻译用量'>"
-        "<span class='book-usage-label'>翻译用量</span>"
-        f"<span class='book-usage-value'>{html.escape(summary)}</span>"
-        "</section>"
-    )
+    items = "".join(f"<li>{html.escape(line)}</li>" for line in lines)
+    return f"<section class='book-usage' aria-label='翻译用量'><ul class='book-usage-lines'>{items}</ul></section>"

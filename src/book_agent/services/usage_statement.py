@@ -309,11 +309,17 @@ class DocumentUsage:
     def total_tokens(self) -> int:
         return self.token_in + self.token_out
 
+    def lines_zh(self) -> list[str]:
+        """The reading copies' usage lines: calls, tokens (input · output), cost."""
+        return [
+            f"翻译用量：模型调用 {self.call_count:,} 次",
+            f"Token {self.total_tokens:,}（输入 {self.token_in:,} · 输出 {self.token_out:,}）",
+            f"花费 US$ {self.cost_usd:,.2f}",
+        ]
+
     def summary_zh(self) -> str:
-        return (
-            f"模型调用 {self.call_count:,} 次 · Token {self.total_tokens:,}"
-            f"（输入 {self.token_in:,} · 输出 {self.token_out:,}）· 花费 US$ {self.cost_usd:,.2f}"
-        )
+        """``lines_zh`` one per line."""
+        return "\n".join(self.lines_zh())
 
 
 def document_usage(session: Session, document_id: str) -> DocumentUsage | None:

@@ -150,7 +150,7 @@ _BOOK_STYLE = """<style>
 .book-chapter + .book-chapter{margin-top:48px;padding-top:32px;border-top:1px solid rgba(0,0,0,.12)}
 .back-to-toc{display:block;margin:12px 0 0;text-align:right;font-size:.85rem}
 .book-usage{max-width:860px;margin:0 auto 20px;padding:10px 24px;font-size:.9rem;line-height:1.6;color:#314152}
-.book-usage-label{margin-right:10px;font-weight:700}
+.book-usage-lines{margin:0;padding-left:1.2em}
 </style>"""
 
 
