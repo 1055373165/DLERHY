@@ -17,6 +17,9 @@ from book_agent.domain.structure.models import (
     derive_translatability,
 )
 from book_agent.ingestion.pdf.classify import (
+    _BACKMATTER_HEADING_TITLES,
+    _INDEX_HEADING_TITLES,
+    _REFERENCES_HEADING_TITLES,
     _contains_chapter_intro_cue,
     _extract_book_main_chapter_number,
     _infer_appendix_intro_title,
@@ -302,7 +305,12 @@ def chapter_start_candidates(
             if _should_start_outlined_book_top_level_chapter(candidate.title)
         ]
     if outline_candidates:
-        return merge_chapter_start_candidates(section_candidates, outline_candidates)
+        if profile.recovery_lane == "academic_paper":
+            # A paper's section headings start its units alongside the outline.
+            return merge_chapter_start_candidates(section_candidates, outline_candidates)
+        return merge_chapter_start_candidates(
+            outline_candidates, section_candidates_outside_outline(section_candidates, outline_candidates)
+        )
 
     toc_candidates = find_toc_candidates(recovered_blocks)
     if toc_candidates:
@@ -591,6 +599,35 @@ def section_family_candidates(
             )
         )
     return sorted(candidates, key=lambda candidate: candidate.page_number)
+
+
+_OUTLINE_CLOSING_TITLES = frozenset({*_INDEX_HEADING_TITLES, *_REFERENCES_HEADING_TITLES, *_BACKMATTER_HEADING_TITLES})
+
+
+def section_candidates_outside_outline(
+    section_candidates: list[_ChapterStartCandidate],
+    outline_candidates: list[_ChapterStartCandidate],
+) -> list[_ChapterStartCandidate]:
+    """The section-family starts a bookmarked book still needs: those its bookmarks do not cover.
+
+    The bookmarks decide where chapters start. A page read as a section family (appendix, references,
+    index) inside a bookmarked chapter is part of it: an appendix's subsections ("A.2.1 …") and running
+    head, a "7.3.2 Evaluating …" heading taken for references, or a further-reading list's "Chapter 4"
+    entries are not chapters. Before the first bookmark, and after the last one when the bookmarks end
+    at a chapter rather than at the index or references, a section family may still start a chapter
+    (front or back matter the bookmarks leave out).
+    """
+    if not outline_candidates:
+        return section_candidates
+    first_page = min(candidate.page_number for candidate in outline_candidates)
+    last = max(outline_candidates, key=lambda candidate: candidate.page_number)
+    last_title = _normalize_outline_title(last.title)
+    tail_open = last_title not in _OUTLINE_CLOSING_TITLES
+    return [
+        candidate
+        for candidate in section_candidates
+        if candidate.page_number < first_page or (tail_open and candidate.page_number > last.page_number)
+    ]
 
 
 def merge_chapter_start_candidates(
