@@ -141,3 +141,35 @@ def test_empty_inputs_safe():
     assert _extract_book_main_chapter_number("   ") is None
     assert _extract_book_main_chapter_number(None or "") is None
     assert not _looks_like_book_primary_outline_title("")
+
+
+# ---- Bookmarks decide where a book's chapters start --------------------
+
+def test_section_family_pages_inside_bookmarked_chapters_do_not_split_them():
+    """The Art of AI Product Development: an appendix's subsections, a "7.3.2" heading read as
+    references and a further-reading list's "Chapter 4" entries split the bookmarked chapters."""
+    from book_agent.ingestion.pdf.chapters import section_candidates_outside_outline
+    from book_agent.ingestion.pdf.models import _ChapterStartCandidate as Start
+
+    outline = [
+        Start(26, "1 Creating value with AI-driven products", "outline"),
+        Start(157, "7 Search and retrieval-augmented generation", "outline"),
+        Start(324, "Appendix AI development toolbox", "outline"),
+        Start(360, "index", "outline"),
+    ]
+    sections = [
+        Start(3, "Front Matter", "section_family", "frontmatter"),
+        Start(175, "7.3.2 Evaluating your RAG system", "section_family", "references"),
+        Start(324, "appendix AI development toolbox", "section_family", "appendix"),
+        Start(324, "A.2.1 Sourcing AI ideas", "section_family", "appendix"),
+        Start(358, "Chapter 4", "section_family", "references"),
+        Start(368, "Back Matter", "section_family", "backmatter"),
+    ]
+    # Inside the bookmarks nothing starts; before the first one front matter may; after the index nothing.
+    assert [s.title for s in section_candidates_outside_outline(sections, outline)] == ["Front Matter"]
+    # Bookmarks ending at the last chapter leave the back matter after it to the section families.
+    open_tail = outline[:2]
+    assert [s.title for s in section_candidates_outside_outline(sections, open_tail)] == [
+        "Front Matter", "7.3.2 Evaluating your RAG system", "appendix AI development toolbox",
+        "A.2.1 Sourcing AI ideas", "Chapter 4", "Back Matter",
+    ]
