@@ -6,6 +6,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { Surface } from "../../components/Surface";
 import {
   type BlogEdition,
+  blogPublishProgressText,
   deleteDocument,
   downloadDocumentExport,
   getBlogTarget,
@@ -22,7 +23,13 @@ import {
 } from "../../lib/workflow";
 import s from "./LibraryPage.module.css";
 
-type Feedback = { tone: "success" | "error"; text: string; link?: { href: string; label: string } } | null;
+type Feedback = {
+  tone: "success" | "error";
+  text: string;
+  link?: { href: string; label: string };
+  // A publish in progress: pictures uploaded of all.
+  progress?: { done: number; total: number };
+} | null;
 
 const BLOG_OPTIONS: { edition: BlogEdition; label: string }[] = [
   { edition: "zh", label: "发布到博客 · 中文版" },
@@ -134,9 +141,17 @@ export function LibraryPage() {
   async function handlePublish(documentId: string, edition: BlogEdition, label: string) {
     setOpenMenu(null);
     setPublishing(true);
-    setFeedback({ tone: "success", text: `正在${label.replace(" · ", "（")}）……首次发布要上传全部图片，可能需要一两分钟。` });
+    const action = label.replace(" · ", "（") + "）";
+    setFeedback({ tone: "success", text: `正在准备${action}……` });
     try {
-      const result = await publishToBlog(documentId, edition);
+      const result = await publishToBlog(documentId, edition, {
+        onProgress: (job) =>
+          setFeedback({
+            tone: "success",
+            text: `${action}：${blogPublishProgressText(job)}`,
+            progress: job.stage === "images" && job.total > 0 ? { done: job.done, total: job.total } : undefined,
+          }),
+      });
       const images = result.images_uploaded
         ? `，上传图片 ${result.images_uploaded} 张`
         : result.images_reused
@@ -257,8 +272,16 @@ export function LibraryPage() {
         </div>
 
         {feedback && (
-          <div className={s.feedback} data-tone={feedback.tone}>
+          <div className={s.feedback} data-tone={feedback.tone} role="status" aria-live="polite">
             {feedback.text}
+            {feedback.progress && (
+              <progress
+                className={s.feedbackProgress}
+                value={feedback.progress.done}
+                max={feedback.progress.total}
+                aria-label="图片上传进度"
+              />
+            )}
             {feedback.link && (
               <>
                 {" "}

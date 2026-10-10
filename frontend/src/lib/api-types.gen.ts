@@ -61,6 +61,18 @@ export interface ApprovalResponse {
   created_at?: string | null;
 }
 
+export interface BlogPublishJobResponse {
+  job_id: string;
+  document_id: string;
+  edition: "zh" | "bilingual";
+  status: "running" | "succeeded" | "failed";
+  stage: string;
+  done: number;
+  total: number;
+  result?: BlogPublishResponse | null;
+  error?: string | null;
+}
+
 export interface BlogPublishRequest {
   edition?: "zh" | "bilingual";
 }

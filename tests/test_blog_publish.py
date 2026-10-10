@@ -92,6 +92,34 @@ class BlogMetadataTest(unittest.TestCase):
         self.assertIn("全书共 2 章：引言、记忆。", meta.excerpt)
 
 
+class PublishProgressTest(unittest.TestCase):
+    def test_progress_counts_each_picture(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        from book_agent.services.blog_publish import publish_markdown
+
+        blog = FakeBlog()
+        transport = httpx.MockTransport(blog.handle)
+        target = BlogTarget(api_url="http://blog.test", email="admin@blog.test", password="secret")
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "assets").mkdir()
+            for name in ("a.png", "b.png", "c.png"):
+                (Path(tmp) / "assets" / name).write_bytes(name.encode())
+            markdown = "# 书\n\n![](assets/a.png)\n\n![](assets/b.png)\n\n![](assets/a.png)\n\n![](assets/c.png)\n"
+            seen: list[tuple[str, int, int]] = []
+            meta = build_blog_metadata(markdown=markdown, title="书", source_title=None, authors=None)
+            result, _state = publish_markdown(
+                target=target, state={}, markdown=markdown, base_dir=Path(tmp), metadata=meta, edition="zh",
+                client_factory=lambda t: BlogClient(t, transport=transport), progress=lambda *args: seen.append(args),
+            )
+        self.assertEqual(
+            seen,
+            [("login", 0, 3), ("images", 0, 3), ("images", 1, 3), ("images", 2, 3), ("images", 3, 3), ("saving", 3, 3)],
+        )
+        self.assertEqual(result.images_uploaded, 3)
+
+
 class BlogPublishApiTest(unittest.TestCase):
     """The API on the download tests' exported book (its Markdown references assets/pdf-images/fig.png)."""
 
@@ -109,14 +137,30 @@ class BlogPublishApiTest(unittest.TestCase):
         factory.start()
         self.addCleanup(factory.stop)
 
-    def _publish(self, edition: str = "zh") -> httpx.Response:
+    def _start(self, edition: str = "zh") -> httpx.Response:
         return self.client.post(f"/v1/documents/{self.document_id}/blog-publish", json={"edition": edition})
+
+    def _publish(self, edition: str = "zh") -> dict:
+        """Start a publish and follow its job to the end; the finished job."""
+        import time
+
+        started = self._start(edition)
+        self.assertEqual(started.status_code, 202, started.text)
+        job = started.json()
+        self.stages = [(job["stage"], job["done"], job["total"])]
+        deadline = time.time() + 10
+        while job["status"] == "running" and time.time() < deadline:
+            time.sleep(0.02)
+            job = self.client.get(f"/v1/blog/publish-jobs/{job['job_id']}").json()
+            self.stages.append((job["stage"], job["done"], job["total"]))
+        return job
 
     def test_the_book_becomes_a_draft_with_its_pictures_uploaded(self) -> None:
         self.assertEqual(self.client.get("/v1/blog/target").json(), {"configured": True, "api_url": "http://blog.test", "web_url": "http://blog-web.test"})
-        response = self._publish()
-        self.assertEqual(response.status_code, 200, response.text)
-        body = response.json()
+        job = self._publish()
+        self.assertEqual(job["status"], "succeeded", job)
+        self.assertEqual((job["stage"], job["done"], job["total"]), ("done", 1, 1))
+        body = job["result"]
         self.assertEqual(body["action"], "created")
         self.assertEqual(body["edit_url"], f"http://blog-web.test/admin/articles/{body['article_id']}/edit")
         self.assertEqual(body["images_uploaded"], 1)
@@ -128,36 +172,37 @@ class BlogPublishApiTest(unittest.TestCase):
             self.assertTrue(article[field], field)
 
         # Again: the same article is updated, its picture not uploaded twice, its state left alone.
-        again = self._publish().json()
+        again = self._publish()["result"]
         self.assertEqual((again["action"], again["article_id"]), ("updated", body["article_id"]))
         self.assertEqual((again["images_uploaded"], again["images_reused"]), (0, 1))
         self.assertEqual(len(self.blog.uploads), 1)
         self.assertEqual(len(self.blog.articles), 1)
 
         # The bilingual edition is its own article; one deleted on the blog is created anew.
-        bilingual = self._publish("bilingual").json()
+        bilingual = self._publish("bilingual")["result"]
         self.assertNotEqual(bilingual["article_id"], body["article_id"])
         self.assertTrue(self.blog.articles[bilingual["article_id"]]["title"].endswith("（中英对照）"))
         del self.blog.articles[body["article_id"]]
-        self.assertEqual(self._publish().json()["action"], "created")
+        self.assertEqual(self._publish()["result"]["action"], "created")
 
     def test_a_wrong_password_or_missing_configuration_is_reported(self) -> None:
         from book_agent.core.config import get_settings
 
         with patch.dict(os.environ, {"BOOK_AGENT_BLOG_PASSWORD": "wrong"}):
             get_settings.cache_clear()
-            response = self._publish()
-        self.assertEqual(response.status_code, 502)
-        self.assertIn("博客登录失败", response.json()["detail"])
+            job = self._publish()
+        self.assertEqual(job["status"], "failed")
+        self.assertIn("博客登录失败", job["error"])
         with patch.dict(os.environ, {"BOOK_AGENT_BLOG_API_URL": ""}):
             get_settings.cache_clear()
-            self.assertEqual(self._publish().status_code, 422)
+            self.assertEqual(self._start().status_code, 422)
             self.assertEqual(self.client.get("/v1/blog/target").json()["configured"], False)
         get_settings.cache_clear()
 
     def test_a_missing_markdown_export_answers_404_so_the_app_exports_first(self) -> None:
         (self.export_root / self.document_id / "merged-document.bilingual.md").unlink()
-        self.assertEqual(self._publish("bilingual").status_code, 404)
+        self.assertEqual(self._start("bilingual").status_code, 404)
+        self.assertEqual(self.client.get("/v1/blog/publish-jobs/unknown").status_code, 404)
 
 
 if __name__ == "__main__":
