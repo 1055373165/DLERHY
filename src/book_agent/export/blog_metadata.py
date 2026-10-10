@@ -1,6 +1,7 @@
 """A blog article's title, excerpt and SEO fields for a book's reading copy, by rule (no model call).
 
-Title: the Chinese title (the bilingual edition says so). Excerpt: who wrote the book and what it
+Title: the book's original (English) title, the Chinese one when there is none (the bilingual
+edition says so). Excerpt: who wrote the book and what it
 is, then the opening of its preface or introduction, or failing that its chapters. SEO: the title
 with the source title, the excerpt cut at a sentence, and keywords from the title, the authors and
 the book's most used glossary terms.
@@ -124,6 +125,8 @@ def build_blog_metadata(
 ) -> BlogMetadata:
     title = " ".join(title.split())
     source_title = " ".join((source_title or "").split()) or None
+    # The article is titled by the book's original name; the Chinese title leads the excerpt and SEO.
+    article_title = source_title or title
     if source_title and source_title.casefold() == title.casefold():
         source_title = None
     author_names = [name for name in _AUTHOR_SPLIT.split(" ".join((authors or "").split())) if name]
@@ -150,7 +153,7 @@ def build_blog_metadata(
         if keyword and keyword.casefold() not in {k.casefold() for k in keywords}:
             keywords.append(keyword)
     return BlogMetadata(
-        title=f"{title}（中英对照）" if bilingual else title,
+        title=f"{article_title}（中英对照）" if bilingual else article_title,
         excerpt=excerpt,
         meta_title=meta_title,
         meta_description=_cut(excerpt, META_DESCRIPTION_MAX),
