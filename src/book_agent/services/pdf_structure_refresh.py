@@ -187,6 +187,9 @@ class PdfStructureRefreshService:
             for block in parse_artifacts.blocks
             if isinstance(block.source_anchor, str) and block.source_anchor.strip()
         }
+        self._rematch_moved_text_blocks(
+            existing_block_by_source_anchor, existing_block_id_by_source_anchor, refreshed_blocks_by_source_anchor
+        )
         self._rematch_moved_figures(
             existing_block_by_source_anchor, existing_block_id_by_source_anchor, refreshed_blocks_by_source_anchor
         )
@@ -371,6 +374,49 @@ class PdfStructureRefreshService:
             stale_sentence_block_ids=stale_sentence_block_ids,
             created_block_ids=created_block_ids,
         )
+
+    def _rematch_moved_text_blocks(
+        self,
+        existing_block_by_source_anchor: dict[str, Block],
+        existing_block_id_by_source_anchor: dict[str, str],
+        refreshed_blocks_by_source_anchor: dict[str, Block],
+    ) -> None:
+        """Anchors number a page's elements in reading order, so a parser change earlier in the book
+        (a table's drawing no longer a picture) renumbers every block after it. An existing block whose
+        anchor the new parse lacks takes over the new anchor of the block on its page with the same
+        text, keeping its id, sentences and translation; of two old copies of one text only the
+        first finds a match (the other is dropped as a copy)."""
+        figure_types = {BlockType.FIGURE.value, BlockType.IMAGE.value}
+        candidates: dict[tuple[int, str], list[Block]] = {}
+        for anchor, block in refreshed_blocks_by_source_anchor.items():
+            if anchor in existing_block_id_by_source_anchor or str(block.block_type) in figure_types:
+                continue
+            page = (block.source_span_json or {}).get("source_page_start")
+            text = _collapse_whitespace(block.source_text)
+            if isinstance(page, int) and text:
+                candidates.setdefault((page, text), []).append(block)
+        orphans = sorted(
+            (
+                block
+                for anchor, block in existing_block_by_source_anchor.items()
+                if anchor not in refreshed_blocks_by_source_anchor
+                and str(getattr(block.block_type, "value", block.block_type)) not in figure_types
+                and block.status == ArtifactStatus.ACTIVE
+            ),
+            key=lambda block: (block.chapter_id, block.ordinal),
+        )
+        for existing in orphans:
+            page = (existing.source_span_json or {}).get("source_page_start")
+            matches = candidates.get((page, _collapse_whitespace(existing.source_text))) if isinstance(page, int) else None
+            if not matches:
+                continue
+            new_anchor = matches.pop(0).source_anchor
+            old_anchor = existing.source_anchor
+            existing.source_anchor = new_anchor
+            del existing_block_by_source_anchor[old_anchor]
+            existing_block_by_source_anchor[new_anchor] = existing
+            existing_block_id_by_source_anchor.pop(old_anchor, None)
+            existing_block_id_by_source_anchor[new_anchor] = existing.id
 
     def _rematch_moved_figures(
         self,

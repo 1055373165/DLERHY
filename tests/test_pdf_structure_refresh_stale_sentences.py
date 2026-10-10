@@ -205,6 +205,25 @@ class PdfStructureRefreshNewBlockTests(PdfStructureRefreshStaleSentenceTests):
         self.assertEqual(status["p1-b4"], ArtifactStatus.INVALIDATED)
         self.assertEqual(status["p1-b3"], ArtifactStatus.ACTIVE)
 
+    def test_blocks_renumbered_by_the_new_parse_keep_their_ids(self) -> None:
+        """A parser change earlier in the book shifts every anchor after it: the blocks match by text."""
+        from book_agent.domain.models import Block
+
+        with self.session_factory() as session:
+            before = {block.source_text: block.id for block in session.query(Block)}
+        artifacts, _block = self._refresh(
+            [
+                ("p1-b7", "5 A retrospective Meanwhile, the hype is everywhere. Now what?"),
+                ("p1-b9", "After some brainstorming, a couple of ideas emerge."),
+            ]
+        )
+        with self.session_factory() as session:
+            after = {block.source_text: (block.id, block.status.value, block.source_anchor) for block in session.query(Block)}
+        self.assertEqual(artifacts.created_block_ids, [])
+        for text, block_id in before.items():
+            self.assertEqual(after[text][:2], (block_id, "active"))
+        self.assertEqual(after["After some brainstorming, a couple of ideas emerge."][2], "pdf://page/1#p1-b9")
+
 
 class PdfStructureRefreshFigureTests(PdfStructureRefreshStaleSentenceTests):
     # The old parse took a sidebar's tinted panel for a figure.
