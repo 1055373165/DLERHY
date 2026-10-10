@@ -55,7 +55,7 @@ h3,h4{font-size:1.1em;margin:1em 0 .5em}
 .title-page{margin-top:30%;text-align:center}
 .title-page .meta{margin-top:1.5em;color:#555}
 .title-page .book-usage{margin-top:3em;font-size:.8em;color:#666}
-.title-page .book-usage-label{display:block;margin-bottom:.3em;font-weight:bold}
+.title-page .book-usage-lines{display:inline-block;margin:0;padding-left:1.2em;text-align:left}
 .chapter-head h2{margin-top:0}
 .block{margin:.8em 0}
 .zh{text-align:justify}

@@ -1406,7 +1406,8 @@ class ExportService:
             lines.extend([f"_作者：{author}_", ""])
         usage = self._document_usage_text(bundle)
         if usage:
-            lines.extend([f"> 翻译用量：{usage}", ""])
+            # A line each: calls, tokens, cost.
+            lines.extend([*(f"- {line}" for line in usage.splitlines()), ""])
         # A book in parts: each part's chapters (and their sections) one level below the part.
         depths = book_parts.part_depths([title_text for _o, _b, _r, title_text in visible_chapters])
         lines.extend(self._markdown_contents(visible_chapters, depths))

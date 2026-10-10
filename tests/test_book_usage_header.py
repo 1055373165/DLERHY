@@ -43,12 +43,15 @@ class BookUsageHeaderTest(unittest.TestCase):
         markdown = Path(md_export.file_path).read_text(encoding="utf-8")
 
         # HTML: under the title, before the first chapter.
-        self.assertIn(summary, merged)
+        for line in usage.lines_zh():
+            self.assertIn(f"<li>{line}</li>", merged)
         self.assertLess(merged.index("</header>"), merged.index("class='book-usage'"))
         self.assertLess(merged.index("class='book-usage'"), merged.index("<section class='chapter'"))
         # Markdown: a line under the title, before the contents.
         head = markdown.split("\n## ", 1)[0]
-        self.assertIn(f"> 翻译用量：{summary}", head)
+        # A line each: calls, tokens, cost.
+        self.assertEqual(usage.lines_zh()[0], f"翻译用量：模型调用 {usage.call_count:,} 次")
+        self.assertIn("\n".join(f"- {line}" for line in usage.lines_zh()), head)
         # The reader's download keeps it, its contents list after it; the EPUB's title page has it.
         reader = reader_html(merged)
         self.assertIn("class='book-usage'", reader)
