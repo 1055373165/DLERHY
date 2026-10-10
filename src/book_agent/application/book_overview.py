@@ -618,8 +618,10 @@ def build_overview(session: Session, document_id: str, context: OverviewContext,
         "needs_you": needs_you,
         "quality": {"open_issues": int(issues[0] or 0), "blocking": int(issues[1] or 0)},
         "parse_health": overview_summary(latest_report(session, document.id)),
-        # Whether the book can be imported again with the current parser (nothing translated yet).
+        # Whether the book can be imported again with the current parser (nothing but the pilot translated).
         "can_reimport": _can_reimport(session, document),
+        # Whether importing again throws the pilot away (the confirmation says so).
+        "reimport_discards_pilot": _reimport_discards_pilot(session, document),
         # The whole book's layered QA and repair (services/book_quality.py); null before the first.
         "book_quality": _book_quality(session, document.id),
         # The estimate reads the whole book: skipped for lists of books (the home page's cards).
@@ -632,6 +634,12 @@ def _can_reimport(session: Session, document: Document) -> bool:
     from book_agent.services.document_reimport import reimport_refusal
 
     return reimport_refusal(session, document) is None
+
+
+def _reimport_discards_pilot(session: Session, document: Document) -> bool:
+    from book_agent.services.document_reimport import reimport_discards_pilot
+
+    return reimport_discards_pilot(session, document)
 
 
 def _book_quality(session: Session, document_id: str) -> dict[str, Any] | None:

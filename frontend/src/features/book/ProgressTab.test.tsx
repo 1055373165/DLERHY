@@ -79,7 +79,7 @@ const report = {
   ],
 };
 
-function installHealthMock(withReport: boolean, canReimport = false) {
+function installHealthMock(withReport: boolean, canReimport = false, { afterPilot = false, needsAttention = true } = {}) {
   const calls: { url: string; method: string }[] = [];
   let reported = withReport;
   vi.stubGlobal(
@@ -93,10 +93,11 @@ function installHealthMock(withReport: boolean, canReimport = false) {
             source_type: "pdf_text",
             source_url: null,
             can_reimport: canReimport,
+            reimport_discards_pilot: afterPilot,
             parse_health: reported
               ? {
-                  status: "blocking",
-                  needs_attention: true,
+                  status: needsAttention ? "blocking" : "passed",
+                  needs_attention: needsAttention,
                   checked_at: "2026-09-25T08:00:00Z",
                   check_count: 3,
                   failed: [
@@ -162,6 +163,22 @@ describe("Parse health on the progress tab", () => {
     expect(within(panel).getByText(/按最新的规则重新导入/)).toBeInTheDocument();
     await userEvent.click(within(panel).getByRole("button", { name: "重新导入" }));
     expect(calls.some((call) => call.url.includes("/reimport"))).toBe(false);
+    await userEvent.click(within(panel).getByRole("button", { name: "确定重新导入" }));
+    expect(calls.some((call) => call.url.includes(`/v1/documents/${HEALTH_ID}/reimport`) && call.method === "POST")).toBe(true);
+  });
+
+  it("after the pilot, offers the re-import even with a green check and says the pilot is dropped", async () => {
+    const calls = installHealthMock(true, true, { afterPilot: true, needsAttention: false });
+    render(
+      <MemoryRouter initialEntries={[`/books/${HEALTH_ID}/progress`]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    const panel = await screen.findByRole("region", { name: "解析体检" });
+    expect(within(panel).getByText(/试译的译文会被清掉，重新导入后可以再免费试译一次/)).toBeInTheDocument();
+    await userEvent.click(within(panel).getByRole("button", { name: "重新导入" }));
+    expect(within(panel).getByText("现有的解析结果、体检报告和试译译文都会被清掉，确定吗？")).toBeInTheDocument();
     await userEvent.click(within(panel).getByRole("button", { name: "确定重新导入" }));
     expect(calls.some((call) => call.url.includes(`/v1/documents/${HEALTH_ID}/reimport`) && call.method === "POST")).toBe(true);
   });
