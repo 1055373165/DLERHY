@@ -48,6 +48,11 @@ export async function getParseHealth(documentId: string): Promise<ParseHealthRep
   return requestJson<ParseHealthReport>(`/documents/${encodeURIComponent(documentId)}/parse-health`);
 }
 
+/** Import the book again from its uploaded file with the current parser (only before anything is translated). */
+export async function reimportDocument(documentId: string): Promise<void> {
+  await requestJson(`/documents/${encodeURIComponent(documentId)}/reimport`, { method: "POST" });
+}
+
 export async function runParseHealth(documentId: string): Promise<ParseHealthReport> {
   return requestJson<ParseHealthReport>(`/documents/${encodeURIComponent(documentId)}/parse-health`, { method: "POST" });
 }

@@ -39,7 +39,11 @@ export function ProgressTab() {
   const bookQuality = book.book_quality ?? null;
   return (
     <div className={s.stack}>
-      <ParseHealthPanel documentId={book.document_id} summary={book.parse_health ?? null} />
+      <ParseHealthPanel
+        documentId={book.document_id}
+        summary={book.parse_health ?? null}
+        canReimport={book.can_reimport ?? false}
+      />
       {bookQuality && (
         <PilotQualityPanel documentId={book.document_id} summary={bookQuality.quality} repair={bookQuality.repair} scope="book" />
       )}

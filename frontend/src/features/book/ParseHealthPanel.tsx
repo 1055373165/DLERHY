@@ -1,8 +1,15 @@
+import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { queryClient } from "../../app/queryClient";
 import { parseCheckCopy, parseSeverityLabel } from "../../lib/copy";
-import { type ParseHealthCheck, type ParseHealthSummary, getParseHealth, runParseHealth } from "../../lib/parseHealth";
+import {
+  type ParseHealthCheck,
+  type ParseHealthSummary,
+  getParseHealth,
+  reimportDocument,
+  runParseHealth,
+} from "../../lib/parseHealth";
 import { formatDate } from "../../lib/workflow";
 import s from "./Tabs.module.css";
 
@@ -68,7 +75,25 @@ function CheckRow({ check }: { check: ParseHealthCheck }) {
 }
 
 /** The parse health report: before any translation, what the rules found wrong with how the book was read. */
-export function ParseHealthPanel({ documentId, summary }: { documentId: string; summary: ParseHealthSummary | null }) {
+export function ParseHealthPanel({
+  documentId,
+  summary,
+  canReimport = false,
+}: {
+  documentId: string;
+  summary: ParseHealthSummary | null;
+  /** From the overview: nothing translated yet, so the book can be imported again with the current parser. */
+  canReimport?: boolean;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const reimport = useMutation({
+    mutationFn: () => reimportDocument(documentId),
+    onSuccess: async () => {
+      setConfirming(false);
+      // Chapters, blocks and the report are all new.
+      await queryClient.invalidateQueries();
+    },
+  });
   const report = useQuery({
     queryKey: ["parse-health", documentId, summary?.checked_at ?? null],
     queryFn: () => getParseHealth(documentId),
@@ -103,6 +128,30 @@ export function ParseHealthPanel({ documentId, summary }: { documentId: string; 
             {summary.checked_at && <span className={s.meta}> · 体检于 {formatDate(summary.checked_at)}</span>}
           </p>
           {report.isError && <div className={s.error}>体检报告没能加载：{(report.error as Error).message}</div>}
+          {canReimport && summary.needs_attention && (
+            <div className={s.reimport}>
+              <p>
+                这些问题出在解析上，不是你的书有问题。解析规则修复后，这本书还没开始翻译，可以按最新的规则重新导入：
+                章节、图片和体检都会重新生成，不花钱，大约一分钟。
+              </p>
+              {confirming ? (
+                <div className={s.reimportActions}>
+                  <span>现有的解析结果和体检报告会被替换，确定吗？</span>
+                  <button className="btn btn-sm btn-primary" disabled={reimport.isPending} onClick={() => reimport.mutate()}>
+                    {reimport.isPending ? "重新导入中…" : "确定重新导入"}
+                  </button>
+                  <button className="btn btn-sm" disabled={reimport.isPending} onClick={() => setConfirming(false)}>
+                    取消
+                  </button>
+                </div>
+              ) : (
+                <button className="btn btn-sm" onClick={() => setConfirming(true)}>
+                  重新导入
+                </button>
+              )}
+              {reimport.isError && <div className={s.error}>重新导入没能完成：{(reimport.error as Error).message}</div>}
+            </div>
+          )}
           {checks.length > 0 && (
             <ul className={s.checks}>
               {checks.map((check) => (

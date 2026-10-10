@@ -618,12 +618,20 @@ def build_overview(session: Session, document_id: str, context: OverviewContext,
         "needs_you": needs_you,
         "quality": {"open_issues": int(issues[0] or 0), "blocking": int(issues[1] or 0)},
         "parse_health": overview_summary(latest_report(session, document.id)),
+        # Whether the book can be imported again with the current parser (nothing translated yet).
+        "can_reimport": _can_reimport(session, document),
         # The whole book's layered QA and repair (services/book_quality.py); null before the first.
         "book_quality": _book_quality(session, document.id),
         # The estimate reads the whole book: skipped for lists of books (the home page's cards).
         # After a pilot it is what the rest of the book costs.
         "cost": _cost(session, document, context, after_pilot=pilot["state"] == "ready") if include_cost else None,
     }
+
+
+def _can_reimport(session: Session, document: Document) -> bool:
+    from book_agent.services.document_reimport import reimport_refusal
+
+    return reimport_refusal(session, document) is None
 
 
 def _book_quality(session: Session, document_id: str) -> dict[str, Any] | None:

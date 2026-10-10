@@ -118,6 +118,39 @@ class ParseHealthApiTests(unittest.TestCase):
                 ).all()
             )
 
+    def test_a_book_not_translated_yet_imports_again_with_the_current_parser(self) -> None:
+        upload = self.root / "uploads" / "first"
+        upload.mkdir(parents=True)
+        pdf_path = upload / "parted.pdf"
+        _write_parted_book(pdf_path)
+        document_id = self._bootstrap(pdf_path)
+        (first_report,) = self._reports(document_id)
+        self.assertTrue(self.client.get(f"/v1/documents/{document_id}/overview").json()["can_reimport"])
+
+        response = self.client.post(f"/v1/documents/{document_id}/reimport")
+        self.assertEqual(response.status_code, 200, response.text)
+        # The same book (its id comes from the file), parsed and checked again from a copy of its file.
+        self.assertEqual(response.json()["document_id"], document_id)
+        # Checked again on import (Postgres deletes the old report with the book; SQLite keeps it).
+        latest = self.client.get(f"/v1/documents/{document_id}/parse-health").json()
+        self.assertNotEqual(latest["report_id"], first_report.id)
+        self.assertEqual(latest["trigger"], "bootstrap")
+        from book_agent.domain.models import Document
+
+        with self.session_factory() as session:
+            source = Path(session.get(Document, document_id).source_path)
+        self.assertTrue(source.is_file())
+        self.assertNotEqual(source, pdf_path)
+        self.assertFalse(pdf_path.exists())
+
+        # Once a translation is asked for, the parse holds work: no re-import.
+        run = self.client.post("/v1/runs", json={"document_id": document_id, "run_type": "translate_full", "requested_by": "test"})
+        self.assertIn(run.status_code, (200, 201), run.text)
+        self.assertFalse(self.client.get(f"/v1/documents/{document_id}/overview").json()["can_reimport"])
+        refused = self.client.post(f"/v1/documents/{document_id}/reimport")
+        self.assertEqual(refused.status_code, 409)
+        self.assertIn("已经开始试译或翻译", refused.json()["detail"])
+
     def test_a_pdf_import_writes_a_report_the_api_and_the_overview_read(self) -> None:
         pdf_path = self.root / "parted.pdf"
         _write_parted_book(pdf_path)
