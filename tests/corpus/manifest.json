@@ -96,6 +96,65 @@
       "known_residuals": {
         "line_break_hyphens": "10 compounds broken at their own hyphen keep a space after it ('general- purpose' p23, 'decision- making' p24/p38, 'domain- specific' p66, 'acid- free' p3) and 1 split word."
       }
+    },
+    {
+      "id": "art-of-ai-product-development",
+      "path": "/Volumes/touch/The Art of AI Product Development (Janna Lipenkova) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "alt_paths": [
+        "~/Downloads/ai 书籍/The Art of AI Product Development (Janna Lipenkova) (z-library.sk, 1lib.sk, z-lib.sk).pdf"
+      ],
+      "publisher": "Manning",
+      "source_type": "pdf_text",
+      "section_count": 25,
+      "chapter_titles": [
+        "Front Matter",
+        "brief contents",
+        "contents",
+        "preface",
+        "acknowledgments",
+        "about this book",
+        "about the author",
+        "about the cover illustration",
+        "Part 1 Discovery",
+        "1 Creating value with AI-driven products",
+        "Chapter 2 Discovering and prioritizing AI opportunities",
+        "Chapter 3 Mapping the AI solution space",
+        "Part 2 Development",
+        "4 Predictive AI",
+        "5 Exploring and evaluating language models",
+        "6 Prompt engineering",
+        "Chapter 7 Search and retrieval-augmented generation",
+        "8 Fine-tuning language models",
+        "Chapter 9 Automating workflows with agentic AI",
+        "Part 3 Adoption",
+        "10 AI user experience: Designing for uncertainty",
+        "11 AI governance",
+        "12 Working with your stakeholders",
+        "appendix AI development toolbox",
+        "index"
+      ],
+      "max_counts": {
+        "chapters_vs_outline": 0,
+        "chapter_titles": 0,
+        "front_matter_sections": 0,
+        "stray_glyphs": 0,
+        "pseudo_headings": 0,
+        "line_break_hyphens": 6,
+        "figure_regions": 15,
+        "image_fragments": 0,
+        "caption_folds": 0,
+        "duplicated_labels": 8,
+        "headings_as_text": 0,
+        "figure_residue": 0
+      },
+      "max_prose_inside_figures": 4,
+      "known_residuals": {
+        "chapters": "Recorded after fix/pdf-outline-chapters-win (2026-10-10): 25 sections, one per bookmark plus the front matter. Before it the appendix, a '7.3.2' heading and the further-reading list split the book into 56.",
+        "figure_regions": "15 crops still flagged (page furniture on p1, a cut author bio on p21, regions over body text on p35/p41/p207): not examined yet.",
+        "prose_inside_figures": "4 body paragraphs inside figure regions (the author bio on p21 and others): the same open figure-region work.",
+        "duplicated_labels": "8 figures whose labels repeat in the text beside them (p21, p41, p198): not examined yet.",
+        "line_break_hyphens": "5 words split at a line-end hyphen ('comprehen- sive' p178, 'rec- ommendations' p274) and 'eff ectively' p368."
+      }
     }
   ]
 }

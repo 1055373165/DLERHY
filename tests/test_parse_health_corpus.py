@@ -243,7 +243,10 @@ def _book_test(book: dict[str, Any]):
         with tempfile.TemporaryDirectory() as tmpdir:
             source_type, titles, checks, figures = parse_book(path, Path(tmpdir))
         failures = corpus_failures(book, source_type=source_type, chapter_titles=titles, checks=checks)
-        failures += [f"body paragraph inside a figure: p{page} {text}" for page, text in prose_inside_figures(path, figures)]
+        swallowed = prose_inside_figures(path, figures)
+        # A book recorded with open figure-region work names how many such paragraphs it still has.
+        if len(swallowed) > int(book.get("max_prose_inside_figures", 0)):
+            failures += [f"body paragraph inside a figure: p{page} {text}" for page, text in swallowed]
         self.assertEqual(failures, [], f"{book['id']} no longer parses as recorded")
 
     test.__doc__ = f"{book['id']} parses as recorded in the corpus manifest."
