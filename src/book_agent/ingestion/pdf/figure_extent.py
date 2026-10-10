@@ -314,7 +314,14 @@ def vector_figure_extents(
                 continue
         figures.append(group)
     figures.extend(
-        _captioned_drawings(unclaimed, figures, text_lines, figure_sized=figure_sized, join_gap=join_gap, page_height=page_height)
+        _captioned_drawings(
+            unclaimed,
+            figures,
+            text_lines,
+            figure_sized=lambda bbox: figure_sized(bbox) or _caption_claim_sized(bbox),
+            join_gap=join_gap,
+            page_height=page_height,
+        )
     )
     _take_text_up_to_caption(figures, text_lines)
 
@@ -332,6 +339,26 @@ def vector_figure_extents(
             )
         )
     return extents
+
+
+# A drawing a figure caption claims is a figure when it is at least this long on one side and this
+# thick on the other: a flat row of boxes and arrows ("Documents → Chunks → …") falls under the
+# general size bar, a lone arrow does not reach this one.
+CAPTION_CLAIM_MIN_LONG_PT = 100.0
+CAPTION_CLAIM_MIN_SHORT_PT = 20.0
+# A side caption (set beside its figure, as Manning does for narrow figures) is this close to it.
+SIDE_CAPTION_GAP_PT = 60.0
+
+
+def _caption_claim_sized(bbox: Bbox) -> bool:
+    width, height = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    return max(width, height) >= CAPTION_CLAIM_MIN_LONG_PT and min(width, height) >= CAPTION_CLAIM_MIN_SHORT_PT
+
+
+def _beside_caption(extent: Bbox, caption: Bbox) -> bool:
+    """A drawing to the left of a side caption: they overlap vertically and nothing wide separates them."""
+    overlaps = extent[1] < caption[3] + 6.0 and extent[3] > caption[1] - 6.0
+    return overlaps and extent[2] <= caption[0] + 2.0 and caption[0] - extent[2] <= SIDE_CAPTION_GAP_PT
 
 
 # A caption with no figure within this distance has not found its drawing yet.
@@ -371,14 +398,20 @@ def _captioned_drawings(
             break
         if any(_gap(group.extent(text_lines), caption) <= FIGURE_CAPTION_GAP_PT for group in claimed):
             continue
-        for above in (True, False):
-            band = _caption_band(caption, block_index, text_lines, above=above, page_height=page_height)
-            if band is None:
-                continue
+        for side in ("above", "below", "beside"):
+            if side == "beside":
+                # A side caption: the drawings to its left that it overlaps vertically.
+                band = (0.0, page_height)
+                placed = lambda extent: _beside_caption(extent, caption)  # noqa: E731
+            else:
+                band = _caption_band(caption, block_index, text_lines, above=side == "above", page_height=page_height)
+                if band is None:
+                    continue
+                placed = lambda extent, band=band: _within_band(extent, band)  # noqa: E731
             members = [
                 group
                 for group in remaining
-                if _within_band(group.extent(text_lines), band)
+                if placed(group.extent(text_lines))
                 and not _intersects(group.extent(text_lines), caption)
                 and not any(
                     line.prose and index not in group.labels and _intersects(group.drawing, line.bbox)
@@ -397,6 +430,8 @@ def _captioned_drawings(
             # is its labels (a title above the first arrow, a note beside an axis),
             # however far from a stroke.
             span = _union(group.extent(text_lines) for group in members)
+            if side == "beside":
+                band = (span[1] - join_gap, span[3] + join_gap)
             for index, line in enumerate(text_lines):
                 if line.prose or line.caption or line.margin or not _within_band(line.bbox, band):
                     continue
@@ -596,6 +631,8 @@ def _is_candidate_path(bbox: Bbox, page_width: float, page_height: float) -> boo
         return False  # page background
     if width >= page_width * 0.92 and height <= page_height * 0.035:
         return False  # full-width rule
+    if width >= page_width * 0.7 and height <= 1.0:
+        return False  # a hairline across the text block: a section's rule ("about the author"), not a figure's
     if height >= page_height * 0.92 and width <= page_width * 0.035:
         return False  # full-height rule
     if bleeds_off_page(bbox, page_width, page_height):
@@ -794,6 +831,68 @@ def _union(bboxes: Iterable[Bbox]) -> Bbox:
         max(bbox[2] for bbox in items),
         max(bbox[3] for bbox in items),
     )
+
+
+# ---------------------------------------------------------------------------
+# Completing a region
+
+
+def complete_figure_region(
+    page: Any,
+    region: Sequence[float],
+    *,
+    max_rounds: int = 8,
+    touch_gap: float = 2.0,
+) -> Bbox:
+    """``region`` grown to the drawing it cuts through: every path that crosses or touches its edge,
+    and the labels (short lines, not sentences) that then cross it, round after round.
+
+    A path or label whose taking would bring in body prose, a caption or the page's header or footer
+    is left out, so a figure never grows over the text around it. Returns ``region`` unchanged when
+    nothing is cut.
+    """
+    page_width = float(page.rect.width)
+    page_height = float(page.rect.height)
+    lines = page_text_lines(page.get_text("dict"), page_width, page_height)
+    try:
+        _paths, visible = split_extended_drawings(page.get_drawings(extended=True))
+    except Exception:
+        visible = []
+    paths = [bbox for bbox in visible if bbox is not None and _is_candidate_path(bbox, page_width, page_height)]
+    box: Bbox = tuple(float(value) for value in region)  # type: ignore[assignment]
+
+    def forbidden(line: PageTextLine) -> bool:
+        text = " ".join(line.text.split())
+        lead_in = text.endswith(":") and len(text.split()) >= 5
+        return line.caption or line.margin or line.prose or _is_sentence(line.text) or lead_in
+
+    # A region that is one glyph (a formula the parser boxed by a single character) reaches the
+    # formula's other lines a little further off.
+    line_gap = touch_gap if (box[2] - box[0]) * (box[3] - box[1]) >= 200.0 else FIGURE_JOIN_GAP_PT
+
+    def takes_forbidden(candidate: Bbox, current: Bbox) -> bool:
+        grown = _union([current, candidate])
+        return any(
+            forbidden(line) and _intersects(grown, line.bbox) and not _intersects(current, line.bbox)
+            for line in lines
+        )
+
+    for _ in range(max_rounds):
+        zone: Bbox = (box[0] - touch_gap, box[1] - touch_gap, box[2] + touch_gap, box[3] + touch_gap)
+        grown = box
+        for bbox in paths:
+            if _intersects(zone, bbox) and not _contains(grown, bbox, tolerance=1.0) and not takes_forbidden(bbox, grown):
+                grown = _union([grown, bbox])
+        line_zone: Bbox = (box[0] - line_gap, box[1] - line_gap, box[2] + line_gap, box[3] + line_gap)
+        for line in lines:
+            if forbidden(line) or not _intersects(line_zone, line.bbox) or _contains(grown, line.bbox, tolerance=1.0):
+                continue
+            if not takes_forbidden(line.bbox, grown):
+                grown = _union([grown, line.bbox])
+        if grown == box:
+            break
+        box = grown
+    return box
 
 
 # ---------------------------------------------------------------------------

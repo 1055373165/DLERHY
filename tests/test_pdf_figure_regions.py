@@ -685,3 +685,71 @@ class TextOnlyFigureProseTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ArtOfAIProductFigureTests(unittest.TestCase):
+    """The Art of AI Product Development (Manning): a wrapped cross-reference read as a caption, a
+    section rule joined to the author photo, a flat row of boxes under the size bar, and margin
+    diagrams cut short."""
+
+    def _parse_built(self, build) -> tuple[list, list, Path, str]:
+        tmpdir = tempfile.mkdtemp()
+        pdf_path = Path(tmpdir) / "book.pdf"
+        document = fitz.open()
+        build(document.new_page(width=531, height=666))
+        document.save(pdf_path)
+        parsed = _parse(pdf_path, tmpdir)
+        return [_region(block)[1] for block in _figure_blocks(parsed)], _text_blocks(parsed), pdf_path, tmpdir
+
+    def test_a_wrapped_lowercase_cross_reference_is_not_a_caption(self) -> None:
+        """p35: "…shown earlier in figure 1.2. This will enable you…" wrapped so a line starts "figure 1.2."."""
+        from book_agent.ingestion.text import _FIGURE_CAPTION_PATTERN
+
+        self.assertIsNone(_FIGURE_CAPTION_PATTERN.match("figure 1.2. This will enable you to think about AI in a systematic way"))
+        self.assertIsNone(_FIGURE_CAPTION_PATTERN.match("figure 2.2: We start with sourcing opportunities"))
+        for caption in ("Figure 1.2 The components of an AI system", "FIGURE 3-1 Agents", "Fig. 4 Overview"):
+            self.assertIsNotNone(_FIGURE_CAPTION_PATTERN.match(caption), caption)
+
+    def test_a_flat_row_of_boxes_its_caption_claims_is_a_figure(self) -> None:
+        def build(page):
+            _body(page, 60, 200)
+            for left in (57, 171, 285, 398):
+                page.draw_rect(fitz.Rect(left, 255, left + 63, 284), color=(0, 0, 0), fill=(0.85, 0.9, 1.0), width=0.5)
+            for start in (120, 234, 348):
+                _arrow(page, (start, 270), (start + 50, 270))
+            page.insert_text((57, 306), "Figure 7.5 Constructing the embedding database", fontsize=8)
+            _body(page, 330, 420)
+
+        regions, texts, _path, _tmp = self._parse_built(build)
+        self.assertEqual(len(regions), 1)
+        x0, y0, x1, y1 = regions[0]
+        self.assertLessEqual(x0, 57.5)
+        self.assertGreaterEqual(x1, 460.5)
+        self.assertGreater(y0, 200.0)
+        self.assertLess(y1, 297.0)
+
+    def test_a_section_rule_across_the_text_block_is_not_part_of_a_figure(self) -> None:
+        """p21: the 0.5pt rule under "about the author" (77% of the page) joined the photo, and through it
+        the heading and the bio."""
+        from book_agent.ingestion.pdf.figure_extent import _is_candidate_path
+
+        self.assertFalse(_is_candidate_path((66.0, 246.9, 474.0, 246.9), 531.0, 666.0))
+        # A figure's own lines and boxes still count: a short arrow, a wide flat box.
+        self.assertTrue(_is_candidate_path((120.0, 270.0, 170.0, 270.0), 531.0, 666.0))
+        self.assertTrue(_is_candidate_path((57.0, 255.0, 461.0, 284.0), 531.0, 666.0))
+
+    def test_a_region_grows_to_the_boxes_it_cuts_and_stops_at_body_text(self) -> None:
+        from book_agent.ingestion.pdf.figure_extent import complete_figure_region
+
+        document = fitz.open()
+        page = document.new_page(width=531, height=666)
+        _body(page, 60, 160)
+        for top in (181, 220, 259):
+            page.draw_rect(fitz.Rect(402, top, 459, top + 10), color=(0, 0, 0), fill=(0.2, 0.3, 0.6), width=0.5)
+        for top in (191, 230):
+            _arrow(page, (430, top), (430, top + 29))
+        page.insert_textbox(fitz.Rect(93, 171, 381, 400), BODY, fontsize=10)
+        grown = complete_figure_region(page, (402.0, 220.0, 459.0, 269.0))
+        self.assertLessEqual(grown[1], 181.5)  # the first box, cut off before
+        self.assertGreaterEqual(grown[0], 390.0)  # never over the text beside it
+        self.assertEqual(figure_region_problems(page, grown, furniture_bboxes=[]), [])

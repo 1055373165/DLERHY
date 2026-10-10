@@ -140,19 +140,19 @@
         "stray_glyphs": 0,
         "pseudo_headings": 0,
         "line_break_hyphens": 6,
-        "figure_regions": 15,
+        "figure_regions": 1,
         "image_fragments": 0,
         "caption_folds": 0,
-        "duplicated_labels": 8,
+        "duplicated_labels": 4,
         "headings_as_text": 0,
         "figure_residue": 0
       },
-      "max_prose_inside_figures": 4,
+      "max_prose_inside_figures": 0,
       "known_residuals": {
         "chapters": "Recorded after fix/pdf-outline-chapters-win (2026-10-10): 25 sections, one per bookmark plus the front matter. Before it the appendix, a '7.3.2' heading and the further-reading list split the book into 56.",
-        "figure_regions": "15 crops still flagged (page furniture on p1, a cut author bio on p21, regions over body text on p35/p41/p207): not examined yet.",
-        "prose_inside_figures": "4 body paragraphs inside figure regions (the author bio on p21 and others): the same open figure-region work.",
-        "duplicated_labels": "8 figures whose labels repeat in the text beside them (p21, p41, p198): not examined yet.",
+        "figure_regions": "1 left: the publisher logo on the cover (p1, the MANNING lettering set in the page's furniture band). Recorded after fix/pdf-figure-regions (2026-10-10); 15 before it: a wrapped cross-reference read as a caption (p35/p38), a section rule joined to the author photo (p21), text-only figures over body text (p41/p273), margin diagrams cut short (p207/p269/p279) and side-captioned or flat vector figures not found (p110/p111/p115/p130/p131/p165).",
+        "prose_inside_figures": "none since fix/pdf-figure-regions (4 before it: p21, p41, p273).",
+        "duplicated_labels": "4 figures whose labels repeat in the text beside them: not examined yet.",
         "line_break_hyphens": "5 words split at a line-end hyphen ('comprehen- sive' p178, 'rec- ommendations' p274) and 'eff ectively' p368."
       }
     }
