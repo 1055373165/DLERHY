@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from statistics import median
@@ -207,6 +207,19 @@ _LISTING_ANNOTATION_PROSE_RE = re.compile(
 
 # Markers of a list item split out by its hanging indent (``PdfTextBlock.list_marker``).
 _LIST_ITEM_MARKERS = frozenset({"bullet", "dash", "number"})
+
+
+# "AI fairness and bias mitigation 325", "• Predictive AI 61", "GDPR 115, 254, 257, 306".
+_LISTING_ENTRY_LINE = re.compile(r"[A-Za-z].*\s\d{1,4}(?:[–-]\d{1,4})?(?:,\s*\d{1,4}(?:[–-]\d{1,4})?)*\s*$")
+_BARE_NUMBER_LINE = re.compile(r"^\s*\d{1,3}\s*$")
+
+
+def _reads_as_listing_entries(line_texts: Sequence[str]) -> bool:
+    """Most lines are a contents or index entry ending in page numbers (bare chapter numbers aside)."""
+    lines = [line for line in line_texts if line.strip() and not _BARE_NUMBER_LINE.match(line)]
+    if not lines:
+        return False
+    return sum(1 for line in lines if _LISTING_ENTRY_LINE.search(line)) >= len(lines) * 0.6
 
 
 class PdfStructureRecoveryService:
@@ -1360,7 +1373,15 @@ class PdfStructureRecoveryService:
         ):
             if zone != "bottom":
                 return "heading"
-        if _looks_like_table(raw_block.line_count, raw_block.line_texts) or _looks_like_numeric_table_fragment(raw_block.line_texts):
+        # A contents or index page lines up "entry  page" on every line: a list, not a table (Art of
+        # AI's brief contents and index came out as tables).
+        listing_page = (page_context.is_toc_page or page_context.page_family == "index") and _reads_as_listing_entries(
+            raw_block.line_texts
+        )
+        if not listing_page and (
+            _looks_like_table(raw_block.line_count, raw_block.line_texts)
+            or _looks_like_numeric_table_fragment(raw_block.line_texts)
+        ):
             # A listing set only in a code font reads as a table to the numeric heuristics
             # (``model="gpt-5-mini"`` has a header cue and a number on each line): it is code.
             if self._is_monospace_code_listing(raw_block):
@@ -4584,6 +4605,67 @@ class PdfStructureRecoveryService:
                 dict.fromkeys([*caption_block.flags, f"{artifact_role}_caption_linked"])
             )
 
+    def _link_figure_captions_to_tables(self, recovered_blocks: list[_RecoveredBlock]) -> None:
+        """A figure caption under a table, on a page with no picture: the book set the table as a
+        figure (Art of AI figure 2.8, a scoring matrix). The table takes the caption, as it would a
+        table's; a page with a picture still uncaptioned leaves its figure captions to the picture."""
+        pictured_pages = {
+            block.page_start
+            for block in recovered_blocks
+            if block.role in {"image", "figure"} and not block.metadata.get("linked_caption_source_anchor")
+        }
+        for caption_index, caption in enumerate(recovered_blocks):
+            if (
+                caption.role != "caption"
+                or caption.metadata.get("caption_for_source_anchor")
+                or not _looks_like_figure_caption(caption.text)
+                or caption.page_start in pictured_pages
+            ):
+                continue
+            caption_bbox = self._page_bbox(caption, caption.page_start)
+            if caption_bbox is None:
+                continue
+            best: tuple[float, int] | None = None
+            for table_index, table in enumerate(recovered_blocks):
+                if (
+                    table.role != "table_like"
+                    or table.page_start != caption.page_start
+                    or table.metadata.get("linked_caption_source_anchor")
+                ):
+                    continue
+                table_bbox = self._page_bbox(table, caption.page_start)
+                if table_bbox is None:
+                    continue
+                gap = caption_bbox[1] - table_bbox[3]
+                # Or beside it: a side caption level with the table, just right of it (figure 5.3).
+                beside = caption_bbox[0] - table_bbox[2]
+                level = min(caption_bbox[3], table_bbox[3]) - max(caption_bbox[1], table_bbox[1]) > 0
+                below = horizontal_overlap_ratio(table_bbox, caption_bbox) >= 0.2 and -12.0 <= gap <= 48.0
+                if below and (best is None or gap < best[0]):
+                    best = (gap, table_index)
+                elif level and 0.0 <= beside <= 48.0 and (best is None or beside < best[0]):
+                    best = (beside, table_index)
+            if best is None:
+                continue
+            table = recovered_blocks[best[1]]
+            caption_anchor = self._source_anchor(caption)
+            table.metadata.update(
+                {
+                    "linked_caption_text": caption.text,
+                    "linked_caption_source_anchor": caption_anchor,
+                    "linked_caption_page": caption.page_start,
+                }
+            )
+            table.flags = list(dict.fromkeys([*table.flags, "caption_linked"]))
+            caption.metadata.update(
+                {
+                    "caption_for_source_anchor": self._source_anchor(table),
+                    "caption_for_page": table.page_start,
+                    "caption_for_role": "table",
+                }
+            )
+            caption.flags = list(dict.fromkeys([*caption.flags, "table_caption_linked"]))
+
     def _link_artifact_group_contexts(
         self,
         recovered_blocks: list[_RecoveredBlock],
@@ -4680,6 +4762,19 @@ class PdfStructureRecoveryService:
             if candidate_bbox is None:
                 continue
             overlap_ratio = horizontal_overlap_ratio(artifact_bbox, candidate_bbox)
+            if same_page and overlap_ratio < 0.2:
+                # A side caption: just right of the artifact, its last line level with the
+                # artifact's foot (Art of AI figure 10.7).
+                beside_gap = candidate_bbox[0] - artifact_bbox[2]
+                if (
+                    0.0 <= beside_gap <= 48.0
+                    and candidate_bbox[1] >= artifact_bbox[1] - 4.0
+                    and abs(candidate_bbox[3] - artifact_bbox[3]) <= 16.0
+                ):
+                    below_candidates.append(
+                        (beside_gap, 0.0, abs(candidate.reading_order_index - artifact_block.reading_order_index), candidate_index)
+                    )
+                continue
             if overlap_ratio < 0.2:
                 continue
             center_distance = abs(
@@ -5564,6 +5659,7 @@ _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
     BlockRecoveryPass("recover_text_only_figures", _returning("_recover_text_only_figures")),
     BlockRecoveryPass("complete_figure_regions", _returning("_complete_figure_regions", "file_path")),
     BlockRecoveryPass("link_artifact_captions", _in_place("_link_artifact_captions")),
+    BlockRecoveryPass("link_figure_captions_to_tables", _in_place("_link_figure_captions_to_tables")),
     BlockRecoveryPass("link_artifact_group_contexts", _in_place("_link_artifact_group_contexts", academic_paper="academic_lane")),
     BlockRecoveryPass("nest_list_items", _returning("_nest_list_items")),
     BlockRecoveryPass("group_sidebars", _returning("_group_sidebars", "ordered_pages")),

@@ -120,6 +120,9 @@ class PdfTextBlock:
     line_styles: tuple[tuple[float, bool], ...] = ()
     # Text is "| cell | cell |" rows recovered from a ruled (vector-lined) table grid.
     ruled_table: bool = False
+    # A ruled table whose cells are mostly filled (a data table, not a diagram's boxes): its own
+    # shading measured as a drawing is not a picture beside it.
+    dense_table: bool = False
     # Every line of the block is a label of a vector figure measured on the page
     # (``figure_extent.figure_label_blocks``): part of the picture, not body text.
     figure_label: bool = False
