@@ -125,6 +125,13 @@ class ParseHealthApiTests(unittest.TestCase):
         _write_parted_book(pdf_path)
         document_id = self._bootstrap(pdf_path)
         (first_report,) = self._reports(document_id)
+        # A download that tried to export it (and failed: nothing translated) leaves no translations.
+        from book_agent.domain.enums import DocumentRunStatus, DocumentRunType
+        from book_agent.domain.models.ops import DocumentRun
+
+        with self.session_factory() as session:
+            session.add(DocumentRun(document_id=document_id, run_type=DocumentRunType.EXPORT_FULL, status=DocumentRunStatus.FAILED, requested_by="test", status_detail_json={}))
+            session.commit()
         self.assertTrue(self.client.get(f"/v1/documents/{document_id}/overview").json()["can_reimport"])
 
         response = self.client.post(f"/v1/documents/{document_id}/reimport")
