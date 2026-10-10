@@ -76,6 +76,28 @@ class SharedGridTranslationTests(unittest.TestCase):
         self.assertIn(">模型</th>", html)
         self.assertNotIn("| 模型", html)
 
+    def test_a_grid_whose_line_breaks_were_dropped_is_cut_back_into_rows(self) -> None:
+        """Art of AI p42: the model answered the Miro table on one line ("... | AI 优势 | | Miro AI | ...")."""
+        from book_agent.domain.structure.table_cells import split_shared_cell_translations
+
+        source = "| Miro features | Human strengths |\n| Miro AI | Users provide input. |\n| AI Sidekicks | |"
+        whole = "| Miro 功能 | 人类优势 | | Miro AI | 用户提供输入。 | | AI Sidekicks | |"
+        cells = {cell: whole for cell in ("Miro features", "Human strengths", "Miro AI", "Users provide input.", "AI Sidekicks")}
+        split = split_shared_cell_translations(table_grid(source), cells)
+        self.assertEqual(
+            split,
+            {
+                "Miro features": "Miro 功能",
+                "Human strengths": "人类优势",
+                "Miro AI": "Miro AI",
+                "Users provide input.": "用户提供输入。",
+                "AI Sidekicks": "AI Sidekicks",
+            },
+        )
+        # A row boundary must be an empty cell; otherwise the shape does not fit and nothing is cut.
+        wrong = "| Miro 功能 | 人类优势 | 多余 | Miro AI | 用户提供输入。 | | AI Sidekicks | |"
+        self.assertEqual(split_shared_cell_translations(table_grid(source), {"Miro AI": wrong, "AI Sidekicks": wrong}), {"Miro AI": wrong, "AI Sidekicks": wrong})
+
     def test_a_grid_of_another_shape_is_left_alone(self) -> None:
         from book_agent.domain.structure.table_cells import split_shared_cell_translations
 
