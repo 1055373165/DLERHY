@@ -1542,6 +1542,9 @@ def check_duplicated_blocks(inputs: PilotQaInputs) -> CheckRun:
             if len(key) < _DUPLICATE_MIN_CHARS:
                 continue
             for earlier in blocks[max(0, index - _DUPLICATE_WINDOW) : index]:
+                # A parse's copy sits on the same page as the original.
+                if block.page is not None and earlier.page is not None and block.page != earlier.page:
+                    continue
                 if _duplicate_key(earlier.parsed_text or earlier.source_text) == key:
                     run.findings.append(
                         _block_finding(

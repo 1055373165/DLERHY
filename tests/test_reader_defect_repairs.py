@@ -249,7 +249,8 @@ class ReaderDefectChecksTests(unittest.TestCase):
         copy = _block("b2", "paragraph", text.replace(" To", "\nTo"))
         later = [_block(f"x{index}", "paragraph", f"Another paragraph number {index} with enough words in it.") for index in range(3)]
         repeat = _block("b9", "paragraph", text)
-        run = pilot_qa.check_duplicated_blocks(_inputs([first, table, copy, *later, repeat]))
+        next_page = _block("b10", "paragraph", text, page=11)
+        run = pilot_qa.check_duplicated_blocks(_inputs([first, table, copy, *later, repeat, next_page]))
         self.assertEqual([(finding.target["id"], finding.evidence["copy_of"]) for finding in run.findings], [("b2", "b1")])
         self.assertEqual(run.findings[0].severity, pilot_qa.BLOCKING)
 
