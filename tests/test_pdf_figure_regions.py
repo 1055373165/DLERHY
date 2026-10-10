@@ -753,3 +753,23 @@ class ArtOfAIProductFigureTests(unittest.TestCase):
         self.assertLessEqual(grown[1], 181.5)  # the first box, cut off before
         self.assertGreaterEqual(grown[0], 390.0)  # never over the text beside it
         self.assertEqual(figure_region_problems(page, grown, furniture_bboxes=[]), [])
+
+
+class TextPanelBackgroundTests(unittest.TestCase):
+    """A sidebar's tint is not a figure's: The Art of AI Product Development p42 (a case study box with a
+    table in it), RAG from First Principles p127 (a note box) and The Art of Code p117 (a math refresher)
+    were each cropped whole as one picture, their text never translated."""
+
+    def test_a_light_borderless_panel_with_body_text_on_it_is_a_panel(self) -> None:
+        from book_agent.ingestion.pdf.extract import _is_text_panel_background
+
+        tint = {"fill": (0.97, 0.96, 0.91), "color": None, "items": [("re", None)]}
+        prose = SimpleNamespace(prose=True, bbox=(114.0, 230.0, 460.0, 242.0))
+        self.assertTrue(_is_text_panel_background(tint, (102.0, 214.0, 474.0, 458.0), 531.0, [prose]))
+        # Not a panel: no body text on it, a dark or outlined shape, or a narrow box in a figure.
+        self.assertFalse(_is_text_panel_background(tint, (102.0, 214.0, 474.0, 458.0), 531.0, []))
+        dark = {**tint, "fill": (0.28, 0.42, 0.52)}
+        self.assertFalse(_is_text_panel_background(dark, (114.0, 281.0, 461.0, 297.0), 531.0, [prose]))
+        outlined = {**tint, "color": (0, 0, 0)}
+        self.assertFalse(_is_text_panel_background(outlined, (102.0, 214.0, 474.0, 458.0), 531.0, [prose]))
+        self.assertFalse(_is_text_panel_background(tint, (300.0, 214.0, 400.0, 458.0), 531.0, [prose]))
