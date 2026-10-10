@@ -816,14 +816,57 @@ def table_page_lines(page: Any) -> list[tuple[float, float, float, float, str]]:
     return lines
 
 
+def _fill_missing_cells(
+    cells: Sequence[Sequence[float] | None], columns: Sequence[tuple[float, float]] | None
+) -> list[Sequence[float] | None]:
+    """A row's cell boxes with the ones ``find_tables`` left out (None) rebuilt from the column
+    bounds and the row's height. With only a header rule, it can see the body's middle column alone
+    and drop the text of the others (Art of AI p42: "Miro AI", "AI generates content drafts" lost)."""
+    present = [cell for cell in cells if cell is not None]
+    if columns is None or len(columns) != len(cells) or not present or len(present) == len(cells):
+        return list(cells)
+    top = min(float(cell[1]) for cell in present)
+    bottom = max(float(cell[3]) for cell in present)
+
+    def spanned(left: float, right: float) -> bool:
+        # A merged cell: a present cell of the row reaches over this column, and already holds its text.
+        middle = (left + right) / 2
+        return any(float(cell[0]) - 1 <= middle <= float(cell[2]) + 1 for cell in present)
+
+    return [
+        cell if cell is not None or spanned(left, right) else (left, top, right, bottom)
+        for cell, (left, right) in zip(cells, columns)
+    ]
+
+
 def table_rows(table: Any, page_lines: Sequence[tuple[float, float, float, float, str]]) -> list[list[str]]:
     """A ``find_tables`` table's rows of cell text, body rows that share one cell box split apart."""
     extracted = table.extract()
+    # Column bounds from a row that has every cell (the header, usually).
+    columns: list[tuple[float, float]] | None = None
+    for table_row in table.rows:
+        row_cells = getattr(table_row, "cells", None) or []
+        if row_cells and all(cell is not None for cell in row_cells):
+            columns = [(float(cell[0]), float(cell[2])) for cell in row_cells]
+            break
     rows: list[list[str]] = []
     for index, row in enumerate(extracted):
         cells = getattr(table.rows[index], "cells", None) if index < len(table.rows) else None
-        split = split_merged_table_row(page_lines, cells) if cells else None
-        rows.extend(split if split else [[_table_cell_text(cell) for cell in row]])
+        filled = _fill_missing_cells(cells, columns) if cells else None
+        split = split_merged_table_row(page_lines, filled) if filled else None
+        if split:
+            rows.extend(split)
+        elif filled is not None and any(cell is None and box is not None for cell, box in zip(cells, filled)):
+            rows.append(
+                [
+                    _table_cell_text(text) if cell is not None else _table_cell_text(
+                        "\n".join(line for _top, _bottom, line in _text_lines_in(page_lines, box)) if box is not None else None
+                    )
+                    for text, cell, box in zip(row, cells, filled)
+                ]
+            )
+        else:
+            rows.append([_table_cell_text(cell) for cell in row])
     return [row for row in rows if any(row)]
 
 
