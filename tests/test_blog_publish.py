@@ -73,7 +73,8 @@ class BlogMetadataTest(unittest.TestCase):
             authors="Jungjun Hur; Younghee Song",
             glossary_terms=["智能体", "工具", "没出现的词"],
         )
-        self.assertEqual(meta.title, "从零开始构建AI智能体")
+        # Titled by the book's original name; the Chinese title leads the excerpt and SEO.
+        self.assertEqual(meta.title, "Build an AI Agent (From Scratch)")
         self.assertTrue(meta.excerpt.startswith("《从零开始构建AI智能体》（Build an AI Agent (From Scratch)）中文版，Jungjun Hur、Younghee Song 著。我们刚开始构建智能体时"))
         self.assertLessEqual(len(meta.excerpt), 200)
         self.assertEqual(meta.meta_title, "《从零开始构建AI智能体》中文版 | Build an AI Agent (From Scratch)")
@@ -83,6 +84,7 @@ class BlogMetadataTest(unittest.TestCase):
         self.assertIn("智能体", keywords)
         self.assertNotIn("没出现的词", keywords)
         bilingual = build_blog_metadata(markdown=markdown, title="书", source_title=None, authors=None, bilingual=True)
+        # Without an original title, the Chinese one.
         self.assertEqual(bilingual.title, "书（中英对照）")
         self.assertIn("中英对照版", bilingual.meta_title)
 
