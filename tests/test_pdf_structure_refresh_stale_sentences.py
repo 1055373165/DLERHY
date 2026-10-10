@@ -173,6 +173,38 @@ class PdfStructureRefreshNewBlockTests(PdfStructureRefreshStaleSentenceTests):
         )
         self.assertEqual(artifacts.created_block_ids, [])
 
+    def test_an_old_parse_s_stray_copy_is_dropped(self) -> None:
+        """Art of AI chapter 2: the old parse had a paragraph twice (b3 and b4); the new parse has it once."""
+        from book_agent.domain.enums import ArtifactStatus
+        from book_agent.domain.models import Block
+
+        with self.session_factory() as session:
+            session.add(
+                Block(
+                    id="5f0b1e8c-0000-4000-8000-00000000c0b7",
+                    chapter_id=session.query(Block).first().chapter_id,
+                    ordinal=9,
+                    block_type=BlockType.PARAGRAPH,
+                    source_text="After some brainstorming, a couple of ideas emerge.",
+                    normalized_text="After some brainstorming, a couple of ideas emerge.",
+                    source_anchor="pdf://page/1#p1-b4",
+                    source_span_json={"source_page_start": 1, "source_page_end": 1},
+                    protected_policy=session.query(Block).first().protected_policy,
+                    status=ArtifactStatus.ACTIVE,
+                )
+            )
+            session.commit()
+        self._refresh(
+            [
+                ("p1-b1", "5 A retrospective"),
+                ("p1-b3", "After some brainstorming, a couple of ideas emerge."),
+            ]
+        )
+        with self.session_factory() as session:
+            status = {block.source_anchor.split("#")[-1]: block.status for block in session.query(Block)}
+        self.assertEqual(status["p1-b4"], ArtifactStatus.INVALIDATED)
+        self.assertEqual(status["p1-b3"], ArtifactStatus.ACTIVE)
+
 
 class PdfStructureRefreshFigureTests(PdfStructureRefreshStaleSentenceTests):
     # The old parse took a sidebar's tinted panel for a figure.

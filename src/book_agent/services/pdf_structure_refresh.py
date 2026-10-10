@@ -749,6 +749,14 @@ class PdfStructureRefreshService:
             return False
 
         refreshed_page_blocks = refreshed_blocks_by_page.get(page_start, [])
+        # Text the new parse holds in another block of the page: an old parse's stray copy (Art of AI
+        # chapter 2 had thirty paragraphs twice, the copy under the next anchor) or a fragment the
+        # new parse joined. Dropping it loses nothing; text found nowhere else is kept.
+        own_text = _collapse_whitespace(existing_block.source_text)
+        if own_text and existing_block.block_type not in {BlockType.FIGURE, BlockType.IMAGE} and any(
+            own_text in _collapse_whitespace(refreshed_block.source_text) for refreshed_block in refreshed_page_blocks
+        ):
+            return True
         if existing_block.block_type in {BlockType.FIGURE, BlockType.IMAGE}:
             # A figure the new parse no longer finds on a page it read (a sidebar's tinted panel
             # taken for a figure, its text now paragraphs of their own) would show the text twice.

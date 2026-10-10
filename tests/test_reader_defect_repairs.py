@@ -242,12 +242,24 @@ class ReaderDefectChecksTests(unittest.TestCase):
         self.assertEqual([finding.target["id"] for finding in titles.findings], ["c1"])
         self.assertEqual([finding.target["id"] for finding in unnamed.findings], ["p1"])
 
+    def test_a_paragraph_kept_twice_by_an_older_parse_is_found_but_not_a_repeat_pages_apart(self) -> None:
+        text = "You've done your homework and evaluated the available opportunities. To make their decision clearer."
+        first = _block("b1", "paragraph", text)
+        table = _block("t1", "table", "| A | B |\n| 1 | 2 |", artifact_kind="table")
+        copy = _block("b2", "paragraph", text.replace(" To", "\nTo"))
+        later = [_block(f"x{index}", "paragraph", f"Another paragraph number {index} with enough words in it.") for index in range(3)]
+        repeat = _block("b9", "paragraph", text)
+        run = pilot_qa.check_duplicated_blocks(_inputs([first, table, copy, *later, repeat]))
+        self.assertEqual([(finding.target["id"], finding.evidence["copy_of"]) for finding in run.findings], [("b2", "b1")])
+        self.assertEqual(run.findings[0].severity, pilot_qa.BLOCKING)
+
     def test_every_new_check_has_a_repair_path(self) -> None:
         from book_agent.domain.quality.pilot_repair import paths_for
 
         expected = {
             "L3.table_rows_merged": "structure_edit.reextract_table",
             "L1.clipped_text_copy": "structure_edit.hide_clipped_copy",
+            "L1.duplicated_block": "structure_edit.hide_duplicate_copy",
             "L1.part_title_unnamed": "structure_edit.split_part_name",
             "L4.list_marker_doubled": "segment_edit.strip_doubled_list_marker",
             "L4.callout_lines_collapsed": "retranslate_packets.callout_line_by_line",

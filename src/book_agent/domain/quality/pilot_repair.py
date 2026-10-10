@@ -105,6 +105,8 @@ REPAIR_PATHS: dict[str, tuple[RepairPath, ...]] = {
     "L1.icon_callout_split": (RepairPath(TOOL_STRUCTURE, "merge_icon_callout", costs_model=True),),
     # A cut-short copy of the block beside it (an older parse clipped a listing's box into an annotation).
     "L1.clipped_text_copy": (RepairPath(TOOL_STRUCTURE, "hide_clipped_copy"),),
+    # The later of two blocks with the same text leaves the reading copy (its packet keeps the first).
+    "L1.duplicated_block": (RepairPath(TOOL_STRUCTURE, "hide_duplicate_copy"),),
     # The part's name read again from its page, split out of the introduction and set as a heading.
     "L1.part_title_unnamed": (RepairPath(TOOL_STRUCTURE, "split_part_name", costs_model=True),),
     "L1.review_blocking": (_RECHECK,),
@@ -304,6 +306,7 @@ GENERIC_CAUSES: tuple[GenericCause, ...] = (
         "parser",
         "只有表头和底部有横线的表格，几行正文挤在一个单元格框里，没有按行距拆开",
     ),
+    GenericCause("L1.duplicated_block", "L1.duplicated_block", "parser", "旧的解析把图表旁的段落读了两遍，同一段成了两个块"),
     GenericCause("L1.clipped_text_copy", "L1.clipped_text_copy", "parser", "代码框的裁剪把旁边注释的半截文字也读了进来，成了一段"),
     GenericCause("L1.part_title_unnamed", "L1.part_title_unnamed", "parser", "部分页的大字号名称并进了下面的正文段落"),
     GenericCause("L4.list_marker_doubled", "L4.list_marker_doubled", "translation", "编号列表项的译文开头多了圆点"),
