@@ -145,6 +145,40 @@ class SharedBodyCellTableTest(unittest.TestCase):
             [["Benchmark", "Standardized public evalu-ation sets"], ["Custom", "Internally constructed evaluation sets"]],
         )
 
+    def test_body_cells_find_tables_leaves_out_are_read_from_the_header_columns(self) -> None:
+        """Art of AI p42: with only a header rule, find_tables boxed the body's middle column alone
+        and returned None for the others; their text ("Miro AI", "AI generates ...") was lost."""
+        from types import SimpleNamespace
+
+        from book_agent.ingestion.pdf.extract import table_rows
+
+        header = [(114.0, 281.0, 184.0, 297.0), (184.0, 281.0, 322.0, 297.0), (322.0, 281.0, 461.0, 297.0)]
+        body = [None, (184.0, 297.0, 322.0, 434.0), None]
+        table = SimpleNamespace(
+            rows=[SimpleNamespace(cells=header), SimpleNamespace(cells=body)],
+            extract=lambda: [["Miro features", "Human strengths", "AI strengths"], [None, "Users provide input. Team members apply expertise.", None]],
+        )
+        lines = [
+            (118.0, 285.0, 170.0, 294.0, "Miro features"),
+            (220.0, 285.0, 290.0, 294.0, "Human strengths"),
+            (370.0, 285.0, 430.0, 294.0, "AI strengths"),
+            (118.0, 303.0, 150.0, 312.0, "Miro AI"),
+            (190.0, 303.0, 310.0, 312.0, "Users provide input."),
+            (328.0, 303.0, 455.0, 312.0, "AI generates drafts."),
+            (118.0, 340.0, 170.0, 349.0, "AI Sidekicks"),
+            (190.0, 340.0, 310.0, 349.0, "Team members apply"),
+            (190.0, 349.5, 310.0, 358.5, "expertise."),
+            (328.0, 340.0, 455.0, 349.0, "AI offers advice."),
+        ]
+        self.assertEqual(
+            table_rows(table, lines),
+            [
+                ["Miro features", "Human strengths", "AI strengths"],
+                ["Miro AI", "Users provide input.", "AI generates drafts."],
+                ["AI Sidekicks", "Team members apply expertise.", "AI offers advice."],
+            ],
+        )
+
 
 class PipeTableParsingTest(unittest.TestCase):
     def test_delimited_rows_keep_empty_cells_in_their_columns(self) -> None:
