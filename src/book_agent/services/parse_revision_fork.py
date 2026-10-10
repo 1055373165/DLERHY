@@ -364,8 +364,11 @@ class ParseRevisionForkService:
                 continue
             # A block that became translatable between packets (code relabelled as the prose it is)
             # joins the packet before it, or the one after it, so it is translated.
-            before = [(end.ordinal, packet) for packet, _start, end in ranges if end.ordinal < block.ordinal]
-            after = [(start.ordinal, packet) for packet, start, _end in ranges if start.ordinal > block.ordinal]
+            # Only a live packet: an invalidated one (a running head's, nothing in it to translate)
+            # would carry the block nowhere.
+            live = [(packet, start, end) for packet, start, end in ranges if packet.status != PacketStatus.INVALIDATED]
+            before = [(end.ordinal, packet) for packet, _start, end in live if end.ordinal < block.ordinal]
+            after = [(start.ordinal, packet) for packet, start, _end in live if start.ordinal > block.ordinal]
             if before:
                 packet = max(before, key=lambda item: item[0])[1]
                 packet.block_end_id = block.id
