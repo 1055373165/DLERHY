@@ -836,3 +836,39 @@ def assert_record_current(record: Any) -> None:
                 f"(current {EXPORT_RENDERER_VERSION}); export again (POST /documents/{{id}}/export) to refresh it."
             ),
         )
+
+
+def markdown_export_file(
+    export_repository: ExportRepository,
+    document_id: str,
+    *,
+    artifact_roots: tuple[Path, ...],
+    bilingual: bool = False,
+) -> Path:
+    """The current Markdown reading copy (or the bilingual one beside it), its pictures in ``assets/`` next to it.
+
+    404 when there is none or it was rendered by an older renderer, as for a download: export first.
+    """
+    from book_agent.services.export import BILINGUAL_MARKDOWN_FILE_NAME
+
+    records = export_repository.list_document_exports_filtered(
+        document_id, export_type=ExportType.MERGED_MARKDOWN, status=ExportStatus.SUCCEEDED
+    )
+    if not records:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No successful merged_markdown export is available.")
+    record = records[0]
+    assert_record_serviceable(record)
+    assert_record_current(record)
+    file_path = resolve_artifact_path(
+        record.file_path, roots=artifact_roots, document_id=document_id, content_sha256=record.content_sha256
+    )
+    canonical = _canonical_artifact_path(record.file_path, roots=artifact_roots, document_id=document_id) or file_path
+    if not bilingual:
+        return canonical if canonical.is_file() else file_path
+    bilingual_path = canonical.parent / BILINGUAL_MARKDOWN_FILE_NAME
+    if not bilingual_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This Markdown export has no Chinese–English edition yet; export the Markdown again.",
+        )
+    return bilingual_path

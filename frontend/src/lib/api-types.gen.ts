@@ -61,6 +61,26 @@ export interface ApprovalResponse {
   created_at?: string | null;
 }
 
+export interface BlogPublishRequest {
+  edition?: "zh" | "bilingual";
+}
+
+export interface BlogPublishResponse {
+  article_id: number;
+  action: "created" | "updated";
+  title: string;
+  edit_url?: string | null;
+  images_uploaded: number;
+  images_reused: number;
+  images_skipped: string[];
+}
+
+export interface BlogTargetResponse {
+  configured: boolean;
+  api_url?: string | null;
+  web_url?: string | null;
+}
+
 export interface Body_bootstrap_uploaded_document_v1_documents_bootstrap_upload_post {
   source_file: string;
 }

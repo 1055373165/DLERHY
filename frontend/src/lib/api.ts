@@ -994,6 +994,37 @@ function startBrowserDownload(path: string): void {
   anchor.remove();
 }
 
+export type BlogTarget = Generated.BlogTargetResponse;
+export type BlogPublishResult = Generated.BlogPublishResponse;
+// "zh": the Chinese Markdown; "bilingual": the Chinese–English one.
+export type BlogEdition = "zh" | "bilingual";
+
+/** Whether a blog is configured for 发布到博客 (book-agent's .env). */
+export async function getBlogTarget(): Promise<BlogTarget> {
+  return requestJson<BlogTarget>("/blog/target");
+}
+
+/**
+ * Save a book's Markdown reading copy as a blog article draft (the same edition again updates it).
+ * The Markdown is exported first when it is missing or out of date, as for a download.
+ */
+export async function publishToBlog(
+  documentId: string,
+  edition: BlogEdition,
+  options: Omit<ExportFetchOptions, "packaging" | "checkOnly"> = {}
+): Promise<BlogPublishResult> {
+  await fetchDocumentExport(documentId, "merged_markdown", {
+    ...options,
+    packaging: edition === "bilingual" ? "bilingual" : "single",
+    checkOnly: true,
+  });
+  return requestJson<BlogPublishResult>(`/documents/${encodeURIComponent(documentId)}/blog-publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ edition }),
+  });
+}
+
 export type ReadableExportType = "merged_html" | "bilingual_html" | "merged_markdown" | "rebuilt_pdf" | "web_html";
 
 /** An export for reading in the app: HTML or Markdown text, or the PDF bytes (exporting first when needed). */
