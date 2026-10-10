@@ -79,7 +79,7 @@ const report = {
   ],
 };
 
-function installHealthMock(withReport: boolean) {
+function installHealthMock(withReport: boolean, canReimport = false) {
   const calls: { url: string; method: string }[] = [];
   let reported = withReport;
   vi.stubGlobal(
@@ -92,6 +92,7 @@ function installHealthMock(withReport: boolean) {
           makeOverview(HEALTH_ID, {
             source_type: "pdf_text",
             source_url: null,
+            can_reimport: canReimport,
             parse_health: reported
               ? {
                   status: "blocking",
@@ -107,6 +108,7 @@ function installHealthMock(withReport: boolean) {
           }),
         );
       }
+      if (url.includes(`/v1/documents/${HEALTH_ID}/reimport`)) return json({ document_id: HEALTH_ID });
       if (url.includes(`/v1/documents/${HEALTH_ID}/parse-health`)) {
         if (init?.method === "POST") reported = true;
         return reported ? json(report) : notFound();
@@ -144,6 +146,24 @@ describe("Parse health on the progress tab", () => {
     // Not a gate: the start button is still there, with the finding next to it.
     expect(screen.getByRole("button", { name: /开始翻译/ })).toBeEnabled();
     expect(screen.getByRole("link", { name: "看看体检报告" })).toHaveAttribute("href", `/books/${HEALTH_ID}/progress`);
+    // The overview did not offer a re-import (translation started, or an older server): no button.
+    expect(within(panel).queryByRole("button", { name: "重新导入" })).not.toBeInTheDocument();
+  });
+
+  it("offers to import a book with parse problems again before anything is translated, after a confirmation", async () => {
+    const calls = installHealthMock(true, true);
+    render(
+      <MemoryRouter initialEntries={[`/books/${HEALTH_ID}/progress`]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    const panel = await screen.findByRole("region", { name: "解析体检" });
+    expect(within(panel).getByText(/按最新的规则重新导入/)).toBeInTheDocument();
+    await userEvent.click(within(panel).getByRole("button", { name: "重新导入" }));
+    expect(calls.some((call) => call.url.includes("/reimport"))).toBe(false);
+    await userEvent.click(within(panel).getByRole("button", { name: "确定重新导入" }));
+    expect(calls.some((call) => call.url.includes(`/v1/documents/${HEALTH_ID}/reimport`) && call.method === "POST")).toBe(true);
   });
 
   it("offers to run the checks on a book imported before they existed", async () => {

@@ -310,6 +310,53 @@ def delete_document(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post("/{document_id}/reimport", response_model=DocumentSummaryResponse)
+def reimport_document(
+    document_id: str,
+    request: Request,
+    session: Session = Depends(get_db_session),
+) -> DocumentSummaryResponse:
+    """Import a book again from its uploaded file with the current parser (services/document_reimport.py).
+
+    Only before anything is translated (409 otherwise, with the reason). The book keeps its id: the id
+    comes from the file's content. The file is copied aside first, so a failed import still has it.
+    """
+    from book_agent.domain.models import Document
+    from book_agent.services.document_reimport import reimport_refusal
+
+    document = session.get(Document, document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Document not found: {document_id}")
+    refusal = reimport_refusal(session, document)
+    if refusal:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=refusal)
+    org_id = document.org_id
+    source = Path(document.source_path)
+    upload_root = _upload_root(request)
+    target_dir = upload_root / uuid4().hex
+    target_dir.mkdir(parents=True, exist_ok=True)
+    copy = target_dir / source.name
+    shutil.copy2(source, copy)
+    service = _workflow_service(request, session)
+    try:
+        files = service.delete_document(document_id)
+    except DocumentBusyError as exc:
+        cleanup_path(copy)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    session.commit()
+    remove_document_files(session, files, upload_root=upload_root)
+    try:
+        summary = service.bootstrap_document(copy, org_id=org_id)
+        session.commit()
+    except Exception as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"旧的解析已删除，但重新导入失败（{exc}）。上传的文件保留在服务器上，可以在书库重新上传这本书。",
+        ) from exc
+    return DocumentSummaryResponse.model_validate(summary, from_attributes=True)
+
+
 @router.get("/{document_id}/exports", response_model=DocumentExportDashboardResponse)
 def get_document_exports(
     document_id: str,

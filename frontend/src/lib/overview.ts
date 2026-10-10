@@ -150,6 +150,8 @@ export interface BookOverview {
   quality: { open_issues: number; blocking: number };
   /** The latest parse health report, summarised; null before the first report. */
   parse_health?: ParseHealthSummary | null;
+  /** Whether the book can be imported again with the current parser: nothing translated yet. Absent from older servers. */
+  can_reimport?: boolean;
   /** The whole book's layered QA and repair after its run (全书质检); null before, absent from older servers. */
   book_quality?: BookQualityOverview | null;
   // null in lists of books (GET /overviews skips the estimate).

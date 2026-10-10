@@ -193,6 +193,28 @@
   color: var(--red);
 }
 
+/* Import again with the current parser: offered while nothing of the book is translated. */
+.reimport {
+  margin: 0 0 var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border, #e3e5e8);
+  border-radius: 8px;
+  background: var(--surface-2, #f7f8fa);
+  font-size: var(--text-sm);
+}
+
+.reimport p {
+  margin: 0 0 var(--sp-3);
+  line-height: 1.7;
+}
+
+.reimportActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
 .checks {
   list-style: none;
   padding: 0;
