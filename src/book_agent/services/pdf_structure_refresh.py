@@ -16,6 +16,12 @@ from book_agent.domain.models.ops import AuditEvent
 from book_agent.ingestion.text import _looks_like_table
 from book_agent.infra.repositories.bootstrap import BootstrapRepository
 from book_agent.services.bootstrap import ParseService
+from book_agent.services.parse_revision_fork import STALE_FLAG
+
+# Ordinals from here up are parked blocks (relocated footnotes, retired blocks), not reading order.
+_PARKED_ORDINAL_BASE = 1_000_000
+# Renumbering goes through this range first so the (chapter, ordinal) unique constraint holds.
+_ORDINAL_SHIFT_OFFSET = 500_000
 
 
 def _utcnow() -> datetime:
@@ -76,6 +82,10 @@ class PdfStructureRefreshArtifacts:
     # packets, translations and alignment edges, so these blocks need a
     # packet rebuild and retranslation before their translations are trusted.
     stale_sentence_block_ids: list[str] = field(default_factory=list)
+    # Blocks the new parse finds that no existing block stands for (a footnote the old parse glued
+    # to a running head, now a body paragraph of its own). They have no sentences yet and carry the
+    # stale flag, so the fork that follows segments, packs and translates them.
+    created_block_ids: list[str] = field(default_factory=list)
     # Set when the refresh was followed by a sentence-level parse-revision fork.
     parse_revision_fork: Any = None
 
@@ -179,14 +189,17 @@ class PdfStructureRefreshService:
         updated_document_image_ids: list[str] = []
         invalidated_block_ids: list[str] = []
         stale_sentence_block_ids: list[str] = []
+        created_block_ids: list[str] = []
         skipped_chapter_count = 0
         skipped_block_count = 0
+        matched_chapters: list[tuple[Chapter, Chapter]] = []
 
         for key, existing_chapter in existing_chapter_by_key.items():
             refreshed_chapter = refreshed_chapters_by_key.get(key)
             if refreshed_chapter is None:
                 skipped_chapter_count += 1
                 continue
+            matched_chapters.append((existing_chapter, refreshed_chapter))
             existing_chapter.title_src = refreshed_chapter.title_src or existing_chapter.title_src
             existing_chapter.anchor_start = refreshed_chapter.anchor_start
             existing_chapter.anchor_end = refreshed_chapter.anchor_end
@@ -272,6 +285,20 @@ class PdfStructureRefreshService:
             self.session.merge(existing_block)
             invalidated_block_ids.append(existing_block.id)
 
+        for existing_chapter, refreshed_chapter in matched_chapters:
+            created_block_ids.extend(
+                self._insert_new_blocks(
+                    document=document,
+                    existing_chapter=existing_chapter,
+                    refreshed_blocks=[block for block in parse_artifacts.blocks if block.chapter_id == refreshed_chapter.id],
+                    existing_block_by_source_anchor=existing_block_by_source_anchor,
+                    existing_block_id_by_source_anchor=existing_block_id_by_source_anchor,
+                    refreshed_images_by_source_anchor=refreshed_images_by_source_anchor,
+                    created_document_image_ids=created_document_image_ids,
+                    now=now,
+                )
+            )
+
         document.title = working_document.title or document.title
         document.title_src = working_document.title_src or document.title_src
         document.title_tgt = working_document.title_tgt or document.title_tgt
@@ -286,6 +313,7 @@ class PdfStructureRefreshService:
                 "refreshed_block_count": len(refreshed_block_ids),
                 "refreshed_document_image_count": len(created_document_image_ids) + len(updated_document_image_ids),
                 "invalidated_block_count": len(invalidated_block_ids),
+                "created_block_count": len(created_block_ids),
                 "stale_sentence_block_count": len(stale_sentence_block_ids),
                 "chapter_scope_ids": sorted(selected_chapter_ids),
             },
@@ -312,7 +340,123 @@ class PdfStructureRefreshService:
             skipped_chapter_count=skipped_chapter_count,
             skipped_block_count=skipped_block_count,
             stale_sentence_block_ids=stale_sentence_block_ids,
+            created_block_ids=created_block_ids,
         )
+
+    def _insert_new_blocks(
+        self,
+        *,
+        document: Document,
+        existing_chapter: Chapter,
+        refreshed_blocks: list[Block],
+        existing_block_by_source_anchor: dict[str, Block],
+        existing_block_id_by_source_anchor: dict[str, str],
+        refreshed_images_by_source_anchor: dict[str, Any],
+        created_document_image_ids: list[str],
+        now: datetime,
+    ) -> list[str]:
+        """Add the refreshed blocks of this chapter whose anchor no existing block has, each right
+        after the block the new parse puts before it. A block whose text an active block of the
+        chapter already holds is not added twice."""
+        chapter_blocks = [
+            block for block in existing_block_by_source_anchor.values() if block.chapter_id == existing_chapter.id
+        ]
+        active_texts = [
+            _collapse_whitespace(block.source_text)
+            for block in chapter_blocks
+            if block.status == ArtifactStatus.ACTIVE
+        ]
+        # (existing block it follows, or None for the chapter start; refreshed block)
+        inserts: list[tuple[Block | None, Block]] = []
+        previous: Block | None = None
+        for refreshed_block in sorted(refreshed_blocks, key=lambda block: block.ordinal):
+            anchor = refreshed_block.source_anchor
+            if not isinstance(anchor, str) or not anchor.strip():
+                continue
+            existing = existing_block_by_source_anchor.get(anchor)
+            if existing is not None:
+                if existing.chapter_id == existing_chapter.id and existing.ordinal < _PARKED_ORDINAL_BASE:
+                    previous = existing
+                continue
+            if anchor in existing_block_id_by_source_anchor:
+                continue
+            text = _collapse_whitespace(refreshed_block.source_text)
+            if not text or any(text in held for held in active_texts):
+                continue
+            inserts.append((previous, refreshed_block))
+        if not inserts:
+            return []
+
+        # Make room: every block after an insertion point moves down by the insertions before it.
+        in_range = sorted(
+            (
+                block
+                for block in self.session.query(Block).filter(
+                    Block.chapter_id == existing_chapter.id, Block.ordinal < _PARKED_ORDINAL_BASE
+                )
+            ),
+            key=lambda block: block.ordinal,
+        )
+        after_ordinals = sorted(previous.ordinal if previous is not None else 0 for previous, _ in inserts)
+        moves = []
+        for block in in_range:
+            shift = sum(1 for ordinal in after_ordinals if ordinal < block.ordinal)
+            if shift:
+                moves.append((block, block.ordinal + shift))
+        for block, _ in moves:
+            block.ordinal += _ORDINAL_SHIFT_OFFSET
+        self.session.flush()
+        for block, ordinal in moves:
+            block.ordinal = ordinal
+        self.session.flush()
+
+        created: list[str] = []
+        placed_after: dict[int, int] = {}
+        taken_ids = {block.id for block in in_range}
+        for previous, refreshed_block in inserts:
+            base = previous.ordinal if previous is not None else 0
+            placed_after[base] = placed_after.get(base, 0) + 1
+            block_id = refreshed_block.id
+            if block_id in taken_ids or self.session.get(Block, block_id) is not None:
+                # Ids derive from the ordinal: a new block may land on an existing block's id.
+                block_id = stable_id("block", refreshed_block.id, "refresh", refreshed_block.source_text or "")
+            taken_ids.add(block_id)
+            block_type = BlockType(refreshed_block.block_type)
+            source_span = self._remap_block_source_span(
+                refreshed_block.source_span_json, existing_block_id_by_source_anchor
+            )
+            block = Block(
+                id=block_id,
+                chapter_id=existing_chapter.id,
+                ordinal=base + placed_after[base],
+                block_type=block_type,
+                parse_revision_id=previous.parse_revision_id if previous is not None else None,
+                source_text=refreshed_block.source_text,
+                normalized_text=" ".join(str(refreshed_block.source_text or "").split()),
+                source_anchor=refreshed_block.source_anchor,
+                source_span_json={**source_span, STALE_FLAG: True, "refresh_created_at": now.isoformat()},
+                parse_confidence=refreshed_block.parse_confidence,
+                protected_policy=protected_policy_for_block(block_type.value, refreshed_block.source_span_json),
+                status=ArtifactStatus.ACTIVE,
+                created_at=now,
+                updated_at=now,
+            )
+            self.session.add(block)
+            self.session.flush()
+            created.append(block.id)
+            refreshed_image = refreshed_images_by_source_anchor.get(refreshed_block.source_anchor)
+            if block_type in {BlockType.IMAGE, BlockType.FIGURE} and refreshed_image is not None:
+                image = self._upsert_document_image(
+                    document=document,
+                    block=block,
+                    existing_image=None,
+                    refreshed_image=refreshed_image,
+                    remapped_block_metadata=source_span,
+                    now=now,
+                )
+                self.session.merge(image)
+                created_document_image_ids.append(image.id)
+        return created
 
     def _merge_preserved_block_metadata(
         self,
