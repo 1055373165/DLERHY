@@ -1979,6 +1979,16 @@ class PilotRepairToolbox:
         self._hide(block, "旁边一段文字被裁掉一截的副本")
         return ToolResult(params={"block_id": block.id, "copy_of": original.id}, block_ids=[block.id])
 
+    def _structure_edit__hide_duplicate_copy(self, item: WorkItem) -> ToolResult:
+        """The later of two nearby blocks with the same text leaves the reading copy."""
+        finding = item.findings[0]
+        block = self._finding_block(finding)
+        original = self._block(str((finding.get("evidence") or {}).get("copy_of") or ""))
+        if " ".join((block.source_text or "").split()) != " ".join((original.source_text or "").split()):
+            raise NotApplicable("the block does not repeat the block it is said to copy")
+        self._hide(block, "同一段原文的重复副本")
+        return ToolResult(params={"block_id": block.id, "copy_of": original.id}, block_ids=[block.id])
+
     def _structure_edit__relabel_code_face_as_code(self, item: WorkItem) -> ToolResult:
         """A paragraph set wholly in the code face (program output, the end of a listing) becomes code."""
         block = self._finding_block(item.findings[0])

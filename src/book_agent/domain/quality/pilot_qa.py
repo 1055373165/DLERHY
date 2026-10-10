@@ -136,6 +136,7 @@ _SPECS = (
     CheckSpec("L1.heading_glued_to_text_end", MAJOR, "小标题接在了上一段的末尾", REPAIR_STRUCTURE),
     CheckSpec("L1.heading_as_text", MAJOR, "小标题被排成了正文段落", REPAIR_STRUCTURE),
     CheckSpec("L1.clipped_text_copy", MAJOR, "旁边一段文字被裁掉一截的副本，又作为一段出现", REPAIR_STRUCTURE),
+    CheckSpec("L1.duplicated_block", BLOCKING, "同一段原文在中文版里出现了两次", REPAIR_STRUCTURE),
     CheckSpec("L1.icon_callout_split", MAJOR, "图标引出的提示框被拆成了零散段落", REPAIR_STRUCTURE),
     CheckSpec("L1.sublist_as_text", MAJOR, "子列表项被排成了正文或挤在上一项里", REPAIR_NEST_LIST_ITEMS),
     CheckSpec("L1.sidebar_as_text", MAJOR, "侧栏的标题被排成了正文，侧栏没有成框", REPAIR_RELABEL_AS_SIDEBAR),
@@ -1517,6 +1518,43 @@ def check_clipped_copies(inputs: PilotQaInputs) -> CheckRun:
     return run
 
 
+# A repeat this close is a parse's copy; a book repeating a sentence sets it pages apart.
+_DUPLICATE_WINDOW = 2
+_DUPLICATE_MIN_CHARS = 40
+
+
+def _duplicate_key(text: str | None) -> str:
+    return " ".join(str(text or "").split())
+
+
+def check_duplicated_blocks(inputs: PilotQaInputs) -> CheckRun:
+    """A block whose text repeats one of the two blocks before it: an older parse kept a paragraph
+    twice (Art of AI chapter 2: thirty paragraphs beside figures and tables, each translated twice)."""
+    run = CheckRun("L1.duplicated_block")
+    by_chapter: dict[str, list[QaBlock]] = defaultdict(list)
+    for block in inputs.blocks:
+        by_chapter[block.chapter_id].append(block)
+    for blocks in by_chapter.values():
+        for index, block in enumerate(blocks):
+            if _is_figure(block) or block.block_type in {"table", "code", "equation"}:
+                continue
+            key = _duplicate_key(block.parsed_text or block.source_text)
+            if len(key) < _DUPLICATE_MIN_CHARS:
+                continue
+            for earlier in blocks[max(0, index - _DUPLICATE_WINDOW) : index]:
+                if _duplicate_key(earlier.parsed_text or earlier.source_text) == key:
+                    run.findings.append(
+                        _block_finding(
+                            "L1.duplicated_block",
+                            block,
+                            f"「{_snippet(block.source_text, 40)}」在前面已经出现过一次，读者会看到两遍",
+                            copy_of=earlier.block_id,
+                        )
+                    )
+                    break
+    return run
+
+
 def check_icon_callouts(inputs: PilotQaInputs) -> list[CheckRun]:
     """A small icon and the lines beside it read as loose pieces (a book parsed before callouts were
     recognised), and any icon-sized picture drawn as a whole figure card.
@@ -2779,6 +2817,7 @@ def run_layers(inputs: PilotQaInputs, extra_checks: Sequence[ExtraCheck] = ()) -
         *check_figures(inputs),
         *check_icon_callouts(inputs),
         check_clipped_copies(inputs),
+        check_duplicated_blocks(inputs),
         check_figure_residue(inputs),
         *check_tables(inputs),
         *check_code_and_format(inputs),
