@@ -130,6 +130,29 @@ def _union_bbox(bboxes: list[tuple[float, float, float, float]]) -> tuple[float,
     )
 
 
+def _is_text_panel_background(
+    drawing: dict[str, Any],
+    bbox: tuple[float, float, float, float],
+    page_width: float,
+    text_lines: Sequence[Any],
+) -> bool:
+    """A light, borderless rectangle at least half the text width with body text on it: a panel's tint."""
+    fill = drawing.get("fill")
+    items = drawing.get("items") or ()
+    if fill is None or drawing.get("color") is not None or not items or any(item[0] != "re" for item in items):
+        return False
+    if min(float(channel) for channel in fill) < 0.85 or bbox[2] - bbox[0] < page_width * 0.45:
+        return False
+    return any(
+        getattr(line, "prose", False)
+        and line.bbox[0] >= bbox[0] - 1.0
+        and line.bbox[2] <= bbox[2] + 1.0
+        and line.bbox[1] >= bbox[1] - 1.0
+        and line.bbox[3] <= bbox[3] + 1.0
+        for line in text_lines
+    )
+
+
 def _is_background_panel(
     cluster_bbox: tuple[float, float, float, float],
     drawings: list[dict[str, Any]],
@@ -1137,7 +1160,12 @@ class PyMuPDFTextExtractor:
             rect = visible_rects[index] if visible_rects is not None and index < len(visible_rects) else drawing.get("rect")
             if rect is None:
                 continue
-            path_bboxes.append((float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3])))
+            bbox = (float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3]))
+            if _is_text_panel_background(drawing, bbox, page_width, text_lines or ()):
+                # A sidebar's tint: its text is the page's, and a table or drawing set inside it is
+                # measured by itself (a case study's table no longer makes the whole box one figure).
+                continue
+            path_bboxes.append(bbox)
             path_drawings.append(drawing)
 
         extents = vector_figure_extents(
