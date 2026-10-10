@@ -4370,6 +4370,10 @@ class PdfStructureRecoveryService:
                 candidates.append((idx, block, bbox))
 
             candidate_threshold = 2 if orphan_figure else 3
+            # The figure is the labels right above its caption: a body block between a label and the
+            # caption (a paragraph rejected above) ends it, and the labels beyond it (a section's
+            # heading, a short line of the text) are not the figure's.
+            candidates = self._contiguous_figure_labels(candidates, page_blocks, caption_block.page_start, caption_bbox)
             if len(candidates) < candidate_threshold:
                 continue
 
@@ -4775,6 +4779,42 @@ class PdfStructureRecoveryService:
                 break
             return candidate_index
         return None
+
+    def _contiguous_figure_labels(
+        self,
+        candidates: list[tuple[int, _RecoveredBlock, list[float]]],
+        page_blocks: list[tuple[int, _RecoveredBlock]],
+        page_number: int,
+        caption_bbox: list[float],
+    ) -> list[tuple[int, _RecoveredBlock, list[float]]]:
+        """The candidates that run up from the caption without a non-candidate text block in between."""
+        candidate_ids = {index for index, _block, _bbox in candidates}
+        others = [
+            bbox
+            for index, block in page_blocks
+            if index not in candidate_ids
+            and block.role not in {"header", "footer", "caption"}
+            and (block.text or "").strip()
+            and (bbox := self._page_bbox(block, page_number)) is not None
+        ]
+        kept: list[tuple[int, _RecoveredBlock, list[float]]] = []
+        top = caption_bbox[1]
+        for candidate in sorted(candidates, key=lambda item: -item[2][3]):
+            bbox = candidate[2]
+            between = any(
+                other[1] >= bbox[3] - 0.5
+                and other[3] <= top + 0.5
+                and other[0] < bbox[2]
+                and other[2] > bbox[0]
+                for other in others
+            )
+            # Labels sit close together; a wide gap is body text the parser placed wrongly (a paragraph
+            # split from its heading keeps the heading's box).
+            if between or (kept and top - bbox[3] > 72.0):
+                break
+            kept.append(candidate)
+            top = min(top, bbox[1])
+        return kept
 
     def _page_bbox(self, block: _RecoveredBlock, page_number: int) -> list[float] | None:
         for region in block.bbox_regions:

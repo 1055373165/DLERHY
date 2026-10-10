@@ -9,8 +9,10 @@ from collections import Counter
 _TERMINAL_PUNCTUATION = (".", "!", "?", ":", ";", "\"", "'", "\u201d", "\u2019")
 _HEADING_PATTERN = re.compile(r"^(chapter|part|appendix)\b", re.IGNORECASE)
 _ARTIFACT_INDEX_PATTERN = r"(?:[A-Z]\d+(?:[.\-\u2013\u2014]\d+)*[A-Za-z]?|\(?\d+(?:[.\-\u2013\u2014]\d+)*[A-Za-z]?\)?|[A-Z])"
+# A caption starts with a capital ("Figure 1.2 …", "FIGURE 3-1"): a line starting "figure 1.2. This will …"
+# is a sentence's cross-reference wrapped to the start of a line, not a caption.
 _FIGURE_CAPTION_PATTERN = re.compile(
-    r"^(?:figure|fig\.?|image|diagram|chart)\s*"
+    r"^(?-i:(?=[A-Z]))(?:figure|fig\.?|image|diagram|chart)\s*"
     + _ARTIFACT_INDEX_PATTERN
     + r"(?:(?:[.:\-\u2013\u2014]\s+)\S+|\s+(?-i:[A-Z])[^\n]{2,})",
     re.IGNORECASE,
