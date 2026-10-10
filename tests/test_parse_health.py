@@ -353,6 +353,23 @@ class FigureRegionCheckTest(unittest.TestCase):
         self.assertEqual(result.breakdown, {"no_region": 1})
         self.assertEqual(result.samples[0].block_id, "orphan")
 
+    def test_a_logo_printed_on_the_cover_is_not_a_figure(self) -> None:
+        """The Art of AI Product Development p1: the MANNING logo on the cover, its lettering in the
+        page's furniture band, was the book's one figure-region finding."""
+        blocks = [
+            *self._blocks((118.0, 78.0, 432.0, 142.0)),
+            block("logo", "", block_type="image", page=1, bbox=(50.0, 602.0, 101.0, 635.0)),
+        ]
+        checked = []
+
+        def find(page, bbox, furniture):
+            checked.append(page)
+            return self._find(page, bbox, furniture)
+
+        result = ph.check_figure_regions(blocks, find, {1: (531, 666), 2: (531, 666)})
+        self.assertEqual((result.count, result.denominator), (0, 1))
+        self.assertNotIn(1, checked)
+
 
 class ReportTest(unittest.TestCase):
     def test_status_is_the_worst_failed_severity(self) -> None:
