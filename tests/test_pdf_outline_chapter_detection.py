@@ -173,3 +173,16 @@ def test_section_family_pages_inside_bookmarked_chapters_do_not_split_them():
         "Front Matter", "7.3.2 Evaluating your RAG system", "appendix AI development toolbox",
         "A.2.1 Sourcing AI ideas", "Chapter 4", "Back Matter",
     ]
+
+
+# ---- The top of a page holds its running head, not footnotes --------------
+
+def test_a_folio_with_a_section_title_at_the_top_is_a_running_head():
+    """The Art of AI Product Development p28: "5 A retrospective" (9pt over a 10pt body) was a
+    footnote, and the page's first paragraph went with it into the notes."""
+    from book_agent.domain.structure.pdf import _looks_like_running_head
+
+    for head in ("5 A retrospective", "283 Getting buy-in from business stakeholders", "Sourcing AI ideas 19", "25 2.3 Limiting output", "49 3.1 What is RAG?"):
+        assert _looks_like_running_head(head), head
+    for text in ("1 Problem statement—Clearly define the business challenge AI will address.", "3 Clean and preprocess the data:"):
+        assert not _looks_like_running_head(text), text

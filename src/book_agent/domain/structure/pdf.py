@@ -1314,7 +1314,18 @@ class PdfStructureRecoveryService:
         if zone == "bottom" and (_is_page_number_text(text) or (zone, signature) in repeated_edge_text):
             return "footer"
         if zone == "top" and raw_block.font_size_avg and raw_block.font_size_avg < page_font_median * 0.95:
-            if _FOOTNOTE_PATTERN.match(text):
+            # "5 A retrospective" atop a page is its folio and the section's running head (Manning sets
+            # one per section, so it does not repeat across pages), and "4<tab>Optimize …" is a
+            # numbered list item; neither is a footnote. A footnote carried over to the top of the
+            # next page ("1 This footnote starts on the next page …") still is.
+            if _looks_like_running_head(text):
+                return "header"
+            if (
+                _FOOTNOTE_PATTERN.match(text)
+                and raw_block.list_marker not in _LIST_ITEM_MARKERS
+                and not text.rstrip().endswith(":")
+                and not re.match(r"^\s*\d{1,3}\t", raw_block.text or "")
+            ):
                 return "footnote"
         if page_context.is_toc_page and _looks_like_toc_heading(text):
             return "toc_entry"
@@ -4957,6 +4968,18 @@ def _looks_like_formula_text(text: str | None) -> bool:
     """A formula set as text: an equals sign, or the math letters and operators math fonts extract as."""
     value = text or ""
     return "=" in value or bool(_MATH_CHAR_RE.search(value))
+
+
+_RUNNING_HEAD_RE = re.compile(r"^\d{1,4}\s+\S.{0,90}$|^\S.{0,90}\s+\d{1,4}$")
+
+
+def _looks_like_running_head(text: str) -> bool:
+    """A folio with a short title ("5 A retrospective", "Sourcing AI ideas 19"): one line, not a sentence."""
+    normalized = " ".join((text or "").split())
+    # A section title may be a question ("49 3.1 What is RAG?"); a sentence ends with a full stop.
+    if "\n" in (text or "").strip() or normalized.endswith((".", "!", ":", ",", ";")):
+        return False
+    return bool(_RUNNING_HEAD_RE.match(normalized))
 
 
 def _is_lead_in_sentence(text: str) -> bool:
