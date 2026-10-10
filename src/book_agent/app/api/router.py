@@ -4,6 +4,7 @@ from book_agent.app.api.access import enforce_access
 from book_agent.app.api.routes import (
     actions,
     api_keys,
+    blog,
     documents,
     harness,
     issues,
@@ -24,6 +25,8 @@ api_router.include_router(health.router, tags=["system"])
 # Everything else authenticates, checks the role and scopes path resources to the caller's org.
 _protected = [Depends(enforce_access)]
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"], dependencies=_protected)
+api_router.include_router(blog.documents_router, prefix="/documents", tags=["blog"], dependencies=_protected)
+api_router.include_router(blog.target_router, prefix="/blog", tags=["blog"], dependencies=_protected)
 api_router.include_router(harness.documents_router, prefix="/documents", tags=["harness"], dependencies=_protected)
 api_router.include_router(harness.approvals_router, prefix="/approvals", tags=["harness"], dependencies=_protected)
 api_router.include_router(overview.documents_router, prefix="/documents", tags=["overview"], dependencies=_protected)

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { downloadDocumentExport, previewDocumentExport } from "./api";
+import { downloadDocumentExport, previewDocumentExport, publishToBlog } from "./api";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -92,5 +92,43 @@ describe("downloadDocumentExport", () => {
     const page = await previewDocumentExport("doc-1", "web_html", { pollIntervalMs: 1 });
     expect(page).toEqual({ kind: "html", text: "<p>中文</p>" });
     expect(exportPosts).toEqual([1, 2]);
+  });
+});
+
+describe("publishToBlog", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("checks the Markdown export is current, then saves the article on the blog", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        calls.push(`${init?.method ?? "GET"} ${url.replace(/^.*\/v1/, "")}`);
+        if (url.includes("/exports/download")) {
+          return new Response(null, { status: 204 });
+        }
+        expect(JSON.parse(String(init?.body))).toEqual({ edition: "bilingual" });
+        return jsonResponse({
+          article_id: 7,
+          action: "created",
+          title: "书（中英对照）",
+          edit_url: "http://blog/admin/articles/7/edit",
+          images_uploaded: 3,
+          images_reused: 0,
+          images_skipped: [],
+        });
+      })
+    );
+
+    const result = await publishToBlog("doc-1", "bilingual", { pollIntervalMs: 1 });
+
+    expect(result.article_id).toBe(7);
+    expect(calls).toEqual([
+      "GET /documents/doc-1/exports/download?export_type=merged_markdown&package=bilingual&check=true",
+      "POST /documents/doc-1/blog-publish",
+    ]);
   });
 });

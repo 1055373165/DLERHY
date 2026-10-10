@@ -108,6 +108,13 @@ class Settings(BaseSettings):
     run_ownership_ttl_seconds: int = 30
     # Built frontend (frontend/dist) served by the API process; unset in development (Vite serves it).
     frontend_dist_dir: Path | None = None
+    # Publishing a reading copy to the blog (~/project/blog): its API (e.g. http://localhost:3001),
+    # its admin pages (e.g. http://localhost:3000, for the link to the new draft), and the account
+    # book-agent logs in with. Unset: the 发布到博客 action is off.
+    blog_api_url: str | None = None
+    blog_web_url: str | None = None
+    blog_email: str | None = None
+    blog_password: str | None = None
     cors_allow_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     translation_backend: str = "echo"
     translation_model: str = "echo-worker"

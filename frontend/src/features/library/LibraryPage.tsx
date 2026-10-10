@@ -4,7 +4,14 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { StatusBadge } from "../../components/StatusBadge";
 import { Surface } from "../../components/Surface";
-import { deleteDocument, downloadDocumentExport, listDocumentHistory } from "../../lib/api";
+import {
+  type BlogEdition,
+  deleteDocument,
+  downloadDocumentExport,
+  getBlogTarget,
+  listDocumentHistory,
+  publishToBlog,
+} from "../../lib/api";
 import {
   formatDate,
   historyBadge,
@@ -15,7 +22,12 @@ import {
 } from "../../lib/workflow";
 import s from "./LibraryPage.module.css";
 
-type Feedback = { tone: "success" | "error"; text: string } | null;
+type Feedback = { tone: "success" | "error"; text: string; link?: { href: string; label: string } } | null;
+
+const BLOG_OPTIONS: { edition: BlogEdition; label: string }[] = [
+  { edition: "zh", label: "发布到博客 · 中文版" },
+  { edition: "bilingual", label: "发布到博客 · 中英对照版" },
+];
 
 const DOWNLOAD_OPTIONS = [
   { key: "zh-web", label: "中文网页 · 原排版", exportType: "web_html", packaging: "single", enabled: true },
@@ -113,6 +125,33 @@ export function LibraryPage() {
       setFeedback({ tone: "success", text: `已开始下载 ${opt.label}，进度见浏览器的下载列表。` });
     } catch (err) {
       setFeedback({ tone: "error", text: err instanceof Error ? err.message : "下载失败" });
+    }
+  }
+
+  const blogTarget = useQuery({ queryKey: ["blog-target"], queryFn: getBlogTarget, staleTime: 5 * 60 * 1000 });
+  const [publishing, setPublishing] = useState(false);
+
+  async function handlePublish(documentId: string, edition: BlogEdition, label: string) {
+    setOpenMenu(null);
+    setPublishing(true);
+    setFeedback({ tone: "success", text: `正在${label.replace(" · ", "（")}）……首次发布要上传全部图片，可能需要一两分钟。` });
+    try {
+      const result = await publishToBlog(documentId, edition);
+      const images = result.images_uploaded
+        ? `，上传图片 ${result.images_uploaded} 张`
+        : result.images_reused
+          ? "，图片沿用上次上传的"
+          : "";
+      const skipped = result.images_skipped.length ? `；${result.images_skipped.length} 张图片超过博客限制没有上传` : "";
+      setFeedback({
+        tone: "success",
+        text: `${result.action === "created" ? "已新建博客草稿" : "已更新博客文章"}「${result.title}」${images}${skipped}。`,
+        link: result.edit_url ? { href: result.edit_url, label: "去博客后台查看" } : undefined,
+      });
+    } catch (err) {
+      setFeedback({ tone: "error", text: err instanceof Error ? err.message : "发布到博客失败" });
+    } finally {
+      setPublishing(false);
     }
   }
 
@@ -218,7 +257,15 @@ export function LibraryPage() {
         </div>
 
         {feedback && (
-          <div className={s.feedback} data-tone={feedback.tone}>{feedback.text}</div>
+          <div className={s.feedback} data-tone={feedback.tone}>
+            {feedback.text}
+            {feedback.link && (
+              <>
+                {" "}
+                <a href={feedback.link.href} target="_blank" rel="noreferrer">{feedback.link.label}</a>
+              </>
+            )}
+          </div>
         )}
 
         {historyQuery.isLoading ? (
@@ -276,6 +323,17 @@ export function LibraryPage() {
                                 {opt.label}
                               </button>
                             ))}
+                            {blogTarget.data?.configured &&
+                              BLOG_OPTIONS.map((opt) => (
+                                <button
+                                  key={opt.edition}
+                                  className={s.dlOption}
+                                  disabled={publishing}
+                                  onClick={() => void handlePublish(entry.document_id, opt.edition, opt.label)}
+                                >
+                                  {opt.label}
+                                </button>
+                              ))}
                           </div>
                         )}
                       </div>
