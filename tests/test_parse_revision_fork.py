@@ -239,6 +239,37 @@ class ParseRevisionForkTests(unittest.TestCase):
             mapped = session.scalars(select(PacketSentenceMap.packet_id).where(PacketSentenceMap.sentence_id.in_(fresh))).all()
             self.assertEqual(set(mapped), set(outcome.fork.retranslate_packet_ids))
 
+    def test_a_new_block_after_an_invalidated_packet_joins_a_live_one(self) -> None:
+        """Art of AI p28: a paragraph the re-parse found after a running head (whose packet was
+        invalidated, nothing in it to translate) was put in that packet and never translated."""
+        from book_agent.domain.enums import BlockType, ProtectedPolicy
+
+        prose = "Meanwhile, the hype is everywhere. Now what?"
+        with self.session_factory() as session:
+            last = session.scalars(select(Block).where(Block.chapter_id == self.chapter_id).order_by(Block.ordinal.desc())).first()
+            packets = session.scalars(select(TranslationPacket).where(TranslationPacket.chapter_id == self.chapter_id)).all()
+            dead = next(packet for packet in packets if packet.block_end_id == last.id)
+            dead.status = PacketStatus.INVALIDATED
+            block = Block(
+                id=stable_id("block", self.chapter_id, "refresh-created"),
+                chapter_id=self.chapter_id,
+                ordinal=last.ordinal + 1,
+                block_type=BlockType.PARAGRAPH,
+                source_text=prose,
+                normalized_text=prose,
+                source_span_json={STALE_FLAG: True},
+                protected_policy=ProtectedPolicy.TRANSLATE,
+                status=ArtifactStatus.ACTIVE,
+            )
+            session.add(block)
+            session.flush()
+            result = ParseRevisionForkService(session).resegment_blocks(self.document_id, reason="new block")
+
+            self.assertEqual(result.unpacketed_block_ids, [])
+            self.assertTrue(result.retranslate_packet_ids)
+            self.assertNotIn(dead.id, result.retranslate_packet_ids)
+            self.assertEqual(session.get(TranslationPacket, dead.id).status, PacketStatus.INVALIDATED)
+
 
 if __name__ == "__main__":
     unittest.main()
