@@ -4333,7 +4333,9 @@ class PdfStructureRecoveryService:
             for idx, block in page_blocks:
                 if idx == caption_index or idx in already_claimed:
                     continue
-                if block.role in {"image", "table_like", "equation", "figure", "header", "footer", "footnote"}:
+                # An equation is a figure's body when a figure caption claims it ("Figure 9.7: Equation
+                # for F1 score"): set in math fonts, its text extracts as garbage, its crop reads.
+                if block.role in {"image", "table_like", "figure", "header", "footer", "footnote"}:
                     continue
                 # Only protect HEADING blocks that came from a RIGOROUS
                 # recovery source (numbered section, all-caps subheading,
@@ -4365,11 +4367,23 @@ class PdfStructureRecoveryService:
                     continue
                 # Full sentences are the body text above the figure (the end of a
                 # paragraph, a lead-in), never one of its labels.
-                if _is_running_prose(block.text):
+                if _is_running_prose(block.text) or _is_lead_in_sentence(block.text):
                     continue
                 candidates.append((idx, block, bbox))
 
             candidate_threshold = 2 if orphan_figure else 3
+            # The figure is the labels right above its caption: a body block between a label and the
+            # caption (a paragraph rejected above) ends it, and the labels beyond it (a section's
+            # heading, a short line of the text) are not the figure's.
+            candidates = self._contiguous_figure_labels(candidates, page_blocks, caption_block.page_start, caption_bbox)
+            # A formula right above its caption is the whole figure (an equation block, or a line of
+            # "Recall = …" the parser left as text).
+            if any(
+                (block.role == "equation" or _looks_like_formula_text(block.text))
+                and caption_bbox[1] - bbox[3] <= 48.0
+                for _idx, block, bbox in candidates
+            ):
+                candidate_threshold = 1
             if len(candidates) < candidate_threshold:
                 continue
 
@@ -4776,6 +4790,92 @@ class PdfStructureRecoveryService:
             return candidate_index
         return None
 
+    def _complete_figure_regions(self, recovered_blocks: list[_RecoveredBlock], file_path: str | Path) -> list[_RecoveredBlock]:
+        """Every figure region grown to the drawing it cuts through (``figure_extent.complete_figure_region``).
+
+        A margin diagram whose first box merged into the text beside it, a picture whose arrows reach
+        past it: the region took part of the figure only. It grows to the paths it cuts and their
+        labels, never over body text, a caption or the page's header or footer.
+        """
+        from book_agent.ingestion.pdf.figure_extent import complete_figure_region
+
+        targets = [
+            index
+            for index, block in enumerate(recovered_blocks)
+            if block.role in {"figure", "image"} and len(block.bbox_regions or []) == 1
+        ]
+        if not targets:
+            return recovered_blocks
+        try:
+            import fitz
+
+            document = fitz.open(str(file_path))
+        except Exception:  # pragma: no cover - no PDF to read: regions stay as they are
+            return recovered_blocks
+        blocks = list(recovered_blocks)
+        try:
+            for index in targets:
+                block = blocks[index]
+                region = block.bbox_regions[0]
+                page_number = int(region.get("page_number") or block.page_start)
+                if not 1 <= page_number <= document.page_count:
+                    continue
+                bbox = [float(value) for value in region["bbox"]]
+                if block.role == "image" and (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]) < 2500.0:
+                    continue  # an icon or an emoji set in the text (a code listing's ⚠), not a figure
+                grown = list(complete_figure_region(document[page_number - 1], bbox))
+                if all(abs(a - b) < 0.5 for a, b in zip(grown, bbox)):
+                    continue
+                regions = [{**region, "bbox": grown}]
+                metadata = dict(block.metadata)
+                if isinstance(metadata.get("source_bbox_json"), dict):
+                    metadata["source_bbox_json"] = {**metadata["source_bbox_json"], "regions": regions}
+                blocks[index] = replace(
+                    block,
+                    bbox_regions=regions,
+                    metadata=metadata,
+                    flags=list(dict.fromkeys([*block.flags, "figure_region_completed"])),
+                )
+        finally:
+            document.close()
+        return blocks
+
+    def _contiguous_figure_labels(
+        self,
+        candidates: list[tuple[int, _RecoveredBlock, list[float]]],
+        page_blocks: list[tuple[int, _RecoveredBlock]],
+        page_number: int,
+        caption_bbox: list[float],
+    ) -> list[tuple[int, _RecoveredBlock, list[float]]]:
+        """The candidates that run up from the caption without a non-candidate text block in between."""
+        candidate_ids = {index for index, _block, _bbox in candidates}
+        others = [
+            bbox
+            for index, block in page_blocks
+            if index not in candidate_ids
+            and block.role not in {"header", "footer", "caption"}
+            and (block.text or "").strip()
+            and (bbox := self._page_bbox(block, page_number)) is not None
+        ]
+        kept: list[tuple[int, _RecoveredBlock, list[float]]] = []
+        top = caption_bbox[1]
+        for candidate in sorted(candidates, key=lambda item: -item[2][3]):
+            bbox = candidate[2]
+            between = any(
+                other[1] >= bbox[3] - 0.5
+                and other[3] <= top + 0.5
+                and other[0] < bbox[2]
+                and other[2] > bbox[0]
+                for other in others
+            )
+            # Labels sit close together; a wide gap is body text the parser placed wrongly (a paragraph
+            # split from its heading keeps the heading's box).
+            if between or (kept and top - bbox[3] > 72.0):
+                break
+            kept.append(candidate)
+            top = min(top, bbox[1])
+        return kept
+
     def _page_bbox(self, block: _RecoveredBlock, page_number: int) -> list[float] | None:
         for region in block.bbox_regions:
             if int(region["page_number"]) != page_number:
@@ -4848,6 +4948,21 @@ def build_default_recovery_service(
 
 
 _FULL_SENTENCE_RE = re.compile(r"[^.!?]*?[A-Za-z][^.!?]*[.!?][\"”’)]?(?=\s+[A-Z“\"(]|\s*$)")
+
+
+_MATH_CHAR_RE = re.compile("[\U0001D400-\U0001D7FF\u2200-\u22FF\uE000-\uF8FF]")
+
+
+def _looks_like_formula_text(text: str | None) -> bool:
+    """A formula set as text: an equals sign, or the math letters and operators math fonts extract as."""
+    value = text or ""
+    return "=" in value or bool(_MATH_CHAR_RE.search(value))
+
+
+def _is_lead_in_sentence(text: str) -> bool:
+    """A sentence leading into a list, a formula or a figure ("The formula for calculating recall is as follows:")."""
+    normalized = " ".join((text or "").split())
+    return normalized.endswith(":") and len(normalized.split()) >= 5 and normalized[:1].isupper()
 
 
 def _is_running_prose(text: str) -> bool:
@@ -5424,6 +5539,7 @@ _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
     BlockRecoveryPass("lock_listing_scope", _returning("_lock_listing_scope")),
     BlockRecoveryPass("figure_clustering", _returning("_apply_figure_clustering")),
     BlockRecoveryPass("recover_text_only_figures", _returning("_recover_text_only_figures")),
+    BlockRecoveryPass("complete_figure_regions", _returning("_complete_figure_regions", "file_path")),
     BlockRecoveryPass("link_artifact_captions", _in_place("_link_artifact_captions")),
     BlockRecoveryPass("link_artifact_group_contexts", _in_place("_link_artifact_group_contexts", academic_paper="academic_lane")),
     BlockRecoveryPass("nest_list_items", _returning("_nest_list_items")),
