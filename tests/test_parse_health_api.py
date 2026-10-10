@@ -78,6 +78,10 @@ class ParseHealthApiTests(unittest.TestCase):
         self.root = Path(self.tempdir.name)
         self.engine = build_engine("sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         self.addCleanup(self.engine.dispose)
+        # Deleting a book removes its runs and reports by cascade, as on Postgres.
+        from sqlalchemy import event
+
+        event.listen(self.engine, "connect", lambda connection, _record: connection.execute("PRAGMA foreign_keys=ON"))
         Base.metadata.create_all(self.engine)
         self.session_factory = build_session_factory(engine=self.engine)
         patcher = patch.dict(
@@ -150,13 +154,48 @@ class ParseHealthApiTests(unittest.TestCase):
         self.assertNotEqual(source, pdf_path)
         self.assertFalse(pdf_path.exists())
 
-        # Once a translation is asked for, the parse holds work: no re-import.
+        self.assertFalse(self.client.get(f"/v1/documents/{document_id}/overview").json()["reimport_discards_pilot"])
+
+        # After the pilot alone it imports again, and the pilot goes with the old parse.
+        with self.session_factory() as session:
+            pilot = DocumentRun(
+                document_id=document_id,
+                run_type=DocumentRunType.TRANSLATE_FULL,
+                status=DocumentRunStatus.RUNNING,
+                requested_by="test",
+                billing_category="pilot",
+                status_detail_json={"run_request": {"scope": "pilot"}},
+            )
+            session.add(pilot)
+            session.commit()
+            pilot_id = pilot.id
+        # Not while it runs.
+        busy = self.client.post(f"/v1/documents/{document_id}/reimport")
+        self.assertEqual(busy.status_code, 409)
+        self.assertIn("还有任务在进行", busy.json()["detail"])
+        with self.session_factory() as session:
+            session.get(DocumentRun, pilot_id).status = DocumentRunStatus.SUCCEEDED
+            session.commit()
+        overview = self.client.get(f"/v1/documents/{document_id}/overview").json()
+        self.assertTrue(overview["can_reimport"])
+        self.assertTrue(overview["reimport_discards_pilot"])
+        again = self.client.post(f"/v1/documents/{document_id}/reimport")
+        self.assertEqual(again.status_code, 200, again.text)
+        with self.session_factory() as session:
+            self.assertIsNone(session.get(DocumentRun, pilot_id))
+        self.assertFalse(self.client.get(f"/v1/documents/{document_id}/overview").json()["reimport_discards_pilot"])
+
+        # Once the whole book is asked for, the parse holds work: no re-import.
         run = self.client.post("/v1/runs", json={"document_id": document_id, "run_type": "translate_full", "requested_by": "test"})
         self.assertIn(run.status_code, (200, 201), run.text)
+        with self.session_factory() as session:
+            for queued in session.scalars(select(DocumentRun).where(DocumentRun.document_id == document_id)).all():
+                queued.status = DocumentRunStatus.SUCCEEDED
+            session.commit()
         self.assertFalse(self.client.get(f"/v1/documents/{document_id}/overview").json()["can_reimport"])
         refused = self.client.post(f"/v1/documents/{document_id}/reimport")
         self.assertEqual(refused.status_code, 409)
-        self.assertIn("已经开始试译或翻译", refused.json()["detail"])
+        self.assertIn("已经开始翻译全书", refused.json()["detail"])
 
     def test_a_pdf_import_writes_a_report_the_api_and_the_overview_read(self) -> None:
         pdf_path = self.root / "parted.pdf"

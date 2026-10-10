@@ -43,6 +43,7 @@ export function ProgressTab() {
         documentId={book.document_id}
         summary={book.parse_health ?? null}
         canReimport={book.can_reimport ?? false}
+        reimportDiscardsPilot={book.reimport_discards_pilot ?? false}
       />
       {bookQuality && (
         <PilotQualityPanel documentId={book.document_id} summary={bookQuality.quality} repair={bookQuality.repair} scope="book" />
