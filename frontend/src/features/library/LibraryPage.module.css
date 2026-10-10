@@ -502,3 +502,11 @@
     justify-content: center;
   }
 }
+
+.feedbackProgress {
+  display: block;
+  width: min(100%, 360px);
+  height: 6px;
+  margin-top: 8px;
+  accent-color: var(--accent, #2f7a5b);
+}

@@ -996,6 +996,7 @@ function startBrowserDownload(path: string): void {
 
 export type BlogTarget = Generated.BlogTargetResponse;
 export type BlogPublishResult = Generated.BlogPublishResponse;
+export type BlogPublishJob = Generated.BlogPublishJobResponse;
 // "zh": the Chinese Markdown; "bilingual": the Chinese–English one.
 export type BlogEdition = "zh" | "bilingual";
 
@@ -1006,23 +1007,57 @@ export async function getBlogTarget(): Promise<BlogTarget> {
 
 /**
  * Save a book's Markdown reading copy as a blog article draft (the same edition again updates it).
- * The Markdown is exported first when it is missing or out of date, as for a download.
+ * The Markdown is exported first when it is missing or out of date, as for a download. The publish
+ * runs as a job on the server: ``onProgress`` gets each state of it (logging in, picture N of M,
+ * saving) until it ends.
  */
 export async function publishToBlog(
   documentId: string,
   edition: BlogEdition,
-  options: Omit<ExportFetchOptions, "packaging" | "checkOnly"> = {}
+  {
+    onProgress,
+    jobPollIntervalMs = 1000,
+    ...options
+  }: Omit<ExportFetchOptions, "packaging" | "checkOnly"> & {
+    onProgress?: (job: BlogPublishJob) => void;
+    jobPollIntervalMs?: number;
+  } = {}
 ): Promise<BlogPublishResult> {
   await fetchDocumentExport(documentId, "merged_markdown", {
     ...options,
     packaging: edition === "bilingual" ? "bilingual" : "single",
     checkOnly: true,
   });
-  return requestJson<BlogPublishResult>(`/documents/${encodeURIComponent(documentId)}/blog-publish`, {
+  let job = await requestJson<BlogPublishJob>(`/documents/${encodeURIComponent(documentId)}/blog-publish`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ edition }),
   });
+  onProgress?.(job);
+  while (job.status === "running") {
+    await new Promise((resolve) => setTimeout(resolve, jobPollIntervalMs));
+    job = await requestJson<BlogPublishJob>(`/blog/publish-jobs/${encodeURIComponent(job.job_id)}`);
+    onProgress?.(job);
+  }
+  if (job.status === "failed" || !job.result) {
+    throw new Error(job.error ?? "发布到博客失败");
+  }
+  return job.result;
+}
+
+/** One line for a publish in progress: logging in, picture N of M, saving. */
+export function blogPublishProgressText(job: BlogPublishJob): string {
+  if (job.stage === "images" && job.total > 0) {
+    const percent = Math.floor((job.done / job.total) * 100);
+    return `正在上传图片 ${job.done}/${job.total}（${percent}%）`;
+  }
+  if (job.stage === "saving" || (job.stage === "images" && job.total === 0)) {
+    return "图片已就绪，正在保存文章……";
+  }
+  if (job.stage === "done") {
+    return "已完成";
+  }
+  return "正在登录博客……";
 }
 
 export type ReadableExportType = "merged_html" | "bilingual_html" | "merged_markdown" | "rebuilt_pdf" | "web_html";

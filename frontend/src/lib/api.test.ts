@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { downloadDocumentExport, previewDocumentExport, publishToBlog } from "./api";
+import { blogPublishProgressText, downloadDocumentExport, previewDocumentExport, publishToBlog } from "./api";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -110,25 +110,44 @@ describe("publishToBlog", () => {
         if (url.includes("/exports/download")) {
           return new Response(null, { status: 204 });
         }
-        expect(JSON.parse(String(init?.body))).toEqual({ edition: "bilingual" });
-        return jsonResponse({
-          article_id: 7,
-          action: "created",
-          title: "书（中英对照）",
-          edit_url: "http://blog/admin/articles/7/edit",
-          images_uploaded: 3,
-          images_reused: 0,
-          images_skipped: [],
-        });
+        if (url.endsWith("/blog-publish")) {
+          expect(JSON.parse(String(init?.body))).toEqual({ edition: "bilingual" });
+          return jsonResponse({ ...job, stage: "login", done: 0, total: 3 }, 202);
+        }
+        polls += 1;
+        return jsonResponse(
+          polls === 1
+            ? { ...job, stage: "images", done: 2, total: 3 }
+            : { ...job, status: "succeeded", stage: "done", done: 3, total: 3, result }
+        );
       })
     );
+    const job = { job_id: "j1", document_id: "doc-1", edition: "bilingual", status: "running", result: null, error: null };
+    const result = {
+      article_id: 7,
+      action: "created",
+      title: "书（中英对照）",
+      edit_url: "http://blog/admin/articles/7/edit",
+      images_uploaded: 3,
+      images_reused: 0,
+      images_skipped: [],
+    };
+    let polls = 0;
+    const seen: string[] = [];
 
-    const result = await publishToBlog("doc-1", "bilingual", { pollIntervalMs: 1 });
+    const published = await publishToBlog("doc-1", "bilingual", {
+      pollIntervalMs: 1,
+      jobPollIntervalMs: 1,
+      onProgress: (state) => seen.push(blogPublishProgressText(state)),
+    });
 
-    expect(result.article_id).toBe(7);
+    expect(published.article_id).toBe(7);
+    expect(seen).toEqual(["正在登录博客……", "正在上传图片 2/3（66%）", "已完成"]);
     expect(calls).toEqual([
       "GET /documents/doc-1/exports/download?export_type=merged_markdown&package=bilingual&check=true",
       "POST /documents/doc-1/blog-publish",
+      "GET /blog/publish-jobs/j1",
+      "GET /blog/publish-jobs/j1",
     ]);
   });
 });

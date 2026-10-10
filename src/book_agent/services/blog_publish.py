@@ -160,37 +160,46 @@ def publish_markdown(
     metadata: Any,
     edition: str,
     client_factory: Callable[[BlogTarget], BlogClient] = BlogClient,
+    progress: Callable[[str, int, int], None] | None = None,
 ) -> tuple[PublishResult, dict[str, Any]]:
     """Upload the pictures, then create or update the article. Returns the result and the new state.
 
     ``state``: what earlier publishes to this blog left (``document.metadata_json["blog_publish"]``).
+    ``progress(stage, done, total)``: "login", then "images" after each picture, then "saving".
     """
+    report = progress or (lambda stage, done, total: None)
     state = {key: dict(value) if isinstance(value, dict) else value for key, value in (state or {}).items()}
     blog_state = dict(state.get(target.api_url) or {})
     images: dict[str, str] = dict(blog_state.get("images") or {})
     articles: dict[str, Any] = dict(blog_state.get("articles") or {})
     result = PublishResult(article_id=0, action="", title=metadata.title, edit_url=None)
 
+    # Every picture file the Markdown links to, once.
+    pictures: dict[str, Path] = {}
+    for match in _IMAGE_LINK.finditer(markdown):
+        src = match.group("src")
+        path = pictures.get(src) or _local_image_path(src, base_dir)
+        if path is not None:
+            pictures[src] = path
+
     with client_factory(target) as client:
+        report("login", 0, len(pictures))
         client.login()
         uploaded_by_src: dict[str, str] = {}
-        for match in _IMAGE_LINK.finditer(markdown):
-            src = match.group("src")
-            if src in uploaded_by_src:
-                continue
-            path = _local_image_path(src, base_dir)
-            if path is None:
-                continue
+        report("images", 0, len(pictures))
+        for done, (src, path) in enumerate(pictures.items(), start=1):
             if path.stat().st_size > _IMAGE_MAX_BYTES or path.suffix.lower() not in _IMAGE_TYPES:
                 result.images_skipped.append(src)
-                continue
-            digest = hashlib.sha256(path.read_bytes()).hexdigest()
-            if digest in images:
-                result.images_reused += 1
             else:
-                images[digest] = client.upload_image(path)
-                result.images_uploaded += 1
-            uploaded_by_src[src] = images[digest]
+                digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                if digest in images:
+                    result.images_reused += 1
+                else:
+                    images[digest] = client.upload_image(path)
+                    result.images_uploaded += 1
+                uploaded_by_src[src] = images[digest]
+            report("images", done, len(pictures))
+        report("saving", len(pictures), len(pictures))
         content = _IMAGE_LINK.sub(
             lambda m: f"{m.group(1)}{uploaded_by_src.get(m.group('src'), m.group('src'))}{m.group(3)}", markdown
         )
