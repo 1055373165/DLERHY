@@ -26,9 +26,13 @@ def reimport_refusal(session: Session, document: Document) -> str | None:
         return "网页不能重新导入；重新添加这个网址即可。"
     if not document.source_path or not Path(document.source_path).is_file():
         return "找不到这本书当初上传的文件，不能重新导入；可以在书库删除后重新上传。"
+    # Importing and exporting leave no translations; a pilot, translation, review or repair run does.
     started = session.scalar(
         select(
-            exists().where(DocumentRun.document_id == document.id, DocumentRun.run_type != DocumentRunType.BOOTSTRAP)
+            exists().where(
+                DocumentRun.document_id == document.id,
+                DocumentRun.run_type.not_in((DocumentRunType.BOOTSTRAP, DocumentRunType.EXPORT_FULL)),
+            )
         )
     )
     translated = session.scalar(
