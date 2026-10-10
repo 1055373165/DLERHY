@@ -13,7 +13,7 @@ not a short all-caps token (API, HTTP, CPU) that stays as written.
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 MAX_CELL_CHARS = 300
@@ -150,6 +150,27 @@ def _translated_grid(text: str) -> list[list[str]] | None:
     return rows or None
 
 
+def _flattened_grid(text: str, shape: Sequence[int]) -> list[list[str]] | None:
+    """A translated grid whose line breaks the model dropped ("| a | b | | c | d |"), cut back into
+    rows of ``shape`` (each row's cell count): a row boundary leaves one empty cell between rows."""
+    stripped = " ".join(str(text or "").split())
+    if "\n" in str(text or "").strip() or not (stripped.startswith("|") and stripped.endswith("|")) or not shape:
+        return None
+    cells = [cell.strip() for cell in stripped[1:-1].split("|")]
+    if len(cells) != sum(shape) + len(shape) - 1:
+        return None
+    rows: list[list[str]] = []
+    position = 0
+    for index, width in enumerate(shape):
+        rows.append(cells[position : position + width])
+        position += width
+        if index < len(shape) - 1:
+            if cells[position]:
+                return None
+            position += 1
+    return rows
+
+
 def split_shared_cell_translations(grid: list[list[str]] | None, translations: Mapping[str, str]) -> dict[str, str]:
     """Cells that came back from the model as one translated table, split back cell by cell.
 
@@ -167,11 +188,15 @@ def split_shared_cell_translations(grid: list[list[str]] | None, translations: M
     for target, sources in sources_by_text.items():
         if len(sources) < 2:
             continue
-        translated = _translated_grid(target)
-        if not translated:
-            continue
         # The rows those cells come from, or the whole table when the model translated all of it.
         rows = [row for row in grid if any(" ".join(cell.split()) in sources for cell in row)]
+        translated = _translated_grid(target)
+        if translated and len(translated) == 1 and len(rows) > 1:
+            translated = _flattened_grid(target, [len(row) for row in rows]) or _flattened_grid(
+                target, [len(row) for row in grid]
+            )
+        if not translated:
+            continue
         if len(rows) != len(translated):
             rows = list(grid)
         if len(rows) != len(translated) or any(len(row) != len(cells) for row, cells in zip(rows, translated)):
