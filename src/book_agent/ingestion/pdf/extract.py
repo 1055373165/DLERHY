@@ -896,11 +896,77 @@ def ruled_table_rows_at(page: Any, bbox: Sequence[float]) -> list[list[str]] | N
     table = max(candidates, key=overlap)
     try:
         unsplit = [row for row in ([_table_cell_text(cell) for cell in row] for row in table.extract()) if any(row)]
-        if not _looks_like_data_table(unsplit):
+        rows = table_rows(table, table_page_lines(page))
+        if not _looks_like_data_table(unsplit) and not (_looks_like_data_table(rows) and _dense_table(rows)):
             return None
-        return table_rows(table, table_page_lines(page))
+        return rows
     except Exception:
         return None
+
+
+# A table's own drawing: this much of the drawing lies in the table, and it is barely larger.
+_TABLE_DRAWING_COVER = 0.85
+_TABLE_DRAWING_MAX_GROWTH = 1.25
+# Split rows make a table when this share of their cells has text.
+_DENSE_TABLE_FILL = 0.75
+
+
+def _box_area(box: Sequence[float]) -> float:
+    return max(0.0, float(box[2]) - float(box[0])) * max(0.0, float(box[3]) - float(box[1]))
+
+
+def _box_intersection(first: Sequence[float], second: Sequence[float]) -> float:
+    width = min(float(first[2]), float(second[2])) - max(float(first[0]), float(second[0]))
+    height = min(float(first[3]), float(second[3])) - max(float(first[1]), float(second[1]))
+    return max(0.0, width) * max(0.0, height)
+
+
+def _is_table_drawing(region: Sequence[float], table_boxes: Sequence[Sequence[float]]) -> bool:
+    """A measured drawing that is a table's shading and rules (Art of AI p54: figure 2.8 is a table)."""
+    area = _box_area(region)
+    if area <= 0:
+        return False
+    return any(
+        _box_intersection(region, box) >= area * _TABLE_DRAWING_COVER
+        and area <= _box_area(box) * _TABLE_DRAWING_MAX_GROWTH
+        for box in table_boxes
+    )
+
+
+def _overlaps_figure(box: Sequence[float], figure_regions: Sequence[Sequence[float]]) -> bool:
+    """Half the box lies in a measured drawing: find_tables' grid there is a diagram's boxes."""
+    area = _box_area(box)
+    return area > 0 and any(_box_intersection(box, region) >= area * 0.5 for region in figure_regions)
+
+
+_TABLE_CAPTION_LINE = re.compile(r"^\s*Table\s+[A-Z]?\d+(?:[.\-]\d+)*\b")
+# How far from a table's top or bottom edge its caption sits.
+_TABLE_CAPTION_GAP = 30.0
+
+
+def _table_caption_at(
+    page_lines: Sequence[tuple[float, float, float, float, str]], bbox: Sequence[float]
+) -> bool:
+    """A "Table 5.2 ..." line just above or below the box, across it."""
+    x0, y0, x1, y1 = (float(value) for value in bbox)
+    for left, top, right, bottom, text in page_lines:
+        if not _TABLE_CAPTION_LINE.match(text) or right < x0 or left > x1:
+            continue
+        if 0 <= y0 - bottom <= _TABLE_CAPTION_GAP or 0 <= top - y1 <= _TABLE_CAPTION_GAP:
+            return True
+    return False
+
+
+def _dense_table(rows: list[list[str]]) -> bool:
+    """Most body cells have text and every column has some (a diagram's labels leave most of
+    find_tables' grid empty). The header is left out: a heading spanning columns ("Features" over
+    five) leaves its other cells empty by design."""
+    body = rows[1:]
+    cells = [cell for row in body for cell in row]
+    if not cells or sum(1 for cell in cells if cell) < len(cells) * _DENSE_TABLE_FILL:
+        return False
+    width = max(len(row) for row in rows)
+    return all(any(column < len(row) and row[column] for row in body) for column in range(width))
 
 
 def _looks_like_data_table(rows: list[list[str]]) -> bool:
@@ -1097,7 +1163,6 @@ class PyMuPDFTextExtractor:
                 blocks = _split_hanging_list_blocks(blocks, line_bboxes_by_block)
                 blocks = _mark_numbered_list_blocks(blocks)
                 blocks = _split_mid_block_captions(blocks, line_bboxes_by_block)
-                blocks = self._merge_ruled_table_blocks(page, blocks, drawings)
                 text_lines = page_text_lines(text_dict, float(page.rect.width), float(page.rect.height))
                 figure_blocks, extents = self._measure_vector_figures(
                     page,
@@ -1108,6 +1173,19 @@ class PyMuPDFTextExtractor:
                     text_lines=text_lines,
                     image_bboxes=[image_block.bbox for image_block in image_blocks],
                 )
+                blocks = self._merge_ruled_table_blocks(
+                    page, blocks, drawings, figure_regions=[extent.region for extent in extents]
+                )
+                # A table's shaded cells measure as a drawing of the table's own size: the table is
+                # the content (translated cell by cell), not a picture of it beside the table.
+                # Only a full grid: a diagram's boxes read as a sparse one, and stay a picture.
+                table_boxes = [block.bbox for block in blocks if block.ruled_table and block.dense_table]
+                if table_boxes:
+                    kept = [not _is_table_drawing(extent.region, table_boxes) for extent in extents]
+                    extents = [extent for extent, keep in zip(extents, kept) if keep]
+                    figure_blocks = [
+                        block for block in figure_blocks if not _is_table_drawing(block.bbox, table_boxes)
+                    ]
                 image_blocks.extend(figure_blocks)
                 if extents:
                     labels = figure_label_blocks([block.bbox for block in blocks], text_lines, extents)
@@ -1242,6 +1320,8 @@ class PyMuPDFTextExtractor:
         page: Any,
         blocks: list[PdfTextBlock],
         drawings: list[dict[str, Any]],
+        *,
+        figure_regions: Sequence[tuple[float, float, float, float]] = (),
     ) -> list[PdfTextBlock]:
         """Replace the per-cell text blocks of a ruled table with one block of pipe rows.
 
@@ -1262,9 +1342,19 @@ class PyMuPDFTextExtractor:
                 # Whether it is a data table is decided on the rows as find_tables reads them; only
                 # then are body rows that share one cell box split apart.
                 unsplit = [row for row in ([_table_cell_text(cell) for cell in row] for row in table.extract()) if any(row)]
-                if not _looks_like_data_table(unsplit):
-                    continue
                 rows = table_rows(table, page_lines)
+                if not _looks_like_data_table(unsplit):
+                    # Rules only under the header and at the bottom: find_tables reads the body as one
+                    # row of long cells. Split by its line gaps it is a table when the grid is full and
+                    # no drawing lies there (a diagram's boxes make a full grid of labels too); a
+                    # "Table 5.2" caption at its edge vouches for long descriptive cells.
+                    bbox = tuple(float(value) for value in table.bbox)
+                    if not (
+                        (_looks_like_data_table(rows) or (len(rows) >= 2 and _table_caption_at(page_lines, bbox)))
+                        and _dense_table(rows)
+                        and not _overlaps_figure(bbox, figure_regions)
+                    ):
+                        continue
             except Exception:
                 continue
             x0, y0, x1, y1 = (float(value) for value in table.bbox)
@@ -1291,6 +1381,7 @@ class PyMuPDFTextExtractor:
                 font_size_avg=_safe_mean(font_sizes),
                 font_names=frozenset().union(*(block.font_names for block in members)),
                 ruled_table=True,
+                dense_table=_dense_table(rows),
             )
             first_index = blocks.index(members[0])
             member_ids = {id(block) for block in members}

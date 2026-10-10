@@ -55,7 +55,7 @@ a{color:var(--accent);text-decoration:none;}a:hover{text-decoration:underline;}
 .artifact-table-shell{overflow-x:auto;border:1px solid rgba(184,197,218,.72);border-radius:14px;background:#fff;}
 .artifact-table{width:100%;border-collapse:collapse;font-family:var(--font-ui);font-size:14px;line-height:1.55;color:#102033;background:#fff;}
 .artifact-table thead th{background:#edf4fb;font-weight:700;color:#17313a;}
-.artifact-table th,.artifact-table td{padding:10px 12px;border:1px solid rgba(184,197,218,.72);text-align:left;vertical-align:top;white-space:nowrap;}
+.artifact-table th,.artifact-table td{padding:10px 12px;border:1px solid rgba(184,197,218,.72);text-align:left;vertical-align:top;white-space:normal;overflow-wrap:break-word;min-width:4.5em;}
 .artifact-table tbody tr:nth-child(even){background:#f8fbfe;}
 .artifact.reference .artifact-body{word-break:break-all;}
 .quote{border-left:5px solid #8cc4ce;padding-left:18px;margin-left:4px;}
