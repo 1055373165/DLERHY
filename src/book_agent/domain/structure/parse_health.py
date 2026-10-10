@@ -935,12 +935,15 @@ def check_figure_regions(
     def full_page(block: HealthBlock) -> bool:
         return is_page_background(block.bbox, (page_sizes or {}).get(int(block.region_page or 0)))
 
+    # A cover is a full-page picture; a publisher's logo or badge printed on it is the cover's, not a figure.
+    cover_pages = {int(block.region_page) for block in picture_blocks(blocks) if block.region_page is not None and full_page(block)}
     figures = [
         block
         for block in picture_blocks(blocks)
         if block.region_page is not None
         and image_fragment_kind(block.bbox) is None
         and not full_page(block)
+        and int(block.region_page) not in cover_pages
         and not is_inline_icon(block.bbox)
     ]
     samples: list[Sample] = []
