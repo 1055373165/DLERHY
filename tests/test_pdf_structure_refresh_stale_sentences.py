@@ -16,20 +16,28 @@ from book_agent.services.bootstrap import BootstrapArtifacts, ParseService, Segm
 from book_agent.services.pdf_structure_refresh import PdfStructureRefreshService
 
 
-def _stub_parser(text: str | list[tuple[str, str]]):
-    """One paragraph, or (anchor, text) paragraphs in reading order."""
+def _stub_parser(text: str | list[tuple[str, str]], boxes: dict[str, list[float]] | None = None):
+    """One paragraph, or (anchor, text) blocks in reading order; a "-fig" anchor is a figure, with
+    its box from ``boxes``."""
     paragraphs = [("p1-b1", text)] if isinstance(text, str) else text
+    boxes = boxes or {}
+
+    def _metadata(anchor: str) -> dict:
+        metadata = {"source_page_start": 1, "source_page_end": 1, "pdf_block_role": "body"}
+        if anchor in boxes:
+            metadata["source_bbox_json"] = {"regions": [{"page_number": 1, "bbox": boxes[anchor]}]}
+        return metadata
 
     class _StubPdfParser:
         def parse(self, _file_path, profile=None):
             blocks = [
                 ParsedBlock(
-                    block_type=BlockType.PARAGRAPH.value,
+                    block_type=(BlockType.FIGURE if "-fig" in anchor else BlockType.PARAGRAPH).value,
                     text=paragraph,
                     source_path="pdf://page/1",
                     ordinal=ordinal,
                     anchor=anchor,
-                    metadata={"source_page_start": 1, "source_page_end": 1, "pdf_block_role": "body"},
+                    metadata=_metadata(anchor),
                     parse_confidence=0.95,
                 )
                 for ordinal, (anchor, paragraph) in enumerate(paragraphs, start=1)
@@ -70,7 +78,9 @@ class PdfStructureRefreshStaleSentenceTests(unittest.TestCase):
             created_at=now,
             updated_at=now,
         )
-        parse_artifacts = ParseService(pdf_parser=_stub_parser(self.ORIGINAL)).parse(document, str(self.pdf_path))
+        parse_artifacts = ParseService(pdf_parser=_stub_parser(self.ORIGINAL, getattr(self, "BOXES", None))).parse(
+            document, str(self.pdf_path)
+        )
         segmentation = SegmentationService().segment(
             parse_artifacts.document, parse_artifacts.chapters, parse_artifacts.blocks
         )
@@ -87,12 +97,12 @@ class PdfStructureRefreshStaleSentenceTests(unittest.TestCase):
             session.commit()
         self.document_id = parse_artifacts.document.id
 
-    def _refresh(self, text: str | list[tuple[str, str]]):
+    def _refresh(self, text: str | list[tuple[str, str]], boxes: dict[str, list[float]] | None = None):
         with self.session_factory() as session:
             artifacts = PdfStructureRefreshService(
                 session,
                 BootstrapRepository(session),
-                parse_service=ParseService(pdf_parser=_stub_parser(text)),
+                parse_service=ParseService(pdf_parser=_stub_parser(text, boxes)),
             ).refresh_document(self.document_id)
             session.commit()
             block = BootstrapRepository(session).load_document_bundle(self.document_id).chapters[0].blocks[0]
@@ -161,6 +171,56 @@ class PdfStructureRefreshNewBlockTests(PdfStructureRefreshStaleSentenceTests):
                 ("p1-b3", "After some brainstorming, a couple of ideas emerge."),
             ]
         )
+        self.assertEqual(artifacts.created_block_ids, [])
+
+
+class PdfStructureRefreshFigureTests(PdfStructureRefreshStaleSentenceTests):
+    # The old parse took a sidebar's tinted panel for a figure.
+    BOXES = {"p1-fig9": [100, 100, 500, 300], "p1-fig12": [100, 400, 500, 600]}
+    ORIGINAL = [
+        ("p1-b1", "Case study: collaboration in Miro"),
+        ("p1-fig9", "[Figure]"),
+        ("p1-fig12", "[Figure]"),
+    ]
+
+    test_changed_text_marks_sentences_stale = None
+    test_whitespace_only_change_keeps_sentences_current = None
+
+    def test_a_figure_the_new_parse_drops_is_invalidated_and_a_new_one_added(self) -> None:
+        from book_agent.domain.enums import ArtifactStatus
+
+        artifacts, _block = self._refresh(
+            [
+                ("p1-b1", "Case study: collaboration in Miro"),
+                ("p1-b2", "Miro uses AI to summarise boards."),
+                ("p1-fig12", "[Figure]"),
+                ("p1-fig15", "[Figure]"),
+            ]
+        )
+        from book_agent.domain.models import Block
+
+        with self.session_factory() as session:
+            status = {block.source_anchor.split("#")[-1]: block.status for block in session.query(Block)}
+        self.assertEqual(status["p1-fig9"], ArtifactStatus.INVALIDATED)
+        self.assertEqual(status["p1-fig12"], ArtifactStatus.ACTIVE)
+        self.assertEqual(status["p1-fig15"], ArtifactStatus.ACTIVE)
+        self.assertEqual(status["p1-b2"], ArtifactStatus.ACTIVE)
+        self.assertEqual(len(artifacts.created_block_ids), 2)
+
+    def test_a_figure_whose_anchor_moved_keeps_its_block(self) -> None:
+        from book_agent.domain.models import Block
+
+        with self.session_factory() as session:
+            before = {block.source_anchor.split("#")[-1]: block.id for block in session.query(Block)}
+        # The same picture as fig12, now anchored on another of its elements.
+        artifacts, _block = self._refresh(
+            [("p1-b1", "Case study: collaboration in Miro"), ("p1-fig13", "[Figure]")],
+            boxes={"p1-fig13": [102, 398, 500, 610]},
+        )
+        with self.session_factory() as session:
+            after = {block.source_anchor.split("#")[-1]: (block.id, block.status.value) for block in session.query(Block)}
+        self.assertEqual(after["p1-fig13"], (before["p1-fig12"], "active"))
+        self.assertEqual(after["p1-fig9"], (before["p1-fig9"], "invalidated"))
         self.assertEqual(artifacts.created_block_ids, [])
 
 

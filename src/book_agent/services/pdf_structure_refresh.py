@@ -43,6 +43,32 @@ def _chapter_href(chapter: Chapter) -> str | None:
     return anchor_start.split("#", 1)[0].strip() or None
 
 
+def _page_box(source_span: dict | None) -> tuple[int, list[float]] | None:
+    """The page and bounding box of a single-region block."""
+    regions = ((source_span or {}).get("source_bbox_json") or {}).get("regions") or []
+    if len(regions) != 1:
+        return None
+    bbox = regions[0].get("bbox")
+    page = regions[0].get("page_number")
+    if not isinstance(page, int) or not isinstance(bbox, list) or len(bbox) != 4:
+        return None
+    return page, [float(value) for value in bbox]
+
+
+def _bbox_overlap(first: dict | None, second: dict | None) -> float:
+    """Overlap of two blocks' boxes on one page, as a share of the smaller box (0 on other pages)."""
+    a, b = _page_box(first), _page_box(second)
+    if a is None or b is None or a[0] != b[0]:
+        return 0.0
+    (ax0, ay0, ax1, ay1), (bx0, by0, bx1, by1) = a[1], b[1]
+    width = min(ax1, bx1) - max(ax0, bx0)
+    height = min(ay1, by1) - max(ay0, by0)
+    if width <= 0 or height <= 0:
+        return 0.0
+    smaller = min((ax1 - ax0) * (ay1 - ay0), (bx1 - bx0) * (by1 - by0))
+    return width * height / smaller if smaller > 0 else 0.0
+
+
 def _clone_document(document: Document) -> Document:
     return Document(
         id=document.id,
@@ -161,6 +187,9 @@ class PdfStructureRefreshService:
             for block in parse_artifacts.blocks
             if isinstance(block.source_anchor, str) and block.source_anchor.strip()
         }
+        self._rematch_moved_figures(
+            existing_block_by_source_anchor, existing_block_id_by_source_anchor, refreshed_blocks_by_source_anchor
+        )
         refreshed_split_fragments_by_base_anchor: dict[str, list[Block]] = {}
         for refreshed_block in parse_artifacts.blocks:
             refreshed_metadata = dict(refreshed_block.source_span_json or {})
@@ -343,6 +372,47 @@ class PdfStructureRefreshService:
             created_block_ids=created_block_ids,
         )
 
+    def _rematch_moved_figures(
+        self,
+        existing_block_by_source_anchor: dict[str, Block],
+        existing_block_id_by_source_anchor: dict[str, str],
+        refreshed_blocks_by_source_anchor: dict[str, Block],
+    ) -> None:
+        """A figure's anchor is its primary element's index, and a new figure-region rule can pick
+        another element of the same picture. An existing figure whose anchor the new parse lacks takes
+        over the new anchor of the figure on its page that overlaps it most, so it keeps its id, image,
+        caption links and the edits made to it, instead of being dropped and added again."""
+        figure_types = {BlockType.FIGURE.value, BlockType.IMAGE.value}
+        orphans = [
+            block
+            for anchor, block in existing_block_by_source_anchor.items()
+            if anchor not in refreshed_blocks_by_source_anchor and str(getattr(block.block_type, "value", block.block_type)) in figure_types
+        ]
+        candidates = [
+            block
+            for anchor, block in refreshed_blocks_by_source_anchor.items()
+            if anchor not in existing_block_id_by_source_anchor and str(block.block_type) in figure_types
+        ]
+        taken: set[str] = set()
+        for existing in orphans:
+            best: tuple[float, Block] | None = None
+            for refreshed in candidates:
+                if refreshed.source_anchor in taken:
+                    continue
+                overlap = _bbox_overlap(existing.source_span_json, refreshed.source_span_json)
+                if overlap >= 0.5 and (best is None or overlap > best[0]):
+                    best = (overlap, refreshed)
+            if best is None:
+                continue
+            new_anchor = best[1].source_anchor
+            taken.add(new_anchor)
+            old_anchor = existing.source_anchor
+            existing.source_anchor = new_anchor
+            del existing_block_by_source_anchor[old_anchor]
+            existing_block_by_source_anchor[new_anchor] = existing
+            existing_block_id_by_source_anchor.pop(old_anchor, None)
+            existing_block_id_by_source_anchor[new_anchor] = existing.id
+
     def _insert_new_blocks(
         self,
         *,
@@ -381,7 +451,9 @@ class PdfStructureRefreshService:
             if anchor in existing_block_id_by_source_anchor:
                 continue
             text = _collapse_whitespace(refreshed_block.source_text)
-            if not text or any(text in held for held in active_texts):
+            # A figure's text is a placeholder ("[Figure]"); its anchor alone says it is new.
+            is_figure = str(refreshed_block.block_type) in {BlockType.FIGURE.value, BlockType.IMAGE.value}
+            if not text or (not is_figure and any(text in held for held in active_texts)):
                 continue
             inserts.append((previous, refreshed_block))
         if not inserts:
@@ -676,11 +748,16 @@ class PdfStructureRefreshService:
         if not isinstance(page_start, int) or not isinstance(page_end, int) or page_start != page_end:
             return False
 
+        refreshed_page_blocks = refreshed_blocks_by_page.get(page_start, [])
+        if existing_block.block_type in {BlockType.FIGURE, BlockType.IMAGE}:
+            # A figure the new parse no longer finds on a page it read (a sidebar's tinted panel
+            # taken for a figure, its text now paragraphs of their own) would show the text twice.
+            return bool(refreshed_page_blocks)
+
         lines = [line for line in str(existing_block.source_text or "").splitlines() if line.strip()]
         if existing_block.block_type != BlockType.TABLE and not _looks_like_table(len(lines), lines):
             return False
 
-        refreshed_page_blocks = refreshed_blocks_by_page.get(page_start, [])
         for refreshed_block in refreshed_page_blocks:
             refreshed_role = str((refreshed_block.source_span_json or {}).get("pdf_block_role") or "")
             if refreshed_role in {"table_like", "caption"}:
