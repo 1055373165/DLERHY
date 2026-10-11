@@ -160,6 +160,8 @@ class PilotRepairService:
         self.max_seconds = max_seconds if max_seconds is not None else (BOOK_MAX_SECONDS if book else MAX_SECONDS)
         self.max_attempts = max_attempts if max_attempts is not None else (BOOK_MAX_ATTEMPTS if book else MAX_ATTEMPTS)
         self._pages = None
+        # The book's misaligned targets after the last kept attempt (None: count them again).
+        self._misaligned: int | None = None
 
     # --- entry points ---------------------------------------------------------------------------
 
@@ -245,6 +247,7 @@ class PilotRepairService:
         pages = self._open_pdf(document_id)
         # Every QA pass reads the PDF through it: its tables and figures are read once per repair.
         self._pages = pages
+        self._misaligned = None
         if pages is not None:
             ctx.figure_problems = pages.figure_problems
         toolbox = PilotRepairToolbox(ctx)
@@ -431,7 +434,8 @@ class PilotRepairService:
         self.session.commit()
         self._begin_write()
         before = QaSnapshot.from_layers(layers)
-        misaligned_before = alignment_anomalies(self.session, ctx.chapter_ids)
+        # Only a kept attempt changes the book between attempts: its count after is this one's before.
+        misaligned_before = self._misaligned if self._misaligned is not None else alignment_anomalies(self.session, ctx.chapter_ids)
         chapter_ids_before = list(ctx.chapter_ids)
         spent_before = ctx.budget.spent_usd
         result: ToolResult | None = None
@@ -477,7 +481,9 @@ class PilotRepairService:
         calls = [dict(event) for event in self.session.info.get(PENDING_LLM_EVENTS) or []]
         if outcome.outcome == "kept":
             savepoint.commit()
+            self._misaligned = misaligned_after
         else:
+            self._misaligned = misaligned_before
             # Paid for all the same: written again here, in this transaction, instead of by the
             # rollback hook on another connection.
             self.session.info.pop(PENDING_LLM_EVENTS, None)
