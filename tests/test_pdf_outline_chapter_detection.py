@@ -149,6 +149,11 @@ def test_back_matter_after_the_last_chapter_is_not_folded_into_it():
     merged = merge_outlined_book_auxiliary_chapters([chapter(title) for title in titles])
     assert [item.title for item in merged] == titles[:-1]
     assert merged[-1].metadata["pdf_collapsed_auxiliary_titles"] == ["Summary"]
+    # A chapter's own references, before the next chapter, stay in it.
+    per_chapter = merge_outlined_book_auxiliary_chapters(
+        [chapter(title) for title in ["1 Durable Products", "References", "2 Learning Systems", "References", "index"]]
+    )
+    assert [item.title for item in per_chapter] == ["1 Durable Products", "2 Learning Systems", "References", "index"]
 
 
 # ---- Sanity: empty / whitespace-only inputs ----------------------------

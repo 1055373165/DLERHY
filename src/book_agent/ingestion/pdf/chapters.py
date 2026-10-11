@@ -301,10 +301,20 @@ def chapter_start_candidates(
         for entry in top_level_outline_entries(outline_entries)
     ]
     if uses_flat_outline_collapse(outline_entries, profile):
+        last_main_page = max(
+            (candidate.page_number for candidate in outline_candidates if _extract_book_main_chapter_number(candidate.title or "") is not None),
+            default=None,
+        )
         outline_candidates = [
             candidate
             for candidate in outline_candidates
             if _should_start_outlined_book_top_level_chapter(candidate.title)
+            # A chapter's own references stay in it; the book's, after its last chapter, are a section.
+            and not (
+                _looks_like_outlined_book_backmatter_title(candidate.title)
+                and last_main_page is not None
+                and candidate.page_number < last_main_page
+            )
         ]
     if outline_candidates:
         if profile.recovery_lane == "academic_paper":
@@ -934,14 +944,19 @@ def merge_outlined_book_auxiliary_chapters(
     merged: list[ParsedChapter] = []
     next_expected_main_chapter = 1
     main_sequence_started = False
+    # A chapter's own references (before a later chapter) stay in it; the book's are a section.
+    last_main_index = max(
+        (index for index, chapter in enumerate(chapters) if _extract_book_main_chapter_number(_normalize_text(chapter.title or "")) is not None),
+        default=-1,
+    )
 
-    for chapter in chapters:
+    for index, chapter in enumerate(chapters):
         title = _normalize_text(chapter.title or "")
         main_chapter_number = _extract_book_main_chapter_number(title)
         starts_appendix = _looks_like_outlined_book_appendix_title(title)
         starts_glossary = _looks_like_outlined_book_glossary_title(title)
         starts_frontmatter = _looks_like_outlined_book_frontmatter_title(title)
-        starts_backmatter = _looks_like_outlined_book_backmatter_title(title)
+        starts_backmatter = _looks_like_outlined_book_backmatter_title(title) and index > last_main_index
         starts_about_page = _looks_like_outlined_book_about_page_title(title)
 
         start_new_group = False

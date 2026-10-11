@@ -407,8 +407,8 @@ def _looks_like_outlined_book_glossary_title(text: str | None) -> bool:
 
 # Pages a flat outline lists before chapter 1 that are sections of their own.
 _OUTLINED_BOOK_ABOUT_PAGE_TITLES = frozenset(
-    {"about this book", "about the author", "about the authors", "about the cover illustration"}
-)
+    {"about this book", "about the author", "about the authors", "about the cover illustration", "brief contents"}
+) | frozenset(_TOC_HEADING_TITLES)
 
 
 def _looks_like_outlined_book_backmatter_title(text: str | None) -> bool:
