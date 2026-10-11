@@ -76,10 +76,12 @@ _DIAGRAM_PAGE = [
     _block("list_item", 45, [117.6, 540.2, 476.6, 552.0], block_type=BlockType.LIST_ITEM),
 ]
 
-# An index page: two columns of entries.
+# A two-column page whose lines were read across the columns: left, right, left, right.
 _TWO_COLUMN_PAGE = [
-    _block("body", 250, [60.0, 60.0, 250.0, 600.0]),
-    _block("body", 250, [280.0, 60.0, 470.0, 600.0]),
+    _block("body", 250, [60.0, 60.0, 250.0, 300.0]),
+    _block("body", 250, [280.0, 60.0, 470.0, 300.0]),
+    _block("body", 250, [60.0, 310.0, 250.0, 600.0]),
+    _block("body", 250, [280.0, 310.0, 470.0, 600.0]),
 ]
 
 
@@ -139,10 +141,26 @@ class PdfLayoutReviewPolicyTests(unittest.TestCase):
         blocks = [
             _block("body", 7, [72.0, 108.2, 389.9, 123.3]),
             _block("body", 7, [330.0, 128.2, 595.9, 143.3]),
+            _block("body", 7, [72.0, 148.2, 389.9, 163.3]),
         ]
         bundle = _bundle(blocks, [_page(7, "multi_column")], risk="medium")
 
         self.assertTrue(self._misordering(bundle)[0].blocking)
+
+    def test_a_two_column_page_read_column_by_column_is_in_order(self) -> None:
+        """Art of AI's index: two columns side by side, the left one read first; book QA blocked it."""
+        index_page = [
+            _block("body", 361, [57.0, 52.0, 245.0, 300.0]),
+            _block("body", 361, [57.0, 310.0, 250.0, 600.0]),
+            _block("body", 361, [270.0, 52.0, 450.0, 300.0]),
+            _block("body", 361, [270.0, 310.0, 455.0, 600.0]),
+        ]
+        bundle = _bundle(index_page, [_page(361, "multi_column")], risk="medium")
+
+        issues = self._misordering(bundle)
+
+        self.assertEqual(len(issues), 1)
+        self.assertFalse(issues[0].blocking)
 
     def test_other_layout_reasons_stay_blocking(self) -> None:
         bundle = _bundle(_DIAGRAM_PAGE, [_page(45, "multi_column", "layout_fragmentation")])
