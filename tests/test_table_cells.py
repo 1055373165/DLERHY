@@ -98,6 +98,38 @@ class SharedGridTranslationTests(unittest.TestCase):
         wrong = "| Miro 功能 | 人类优势 | 多余 | Miro AI | 用户提供输入。 | | AI Sidekicks | |"
         self.assertEqual(split_shared_cell_translations(table_grid(source), {"Miro AI": wrong, "AI Sidekicks": wrong}), {"Miro AI": wrong, "AI Sidekicks": wrong})
 
+    def test_a_row_answered_as_a_grid_for_its_only_sentence_cell_is_split(self) -> None:
+        """Art of AI table 5.2: "MMLU" is no sentence, so the row's grid answer belongs to one cell."""
+        from book_agent.domain.structure.table_cells import split_shared_cell_translations
+
+        source = "| MMLU | Measures LLMs on many tasks. |\n| ARC | Tests reasoning on science questions. |"
+        row1 = "| MMLU | 评测 LLM 在各类任务上的表现。 |"
+        row2 = "| ARC | 用科学选择题测试推理能力。 |"
+        cells = {"Measures LLMs on many tasks.": row1, "ARC": row2, "Tests reasoning on science questions.": row2}
+        split = split_shared_cell_translations(table_grid(source), cells)
+        self.assertEqual(
+            split,
+            {"Measures LLMs on many tasks.": "评测 LLM 在各类任务上的表现。", "ARC": "ARC", "Tests reasoning on science questions.": "用科学选择题测试推理能力。"},
+        )
+
+    def test_header_and_body_answered_apart_and_joined_are_split(self) -> None:
+        """Art of AI table 4.4: only the header cells are sentences; the model answered the header row
+        and the body rows as two segments, joined so the first line holds the header and a row."""
+        from book_agent.domain.structure.table_cells import split_shared_cell_translations
+
+        source = "| Timestamp | Recommendation clicks |\n| 2024-08-19 12:01 | 150 |\n| 2024-08-19 12:02 | 172 |"
+        joined = "| 时间戳 | 推荐点击量 | | 2024-08-19 12:01 | 150 |\n| 2024-08-19 12:02 | 172 |"
+        split = split_shared_cell_translations(table_grid(source), {"Timestamp": joined, "Recommendation clicks": joined})
+        self.assertEqual(split, {"Timestamp": "时间戳", "Recommendation clicks": "推荐点击量"})
+
+    def test_a_grid_without_outer_bars_is_split(self) -> None:
+        from book_agent.domain.structure.table_cells import split_shared_cell_translations
+
+        source = "| Type | Algorithm |\n| Clustering | K-means |"
+        whole = "类型 | 算法 | | 聚类 | K均值"
+        split = split_shared_cell_translations(table_grid(source), {"Type": whole, "Algorithm": whole, "Clustering": whole})
+        self.assertEqual(split, {"Type": "类型", "Algorithm": "算法", "Clustering": "聚类"})
+
     def test_a_grid_of_another_shape_is_left_alone(self) -> None:
         from book_agent.domain.structure.table_cells import split_shared_cell_translations
 
