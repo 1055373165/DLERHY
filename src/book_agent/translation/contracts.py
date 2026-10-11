@@ -146,6 +146,58 @@ class TranslationWorkerOutput(BaseSchema):
     notes: list[TranslationNote] = Field(default_factory=list)
 
 
+class TranslationModelReply(BaseSchema):
+    """What the model writes in the slim reply format: only what it alone knows.
+
+    The packet id is the caller's, and the alignment is each segment's ``source_sentence_ids``:
+    asking the model to copy them back was about half of its output tokens
+    (docs/specs/cost-governance/SPEC.md, E4). ``complete_model_reply`` makes the full output.
+    """
+
+    target_segments: list[TranslationTargetSegment]
+    low_confidence_flags: list[LowConfidenceFlag] = Field(default_factory=list)
+    notes: list[TranslationNote] = Field(default_factory=list)
+
+
+REPLY_FORMATS = ("full", "slim")
+
+
+def complete_model_reply(payload: dict[str, Any], *, packet_id: str) -> dict[str, Any]:
+    """The full output from a reply that left out the packet id or the alignment.
+
+    Each segment aligns to the sentences it names: one sentence in one segment is 1:1, several
+    sentences in one segment n:1, one sentence split over several segments 1:n. A reply that
+    carries its own alignment keeps it.
+    """
+    completed = dict(payload)
+    if not completed.get("packet_id"):
+        completed["packet_id"] = packet_id
+    if "alignment_suggestions" in completed and completed["alignment_suggestions"]:
+        return completed
+    segments = [segment for segment in completed.get("target_segments") or [] if isinstance(segment, dict)]
+    uses: dict[str, int] = {}
+    for segment in segments:
+        for sentence_id in segment.get("source_sentence_ids") or []:
+            uses[str(sentence_id)] = uses.get(str(sentence_id), 0) + 1
+    suggestions = []
+    for segment in segments:
+        sources = [str(sentence_id) for sentence_id in segment.get("source_sentence_ids") or []]
+        if not sources or not segment.get("temp_id"):
+            continue
+        if len(sources) > 1:
+            relation = "n:1"
+        elif uses.get(sources[0], 0) > 1:
+            relation = "1:n"
+        else:
+            relation = "1:1"
+        suggestion = {"source_sentence_ids": sources, "target_temp_ids": [segment["temp_id"]], "relation_type": relation}
+        if segment.get("confidence") is not None:
+            suggestion["confidence"] = segment["confidence"]
+        suggestions.append(suggestion)
+    completed["alignment_suggestions"] = suggestions
+    return completed
+
+
 class TranslationUsage(BaseSchema):
     token_in: int = 0
     token_out: int = 0

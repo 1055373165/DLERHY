@@ -45,6 +45,17 @@ POLISH_SYSTEM_PROMPT = """你是中文技术书的译文编辑。你拿到英文
 
 只输出 JSON：{"segments": [{"id": "段编号", "text_zh": "修改后的这一段译文"}]}。"""
 
+# The "changed" reply (docs/specs/cost-governance/SPEC.md, M2): half the calls changed nothing and
+# returned every segment anyway; about two thirds of the editor's output was the draft copied back.
+POLISH_SYSTEM_PROMPT_CHANGED_ONLY = POLISH_SYSTEM_PROMPT.replace(
+    "六、没有问题的句子原样保留，不要为了显得做了修改而改动通顺的文字。每一段都要返回，编号不变。",
+    "六、没有问题的句子原样保留，不要为了显得做了修改而改动通顺的文字。只返回你修改过的段落，编号不变；一段都没有修改就返回空数组。",
+).replace(
+    '只输出 JSON：{"segments": [{"id": "段编号", "text_zh": "修改后的这一段译文"}]}。',
+    '只输出 JSON：{"segments": [{"id": "段编号", "text_zh": "修改后的这一段译文"}]}，没有修改时输出 {"segments": []}。',
+)
+POLISH_REPLIES = ("all", "changed")
+
 POLISH_RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -107,14 +118,17 @@ def polish_output(
     output: TranslationWorkerOutput,
     source_by_sentence_id: Mapping[str, str],
     locked_terms: Sequence[tuple[str, str]] = (),
+    reply: str = "all",
 ) -> PolishOutcome:
-    """Ask the editor for every segment back; anything short of that keeps the draft."""
+    """Ask the editor for every segment back ("all") or only the ones it changed ("changed");
+    anything else (a segment missing from "all", an unknown or empty one) keeps the draft."""
+    changed_only = reply == "changed"
     draft = [{"id": segment.temp_id, "text_zh": segment.text_zh} for segment in output.target_segments]
     if not output.target_segments:
         return PolishOutcome(output=output, applied=False, reverted_reason="no_segments")
     payload, usage = generate(
         model_name=model_name,
-        system_prompt=POLISH_SYSTEM_PROMPT,
+        system_prompt=POLISH_SYSTEM_PROMPT_CHANGED_ONLY if changed_only else POLISH_SYSTEM_PROMPT,
         user_prompt=polish_user_prompt(output, source_by_sentence_id, locked_terms),
         response_schema=POLISH_RESPONSE_SCHEMA,
         schema_name="translation_polish",
@@ -125,8 +139,11 @@ def polish_output(
         if isinstance(item, Mapping)
     }
     expected = {segment.temp_id for segment in output.target_segments}
-    if set(returned) != expected or not all(returned.values()):
+    complete = set(returned) <= expected if changed_only else set(returned) == expected
+    if not complete or not all(returned.values()):
         return PolishOutcome(output=output, applied=False, reverted_reason="segments_mismatch", usage=usage, draft=draft)
+    # A segment the "changed" reply leaves out is the draft's.
+    returned = {segment.temp_id: returned.get(segment.temp_id, segment.text_zh) for segment in output.target_segments}
     changed = [segment.temp_id for segment in output.target_segments if returned[segment.temp_id] != segment.text_zh]
     polished = output.model_copy(
         update={

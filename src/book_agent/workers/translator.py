@@ -10,6 +10,7 @@ from book_agent.translation.contracts import (
     ContextPacket,
     PacketBlock,
     TranslationTargetSegment,
+    TranslationModelReply,
     TranslationUsage,
     TranslationWorkerOutput,
     TranslationWorkerResult,
@@ -281,6 +282,8 @@ class TranslationPromptRequest:
     system_prompt_dynamic: str = ""
     sentence_alias_map: dict[str, str] = field(default_factory=dict)
     messages: tuple[PromptMessage, ...] = ()
+    # "full" (packet id and alignment in the reply) or "slim" (``TranslationModelReply``).
+    reply_format: str = "full"
 
     def effective_messages(self) -> tuple[PromptMessage, ...]:
         if self.messages:
@@ -494,6 +497,15 @@ def _material_memory_handling_lines(
     return lines
 
 
+_FULL_COVERAGE_LINE = (
+    "- Keep alignment coverage complete and use only the provided sentence aliases in source_sentence_ids and low_confidence_flags.sentence_id."
+)
+_SLIM_COVERAGE_LINE = (
+    "- Cover every current sentence: each sentence alias appears in exactly one target segment's source_sentence_ids "
+    "(a segment may name several), and use only the provided sentence aliases in source_sentence_ids and low_confidence_flags.sentence_id."
+)
+
+
 def _material_contract_lines(
     *,
     material: TranslationMaterial,
@@ -515,7 +527,7 @@ def _material_contract_lines(
         opening,
         "- Preserve logic, causality, constraints, and technical detail; do not add, omit, or soften meaning.",
         "- Preserve inline formatting markers exactly: keep `backtick code`, **bold**, and *italic* markdown wrappers intact around the same content spans in the translation. Close every marker you open (never leave a lone * or **) and add none the source does not have.",
-        "- Keep alignment coverage complete and use only the provided sentence aliases in source_sentence_ids and low_confidence_flags.sentence_id.",
+        _FULL_COVERAGE_LINE,
         "- Return JSON that matches the provided response schema.",
     ]
     if minimal:
@@ -655,7 +667,11 @@ def build_translation_prompt_request(
     prompt_layout: PromptLayout = "paragraph-led",
     prompt_profile: PromptProfile = "tech-column-meta-v1",
     allow_compact_prompt: bool = True,
+    reply_format: str = "full",
 ) -> TranslationPromptRequest:
+    """``reply_format`` "slim": the model writes ``TranslationModelReply`` (no packet id, no
+    alignment); the client completes it (``complete_model_reply``)."""
+    slim = reply_format == "slim"
     packet = task.context_packet
     profile = PROMPT_PROFILES[prompt_profile]
     translation_material = _resolve_translation_material(packet)
@@ -711,6 +727,8 @@ def build_translation_prompt_request(
             prompt_layout=prompt_layout,
             minimal=minimal_material_prompt,
         )
+        if slim:
+            contract_lines = [_SLIM_COVERAGE_LINE if line == _FULL_COVERAGE_LINE else line for line in contract_lines]
     elif compact_prompt:
         contract_lines = [
             "- Translate the current paragraph into natural, publication-ready Chinese.",
@@ -844,7 +862,7 @@ def build_translation_prompt_request(
         messages.append(PromptMessage("system", "Dynamic Packet Guidance:\n" + system_prompt_dynamic))
     messages.append(PromptMessage("user", user_prompt))
     if task.correction is not None:
-        messages.extend(_correction_messages(task.correction, sentence_alias_map))
+        messages.extend(_correction_messages(task.correction, sentence_alias_map, slim=slim))
     return TranslationPromptRequest(
         packet_id=packet.packet_id,
         model_name=model_name,
@@ -853,14 +871,15 @@ def build_translation_prompt_request(
         system_prompt_static=system_prompt_static,
         system_prompt_dynamic=system_prompt_dynamic,
         user_prompt=user_prompt,
-        response_schema=TranslationWorkerOutput.model_json_schema(),
+        response_schema=(TranslationModelReply if slim else TranslationWorkerOutput).model_json_schema(),
         sentence_alias_map=sentence_alias_map,
         messages=tuple(messages),
+        reply_format="slim" if slim else "full",
     )
 
 
 def _correction_messages(
-    correction: OutputCorrection, sentence_alias_map: dict[str, str]
+    correction: OutputCorrection, sentence_alias_map: dict[str, str], *, slim: bool = False
 ) -> list[PromptMessage]:
     """Replay the rejected answer (in alias form) and ask for a corrected one."""
     alias_of = {sentence_id: alias for alias, sentence_id in sentence_alias_map.items()}
@@ -893,8 +912,10 @@ def _correction_messages(
         "Keep the same schema, keep the sentence aliases, and make sure every current sentence is "
         "translated and aligned exactly once.",
     ]
+    # The answer replayed in the format the model was asked for.
+    exclude = {"packet_id", "alignment_suggestions"} if slim else None
     return [
-        PromptMessage("assistant", previous.model_dump_json(exclude_none=True)),
+        PromptMessage("assistant", previous.model_dump_json(exclude_none=True, exclude=exclude)),
         PromptMessage("user", "\n".join(lines)),
     ]
 
@@ -963,9 +984,11 @@ class LLMTranslationWorker:
         prompt_version: str = "p0.llm.v1",
         prompt_profile: PromptProfile = "tech-column-meta-v1",
         runtime_config: dict[str, Any] | None = None,
+        reply_format: str = "full",
     ):
         self.client = client
         self.prompt_profile = prompt_profile
+        self.reply_format = reply_format
         self._metadata = TranslationWorkerMetadata(
             worker_name=self.__class__.__name__,
             model_name=model_name,
@@ -985,6 +1008,7 @@ class LLMTranslationWorker:
             model_name=self._metadata.model_name,
             prompt_version=self._metadata.prompt_version,
             prompt_profile=self.prompt_profile,
+            reply_format=self.reply_format,
         )
         payload = self.client.generate_translation(request)
         return self._remap_sentence_aliases(payload, request)

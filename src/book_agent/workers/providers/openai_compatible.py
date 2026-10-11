@@ -37,6 +37,7 @@ from book_agent.translation.contracts import (
     TranslationUsage,
     TranslationWorkerOutput,
     TranslationWorkerResult,
+    complete_model_reply,
 )
 from book_agent.workers.providers.pricing import price_multiplier_at
 from book_agent.workers.translator import TranslationModelClient, TranslationPromptRequest
@@ -459,7 +460,11 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         latency_ms = max(1, round((time.perf_counter() - request_started_at) * 1000))
         try:
             output_payload = self._extract_output_payload(response, api_mode=api_mode)
+            if request.reply_format != "slim" and not {"packet_id", "alignment_suggestions"} <= output_payload.keys():
+                raise ProviderResponseFormatError("Provider response did not include a structured JSON output payload.")
             output_payload = self._normalize_translation_payload(output_payload)
+            if request.reply_format == "slim":
+                output_payload = complete_model_reply(output_payload, packet_id=request.packet_id)
             try:
                 output = TranslationWorkerOutput.model_validate(output_payload)
             except Exception as exc:
@@ -866,10 +871,11 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
                     "role": chat_messages[0]["role"],
                     "content": chat_messages[0]["content"] + "\n" + self._chat_completions_schema_contract(request),
                 }
-            chat_messages[-1] = {
-                "role": chat_messages[-1]["role"],
-                "content": chat_messages[-1]["content"] + f"\npacket_id must equal: {request.packet_id}",
-            }
+            if request.reply_format != "slim":
+                chat_messages[-1] = {
+                    "role": chat_messages[-1]["role"],
+                    "content": chat_messages[-1]["content"] + f"\npacket_id must equal: {request.packet_id}",
+                }
             payload = {
                 "model": request.model_name,
                 "messages": chat_messages,
@@ -942,6 +948,16 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
     def _chat_completions_schema_contract(self, request: TranslationPromptRequest) -> str:
         """Packet-independent output contract for providers without schema-constrained decoding."""
         schema_json = json.dumps(request.response_schema, ensure_ascii=False, separators=(",", ":"))
+        if request.reply_format == "slim":
+            return (
+                "Return exactly one JSON object with these top-level keys only: "
+                "target_segments, low_confidence_flags, notes.\n"
+                "Do not use top-level keys like translation or translations.\n"
+                "Every current source sentence must be covered by exactly one target segment's source_sentence_ids.\n"
+                "When confidence is normal, low_confidence_flags should be []. notes may be [].\n"
+                "Required JSON schema:\n"
+                f"{schema_json}"
+            )
         return (
             "Return exactly one JSON object with these top-level keys only: "
             "packet_id, target_segments, alignment_suggestions, low_confidence_flags, notes.\n"
@@ -1262,8 +1278,8 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
         return None
 
     def _looks_like_translation_payload(self, payload: dict[str, Any]) -> bool:
-        required_keys = {"packet_id", "target_segments", "alignment_suggestions"}
-        return required_keys.issubset(payload.keys())
+        # The slim reply has only the segments; the full format's other keys are checked by the caller.
+        return "target_segments" in payload
 
     def _normalize_translation_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         normalized = dict(payload)
