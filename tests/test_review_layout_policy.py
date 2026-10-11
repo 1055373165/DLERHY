@@ -155,5 +155,21 @@ class PdfLayoutReviewPolicyTests(unittest.TestCase):
         self.assertTrue(self._misordering(bundle)[0].blocking)
 
 
+    def test_a_running_head_the_repair_hid_is_no_leak(self) -> None:
+        """Art of AI p28: a paragraph read again as the running head, hidden from the reading copy by
+        the repair, still had translatable sentences; the rule reported a header leaking into the text."""
+        head = _block("header", 28, [57.0, 25.0, 300.0, 36.0], repair_hidden_from_export=True)
+        bundle = _bundle([head, _block("body", 28, [93.0, 70.0, 467.0, 160.0])], [_page(28)], risk="low")
+        bundle.sentences = [SimpleNamespace(id="s1", block_id=head.id, translatable=True, ordinal_in_block=1)]
+        pollution = [
+            issue for issue in self.service._pdf_structure_issues(bundle, datetime.now(timezone.utc)) if issue.issue_type == "STRUCTURE_POLLUTION"
+        ]
+        self.assertEqual(pollution, [])
+        head.source_span_json.pop("repair_hidden_from_export")
+        pollution = [
+            issue for issue in self.service._pdf_structure_issues(bundle, datetime.now(timezone.utc)) if issue.issue_type == "STRUCTURE_POLLUTION"
+        ]
+        self.assertEqual(len(pollution), 1)
+
 if __name__ == "__main__":
     unittest.main()

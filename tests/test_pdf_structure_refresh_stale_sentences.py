@@ -16,14 +16,18 @@ from book_agent.services.bootstrap import BootstrapArtifacts, ParseService, Segm
 from book_agent.services.pdf_structure_refresh import PdfStructureRefreshService
 
 
-def _stub_parser(text: str | list[tuple[str, str]], boxes: dict[str, list[float]] | None = None):
+def _stub_parser(
+    text: str | list[tuple[str, str]],
+    boxes: dict[str, list[float]] | None = None,
+    roles: dict[str, str] | None = None,
+):
     """One paragraph, or (anchor, text) blocks in reading order; a "-fig" anchor is a figure, with
     its box from ``boxes``."""
     paragraphs = [("p1-b1", text)] if isinstance(text, str) else text
     boxes = boxes or {}
 
     def _metadata(anchor: str) -> dict:
-        metadata = {"source_page_start": 1, "source_page_end": 1, "pdf_block_role": "body"}
+        metadata = {"source_page_start": 1, "source_page_end": 1, "pdf_block_role": (roles or {}).get(anchor, "body")}
         if anchor in boxes:
             metadata["source_bbox_json"] = {"regions": [{"page_number": 1, "bbox": boxes[anchor]}]}
         return metadata
@@ -97,12 +101,17 @@ class PdfStructureRefreshStaleSentenceTests(unittest.TestCase):
             session.commit()
         self.document_id = parse_artifacts.document.id
 
-    def _refresh(self, text: str | list[tuple[str, str]], boxes: dict[str, list[float]] | None = None):
+    def _refresh(
+        self,
+        text: str | list[tuple[str, str]],
+        boxes: dict[str, list[float]] | None = None,
+        roles: dict[str, str] | None = None,
+    ):
         with self.session_factory() as session:
             artifacts = PdfStructureRefreshService(
                 session,
                 BootstrapRepository(session),
-                parse_service=ParseService(pdf_parser=_stub_parser(text, boxes)),
+                parse_service=ParseService(pdf_parser=_stub_parser(text, boxes, roles)),
             ).refresh_document(self.document_id)
             session.commit()
             block = BootstrapRepository(session).load_document_bundle(self.document_id).chapters[0].blocks[0]
@@ -110,6 +119,13 @@ class PdfStructureRefreshStaleSentenceTests(unittest.TestCase):
 
     def test_changed_text_marks_sentences_stale(self) -> None:
         artifacts, block = self._refresh("Agents need long-term memory. Context windows are finite.")
+
+        self.assertEqual(artifacts.stale_sentence_block_ids, [block.id])
+        self.assertTrue(block.source_span_json["refresh_sentences_stale"])
+
+    def test_a_paragraph_read_again_as_a_running_head_is_segmented_again(self) -> None:
+        """Art of AI p28: same text, now the page's running head; its sentences were still translatable."""
+        artifacts, block = self._refresh(self.ORIGINAL, roles={"p1-b1": "header"})
 
         self.assertEqual(artifacts.stale_sentence_block_ids, [block.id])
         self.assertTrue(block.source_span_json["refresh_sentences_stale"])

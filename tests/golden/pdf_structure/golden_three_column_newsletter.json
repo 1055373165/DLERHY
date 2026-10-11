@@ -118,10 +118,10 @@
        "regions": [
         {
          "bbox": [
-          236.0,
-          80.0,
-          412.76,
-          138.052
+          40.0,
+          280.0,
+          216.76,
+          338.051
          ],
          "page_number": 1
         }
@@ -136,7 +136,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "COL2-R1: A column-major reading",
+     "text": "COL1-R2: A column-major reading",
      "translatability": "translate_none"
     },
     {
@@ -164,10 +164,10 @@
        "regions": [
         {
          "bbox": [
-          236.0,
-          80.0,
-          412.76,
-          138.052
+          40.0,
+          280.0,
+          216.76,
+          338.051
          ],
          "page_number": 1
         }
@@ -209,10 +209,10 @@
        "regions": [
         {
          "bbox": [
-          432.0,
-          80.0,
-          565.95,
-          167.592
+          40.0,
+          480.0,
+          216.76,
+          538.052
          ],
          "page_number": 1
         }
@@ -227,7 +227,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "COL3-R1: A column-major",
+     "text": "COL1-R3: A column-major reading",
      "translatability": "translate_none"
     },
     {
@@ -255,10 +255,10 @@
        "regions": [
         {
          "bbox": [
-          432.0,
-          80.0,
-          565.95,
-          167.592
+          40.0,
+          480.0,
+          216.76,
+          538.052
          ],
          "page_number": 1
         }
@@ -273,7 +273,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "reading order test block that is\nlong enough to qualify as a\ncolumn candidate under the\nmulti-column signature\nheuristic.",
+     "text": "order test block that is long enough to\nqualify as a column candidate under the\nmulti-column signature heuristic.",
      "translatability": "translate_all"
     },
     {
@@ -300,10 +300,10 @@
        "regions": [
         {
          "bbox": [
-          40.0,
-          280.0,
-          216.76,
-          338.051
+          236.0,
+          80.0,
+          412.76,
+          138.052
          ],
          "page_number": 1
         }
@@ -318,7 +318,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "COL1-R2: A column-major reading",
+     "text": "COL2-R1: A column-major reading",
      "translatability": "translate_none"
     },
     {
@@ -346,10 +346,10 @@
        "regions": [
         {
          "bbox": [
-          40.0,
-          280.0,
-          216.76,
-          338.051
+          236.0,
+          80.0,
+          412.76,
+          138.052
          ],
          "page_number": 1
         }
@@ -482,10 +482,10 @@
        "regions": [
         {
          "bbox": [
-          432.0,
-          280.0,
-          565.95,
-          367.592
+          236.0,
+          480.0,
+          412.76,
+          538.052
          ],
          "page_number": 1
         }
@@ -500,7 +500,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "COL3-R2: A column-major",
+     "text": "COL2-R3: A column-major reading",
      "translatability": "translate_none"
     },
     {
@@ -528,10 +528,10 @@
        "regions": [
         {
          "bbox": [
-          432.0,
-          280.0,
-          565.95,
-          367.592
+          236.0,
+          480.0,
+          412.76,
+          538.052
          ],
          "page_number": 1
         }
@@ -546,7 +546,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "reading order test block that is\nlong enough to qualify as a\ncolumn candidate under the\nmulti-column signature\nheuristic.",
+     "text": "order test block that is long enough to\nqualify as a column candidate under the\nmulti-column signature heuristic.",
      "translatability": "translate_all"
     },
     {
@@ -573,10 +573,10 @@
        "regions": [
         {
          "bbox": [
-          40.0,
-          480.0,
-          216.76,
-          538.052
+          432.0,
+          80.0,
+          565.95,
+          167.592
          ],
          "page_number": 1
         }
@@ -591,7 +591,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "COL1-R3: A column-major reading",
+     "text": "COL3-R1: A column-major",
      "translatability": "translate_none"
     },
     {
@@ -619,10 +619,10 @@
        "regions": [
         {
          "bbox": [
-          40.0,
-          480.0,
-          216.76,
-          538.052
+          432.0,
+          80.0,
+          565.95,
+          167.592
          ],
          "page_number": 1
         }
@@ -637,7 +637,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "order test block that is long enough to\nqualify as a column candidate under the\nmulti-column signature heuristic.",
+     "text": "reading order test block that is\nlong enough to qualify as a\ncolumn candidate under the\nmulti-column signature\nheuristic.",
      "translatability": "translate_all"
     },
     {
@@ -664,10 +664,10 @@
        "regions": [
         {
          "bbox": [
-          236.0,
-          480.0,
-          412.76,
-          538.052
+          432.0,
+          280.0,
+          565.95,
+          367.592
          ],
          "page_number": 1
         }
@@ -682,7 +682,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "COL2-R3: A column-major reading",
+     "text": "COL3-R2: A column-major",
      "translatability": "translate_none"
     },
     {
@@ -710,10 +710,10 @@
        "regions": [
         {
          "bbox": [
-          236.0,
-          480.0,
-          412.76,
-          538.052
+          432.0,
+          280.0,
+          565.95,
+          367.592
          ],
          "page_number": 1
         }
@@ -728,7 +728,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "order test block that is long enough to\nqualify as a column candidate under the\nmulti-column signature heuristic.",
+     "text": "reading order test block that is\nlong enough to qualify as a\ncolumn candidate under the\nmulti-column signature\nheuristic.",
      "translatability": "translate_all"
     },
     {

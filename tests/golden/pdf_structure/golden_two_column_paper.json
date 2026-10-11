@@ -118,10 +118,10 @@
        "regions": [
         {
          "bbox": [
-          324.0,
-          95.0,
-          524.64,
-          153.052
+          72.0,
+          250.0,
+          285.99,
+          322.822
          ],
          "page_number": 1
         }
@@ -136,7 +136,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "RIGHT-1: This paragraph belongs to the right",
+     "text": "LEFT-2: This paragraph belongs to the left",
      "translatability": "translate_none"
     },
     {
@@ -164,10 +164,10 @@
        "regions": [
         {
          "bbox": [
-          324.0,
-          95.0,
-          524.64,
-          153.052
+          72.0,
+          250.0,
+          285.99,
+          322.822
          ],
          "page_number": 1
         }
@@ -182,7 +182,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "column. It must appear only after all LEFT\nparagraphs in the recovered reading order,\nnever interleaved.",
+     "text": "column and contains enough prose to qualify as\na column-candidate block. It must appear before\nany RIGHT paragraph in the recovered reading\norder.",
      "translatability": "translate_all"
     },
     {
@@ -210,9 +210,9 @@
         {
          "bbox": [
           72.0,
-          250.0,
+          410.0,
           285.99,
-          322.822
+          482.822
          ],
          "page_number": 1
         }
@@ -227,7 +227,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "LEFT-2: This paragraph belongs to the left",
+     "text": "LEFT-3: This paragraph belongs to the left",
      "translatability": "translate_none"
     },
     {
@@ -256,9 +256,9 @@
         {
          "bbox": [
           72.0,
-          250.0,
+          410.0,
           285.99,
-          322.822
+          482.822
          ],
          "page_number": 1
         }
@@ -300,10 +300,10 @@
        "regions": [
         {
          "bbox": [
-          324.0,
-          255.0,
-          524.64,
-          313.051
+          72.0,
+          570.0,
+          285.99,
+          642.822
          ],
          "page_number": 1
         }
@@ -318,7 +318,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "RIGHT-2: This paragraph belongs to the right",
+     "text": "LEFT-4: This paragraph belongs to the left",
      "translatability": "translate_none"
     },
     {
@@ -346,10 +346,10 @@
        "regions": [
         {
          "bbox": [
-          324.0,
-          255.0,
-          524.64,
-          313.051
+          72.0,
+          570.0,
+          285.99,
+          642.822
          ],
          "page_number": 1
         }
@@ -364,7 +364,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "column. It must appear only after all LEFT\nparagraphs in the recovered reading order,\nnever interleaved.",
+     "text": "column and contains enough prose to qualify as\na column-candidate block. It must appear before\nany RIGHT paragraph in the recovered reading\norder.",
      "translatability": "translate_all"
     },
     {
@@ -391,10 +391,10 @@
        "regions": [
         {
          "bbox": [
-          72.0,
-          410.0,
-          285.99,
-          482.822
+          324.0,
+          95.0,
+          524.64,
+          153.052
          ],
          "page_number": 1
         }
@@ -409,7 +409,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "LEFT-3: This paragraph belongs to the left",
+     "text": "RIGHT-1: This paragraph belongs to the right",
      "translatability": "translate_none"
     },
     {
@@ -437,10 +437,10 @@
        "regions": [
         {
          "bbox": [
-          72.0,
-          410.0,
-          285.99,
-          482.822
+          324.0,
+          95.0,
+          524.64,
+          153.052
          ],
          "page_number": 1
         }
@@ -455,7 +455,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "column and contains enough prose to qualify as\na column-candidate block. It must appear before\nany RIGHT paragraph in the recovered reading\norder.",
+     "text": "column. It must appear only after all LEFT\nparagraphs in the recovered reading order,\nnever interleaved.",
      "translatability": "translate_all"
     },
     {
@@ -483,9 +483,9 @@
         {
          "bbox": [
           324.0,
-          415.0,
+          255.0,
           524.64,
-          473.051
+          313.051
          ],
          "page_number": 1
         }
@@ -500,7 +500,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "RIGHT-3: This paragraph belongs to the right",
+     "text": "RIGHT-2: This paragraph belongs to the right",
      "translatability": "translate_none"
     },
     {
@@ -529,9 +529,9 @@
         {
          "bbox": [
           324.0,
-          415.0,
+          255.0,
           524.64,
-          473.051
+          313.051
          ],
          "page_number": 1
         }
@@ -573,10 +573,10 @@
        "regions": [
         {
          "bbox": [
-          72.0,
-          570.0,
-          285.99,
-          642.822
+          324.0,
+          415.0,
+          524.64,
+          473.051
          ],
          "page_number": 1
         }
@@ -591,7 +591,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "LEFT-4: This paragraph belongs to the left",
+     "text": "RIGHT-3: This paragraph belongs to the right",
      "translatability": "translate_none"
     },
     {
@@ -619,10 +619,10 @@
        "regions": [
         {
          "bbox": [
-          72.0,
-          570.0,
-          285.99,
-          642.822
+          324.0,
+          415.0,
+          524.64,
+          473.051
          ],
          "page_number": 1
         }
@@ -637,7 +637,7 @@
      "provenance": "text_layer",
      "source_path": "pdf://page/1",
      "style_hints": {},
-     "text": "column and contains enough prose to qualify as\na column-candidate block. It must appear before\nany RIGHT paragraph in the recovered reading\norder.",
+     "text": "column. It must appear only after all LEFT\nparagraphs in the recovered reading order,\nnever interleaved.",
      "translatability": "translate_all"
     },
     {

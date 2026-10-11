@@ -62,6 +62,15 @@ from book_agent.infra.repositories.events import emit_event
 from book_agent.infra.repositories.review import ReviewRepository
 
 ACTOR_ID = "services.chapter_reparse"
+# A chapter's layout fields the parser derives from its pages (the review reads them).
+_LAYOUT_EVIDENCE_KEYS = (
+    "pdf_layout_risk",
+    "suspicious_page_numbers",
+    "structure_flags",
+    "parse_confidence",
+    "pdf_role_counts",
+    "pdf_page_family_counts",
+)
 PDF_SOURCE_TYPES = frozenset({SourceType.PDF_TEXT, SourceType.PDF_MIXED, SourceType.PDF_SCAN})
 # Old blocks of a re-parsed chapter wait here, above the structure edits' parking range.
 REPARSE_PARKED_ORDINAL_BASE = 3_000_000
@@ -350,6 +359,12 @@ class ChapterReparseService:
             by_id[chapter.id].new_packet_count, record["chapters"][chapter.id] = self._replace_chapter(
                 document, chapter, old_blocks, new_blocks, images_by_block, revision, now
             )
+        self._sync_layout_evidence(
+            document,
+            chapters,
+            parsed,
+            {entry.chapter_id for entry in result.chapters if entry.outcome in {"refreshed", "unchanged"}},
+        )
         record_parser_fingerprint(document)
         document.updated_at = now
         if revision is not None:
@@ -358,6 +373,58 @@ class ChapterReparseService:
         self._log(document, result, actor_id=actor_id, run_id=run_id, now=now)
         self.session.flush()
         return result
+
+    def _sync_layout_evidence(
+        self,
+        document: Document,
+        chapters: list[Chapter],
+        parsed: Any,
+        chapter_ids: set[str],
+    ) -> None:
+        """The layout evidence of the chapters now read by this parser: each chapter's layout fields
+        and the document's per-page evidence for its pages. The review judges reading order by them;
+        left from the import, they flagged pages whose tables the old parser read as stray prose
+        (Art of AI p304 and the appendix) though the new blocks read in one column. Translated and
+        edited chapters keep theirs, which describe the blocks they still have."""
+        parsed_by_id = {chapter.id: chapter for chapter in parsed.chapters}
+        pages: set[int] = set()
+        for chapter in chapters:
+            fresh = parsed_by_id.get(chapter.id)
+            if chapter.id not in chapter_ids or fresh is None:
+                continue
+            fresh_metadata = fresh.metadata_json or {}
+            chapter.metadata_json = {
+                **(chapter.metadata_json or {}),
+                **{key: fresh_metadata[key] for key in _LAYOUT_EVIDENCE_KEYS if key in fresh_metadata},
+            }
+            if fresh.risk_level is not None:
+                chapter.risk_level = fresh.risk_level
+            start, end = fresh_metadata.get("source_page_start"), fresh_metadata.get("source_page_end")
+            if isinstance(start, int) and isinstance(end, int):
+                pages.update(range(start, end + 1))
+        fresh_evidence = (parsed.document.metadata_json or {}).get("pdf_page_evidence")
+        old_evidence = (document.metadata_json or {}).get("pdf_page_evidence")
+        if not pages or not isinstance(fresh_evidence, dict):
+            return
+        fresh_pages = {
+            int(page["page_number"]): page
+            for page in fresh_evidence.get("pdf_pages") or []
+            if isinstance(page, dict) and isinstance(page.get("page_number"), int)
+        }
+        if not isinstance(old_evidence, dict):
+            merged = fresh_evidence
+        else:
+            kept = [
+                page
+                for page in old_evidence.get("pdf_pages") or []
+                if not (isinstance(page, dict) and page.get("page_number") in pages and page.get("page_number") in fresh_pages)
+            ]
+            replaced = [fresh_pages[number] for number in sorted(pages) if number in fresh_pages]
+            merged = {
+                **old_evidence,
+                "pdf_pages": sorted(kept + replaced, key=lambda page: int(page.get("page_number") or 0)),
+            }
+        document.metadata_json = {**(document.metadata_json or {}), "pdf_page_evidence": merged}
 
     def _check_boundaries(self, chapters: list[Chapter], parsed_chapters: list[Chapter]) -> None:
         if len(chapters) != len(parsed_chapters):

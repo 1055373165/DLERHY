@@ -8,7 +8,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from book_agent.domain.block_rules import protected_policy_for_block
+from book_agent.domain.block_rules import protected_policy_for_block, translatability_for_block
 from book_agent.core.ids import stable_id
 from book_agent.domain.enums import ActorType, ArtifactStatus, BlockType, SourceType
 from book_agent.domain.models import Block, Chapter, Document, DocumentImage
@@ -254,6 +254,7 @@ class PdfStructureRefreshService:
                 existing_block_id_by_source_anchor,
             )
             refreshed_block_type = BlockType(refreshed_block.block_type)
+            translatable_before = translatability_for_block(existing_block.block_type, existing_block.source_span_json)[0]
             existing_block.block_type = refreshed_block_type
             existing_block.source_text = refreshed_block.source_text
             existing_block.normalized_text = " ".join(str(refreshed_block.source_text or "").split())
@@ -270,8 +271,14 @@ class PdfStructureRefreshService:
                 refreshed_split_fragments=refreshed_split_fragments,
             )
             existing_sentence_text = existing_sentence_text_by_block_id.get(existing_block.id)
-            if existing_sentence_text is not None and _collapse_whitespace(existing_sentence_text) != _collapse_whitespace(
-                existing_block.source_text
+            # Its text changed, or what it is did (a paragraph read again as a running head, Art of AI
+            # p28): its sentences no longer match it and are segmented again.
+            translatability_changed = (
+                translatability_for_block(existing_block.block_type, existing_block.source_span_json)[0] != translatable_before
+            )
+            if existing_sentence_text is not None and (
+                translatability_changed
+                or _collapse_whitespace(existing_sentence_text) != _collapse_whitespace(existing_block.source_text)
             ):
                 existing_block.source_span_json = {
                     **existing_block.source_span_json,

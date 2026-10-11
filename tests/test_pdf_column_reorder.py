@@ -170,3 +170,41 @@ class PdfMultiColumnReorderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ColumnOrderSurvivesPageEntriesTests(unittest.TestCase):
+    """The page's entries (text and pictures together) keep the column order: Art of AI's two-column
+    index was read column by column and then sorted by height again, interleaving the columns."""
+
+    def _two_column_page(self, image_blocks=()):
+        blocks = []
+        for row in range(3):
+            y = 100 + row * 60
+            blocks.append(_mk_block(block_number=2 * row + 1, text=_filler_prose(f"LEFT-{row + 1}"), x0=40, y0=y, x1=280, y1=y + 40))
+            blocks.append(_mk_block(block_number=2 * row + 2, text=_filler_prose(f"RIGHT-{row + 1}"), x0=320, y0=y + 5, x1=560, y1=y + 45))
+        return PdfPage(page_number=1, width=600.0, height=800.0, blocks=blocks, image_blocks=list(image_blocks))
+
+    def _labels(self, entries):
+        return [("IMG" if kind == "image" else block.text.split(" ", 1)[0]) for kind, block in entries]
+
+    def test_text_entries_stay_column_by_column(self) -> None:
+        entries = PdfStructureRecoveryService()._ordered_page_content_entries(self._two_column_page(), _book_profile())
+        self.assertEqual(self._labels(entries), ["LEFT-1", "LEFT-2", "LEFT-3", "RIGHT-1", "RIGHT-2", "RIGHT-3"])
+
+    def test_a_picture_keeps_its_place_in_its_column(self) -> None:
+        from book_agent.ingestion.pdf.models import PdfImageBlock
+
+        image = PdfImageBlock(page_number=1, block_number=9, bbox=(330.0, 152.0, 550.0, 158.0))
+        entries = PdfStructureRecoveryService()._ordered_page_content_entries(self._two_column_page([image]), _book_profile())
+        self.assertEqual(self._labels(entries), ["LEFT-1", "LEFT-2", "LEFT-3", "RIGHT-1", "IMG", "RIGHT-2", "RIGHT-3"])
+
+    def test_stacked_blocks_with_different_indents_are_not_columns(self) -> None:
+        """A heading set left of its indented paragraphs only stacks (Art of AI p69): keep the order."""
+        blocks = []
+        for row in range(4):
+            y = 100 + row * 80
+            blocks.append(_mk_block(block_number=2 * row + 1, text=_filler_prose(f"HEAD-{row + 1}"), x0=40, y0=y, x1=200, y1=y + 15))
+            blocks.append(_mk_block(block_number=2 * row + 2, text=_filler_prose(f"BODY-{row + 1}"), x0=250, y0=y + 20, x1=560, y1=y + 70))
+        page = PdfPage(page_number=1, width=600.0, height=800.0, blocks=blocks)
+        entries = PdfStructureRecoveryService()._ordered_page_content_entries(page, _book_profile())
+        self.assertEqual(self._labels(entries), [f"{kind}-{row}" for row in range(1, 5) for kind in ("HEAD", "BODY")])
