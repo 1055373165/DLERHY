@@ -96,6 +96,40 @@ class ChapterReparseTests(unittest.TestCase):
             self.assertEqual(again.refreshed_chapter_ids, [])
             self.assertIsNone(again.parse_revision_id)
 
+    def test_the_layout_evidence_of_refreshed_chapters_is_read_again(self) -> None:
+        """Art of AI: the import flagged p304 and the appendix as suspect (tables read as stray prose);
+        after the re-parse the review still judged reading order by that evidence."""
+        with self.bench.session_factory() as session:
+            chapter = self._third_chapter(session)
+            self._damage(session, chapter.id)
+            pilot_chapter = session.get(Chapter, self.pilot[0])
+            pilot_page = (pilot_chapter.metadata_json or {}).get("source_page_start")
+            chapter.metadata_json = {**(chapter.metadata_json or {}), "pdf_layout_risk": "high", "suspicious_page_numbers": [7]}
+            pilot_chapter.metadata_json = {**(pilot_chapter.metadata_json or {}), "suspicious_page_numbers": [pilot_page]}
+            document = self.bench.document(session)
+            evidence = dict((document.metadata_json or {}).get("pdf_page_evidence") or {})
+            pages = [dict(page) for page in evidence.get("pdf_pages") or []]
+            for page in pages:
+                if page.get("page_number") in {7, pilot_page}:
+                    page["layout_suspect"] = True
+            document.metadata_json = {**document.metadata_json, "pdf_page_evidence": {**evidence, "pdf_pages": pages}}
+            session.commit()
+
+            ChapterReparseService(session).reparse_untranslated(self.bench.document_id)
+            session.commit()
+            session.expire_all()
+            chapter = self._third_chapter(session)
+            self.assertEqual(chapter.metadata_json.get("suspicious_page_numbers"), [])
+            self.assertNotEqual(chapter.metadata_json.get("pdf_layout_risk"), "high")
+            by_page = {
+                page["page_number"]: page
+                for page in self.bench.document(session).metadata_json["pdf_page_evidence"]["pdf_pages"]
+            }
+            self.assertFalse(by_page[7].get("layout_suspect"))
+            # The pilot's translated chapter keeps the evidence of the blocks it still has.
+            self.assertTrue(by_page[pilot_page].get("layout_suspect"))
+            self.assertEqual(session.get(Chapter, self.pilot[0]).metadata_json.get("suspicious_page_numbers"), [pilot_page])
+
     def test_revert_puts_the_old_structure_back(self) -> None:
         with self.bench.session_factory() as session:
             chapter = self._third_chapter(session)
