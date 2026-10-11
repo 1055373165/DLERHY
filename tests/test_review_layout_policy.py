@@ -150,6 +150,8 @@ class PdfLayoutReviewPolicyTests(unittest.TestCase):
     def test_a_two_column_page_read_column_by_column_is_in_order(self) -> None:
         """Art of AI's index: two columns side by side, the left one read first; book QA blocked it."""
         index_page = [
+            # The index's title, set right above both columns, comes first.
+            _block("heading", 361, [410.0, 20.0, 474.0, 45.0], block_type=BlockType.HEADING),
             _block("body", 361, [57.0, 52.0, 245.0, 300.0]),
             _block("body", 361, [57.0, 310.0, 250.0, 600.0]),
             _block("body", 361, [270.0, 52.0, 450.0, 300.0]),

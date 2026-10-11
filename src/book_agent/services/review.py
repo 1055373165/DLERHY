@@ -155,6 +155,13 @@ def _page_reads_by_column(blocks: list[Any], page: int) -> bool:
             bbox = region.get("bbox") if isinstance(region, dict) else None
             if region.get("page_number") == page and isinstance(bbox, list) and len(bbox) == 4:
                 regions.append(tuple(float(value) for value in bbox))  # type: ignore[arg-type]
+    # A title above every other region of the page (the index's "index", set right) heads both
+    # columns and is not part of either.
+    regions = [
+        rect
+        for index, rect in enumerate(regions)
+        if not all(rect[3] <= other[1] + 2 for other_index, other in enumerate(regions) if other_index != index)
+    ]
     if len(regions) < 2:
         return False
     # Another column by the same measure as _has_side_by_side: a left edge set apart by more than
