@@ -1112,6 +1112,34 @@ class CitationEntryTests(unittest.TestCase):
         self.assertEqual(len(hits), 1)
         self.assertEqual(hits[0]["evidence"]["title"], "“Fully Autonomous AI Agents Should Not Be Developed.”")
 
+    def test_english_the_book_keeps_is_not_untranslated_prose(self) -> None:
+        """Art of AI: 39 findings, nearly all titles in 《》, examples quoted from the source, names."""
+        cases = [
+            (
+                "• Nielsen Norman Group’s article, “When Should We Trust AI? Magic 8-Ball Thinking” (www.nngroup.com/articles/ai-magic-8-ball/)",
+                "• Nielsen Norman Group 的文章《When Should We Trust AI? Magic 8-Ball Thinking》（www.nngroup.com/articles/ai-magic-8-ball/）",
+            ),
+            (
+                "• Input: “Last night, we went to the” → Label: “cinema”",
+                "• 输入：“Last night, we went to the” → 标签：“cinema”",
+            ),
+            ("– Recommended: 4× NVIDIA A100 80 GB or H100 80 GB GPUs", "– 推荐：4× NVIDIA A100 80 GB 或 H100 80 GB GPU"),
+            ("M A N N I N G", "M A N N I N G"),
+        ]
+        blocks = [rendered(f"b-keep-{index}", C2, "paragraph", source, target, page=33) for index, (source, target) in enumerate(cases)]
+        self.assertNotIn("L7.untranslated_prose", _by_check(build([*clean_blocks(), *blocks])))
+
+    def test_a_translation_still_in_english_words_is_found(self) -> None:
+        prose = rendered(
+            "b-half",
+            C2,
+            "paragraph",
+            "The team should start with a small pilot and measure how users respond before they scale.",
+            "团队 should start with a small pilot and measure how users respond before they scale。",
+            page=33,
+        )
+        self.assertIn("L7.untranslated_prose", _by_check(build([*clean_blocks(), prose])))
+
     def test_english_prose_left_untranslated_is_still_found(self) -> None:
         text = "Gabriel et al. (2024) showed that agents in production need careful oversight and evaluation."
         prose = rendered("b-en", C2, "paragraph", text, text, page=33)

@@ -21,11 +21,18 @@ from __future__ import annotations
 import re
 
 # "4 Gabriel, Iason et al." / "1 Russell, Stuart and Peter Norvig," / "Dao, Tri, ..." / "[3] Vaswani, A."
-_NOTE_NUMBER_RE = re.compile(r"^\s*(?:\[\d{1,3}\]|\d{1,3}[.)]?)\s+")
+_NOTE_NUMBER_RE = re.compile(r"^\s*(?:\[\d{1,3}\]|\d{1,3}[.)]?|[•–\-])\s+")
 _AUTHOR_RE = re.compile(
-    r"^\s*(?:\[\d{1,3}\]|\d{1,3}[.)]?)?\s*"
+    # A note marker may be a letter set against the name ("aDastin, Jeffrey.").
+    r"^\s*(?:\[\d{1,3}\]|\d{1,3}[.)]?|[•–\-]|[a-z](?=[A-Z][a-z]))?\s*"
+    r"(?:"
+    # "Gabriel, Iason et al." / "Russell, Stuart and Peter Norvig,"
     r"[A-Z][A-Za-z'’\-]+,\s+(?:[A-Z][A-Za-z'’\-]*\.?\s*){1,3}"
     r"(?:(?:et al\.?|等)|(?:,?\s*(?:and|&)\s+[A-Z])|,|\.)"
+    r"|"
+    # IEEE: "T. Mikolov, K. Chen" / "J. S. Park," / "S. Russell and P. Norvig,"
+    r"(?:[A-Z]\.\s*){1,3}[A-Z][\w'’\-]+(?:,|\s+(?:and|&)\s+[A-Z]\.)"
+    r")"
 )
 _YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}[a-z]?(?!\d)")
 _ARXIV_RE = re.compile(r"\barXiv\b|(?<![\d.])\d{4}\.\d{4,5}(?:v\d+)?(?![\d.])", re.IGNORECASE)
@@ -73,6 +80,14 @@ def title_spans(text: str) -> list[tuple[int, int]]:
     return spans
 
 
+# "J. Kirkpatrick, R. Pascanu, N. Rabinowitz, J. Veness, G. Desjardins, A. A. Rusu, K." — an entry's
+# author list on a line of its own (the rest of the entry set apart by the parse).
+_AUTHOR_LIST_RE = re.compile(
+    r"^\s*(?:\[\d{1,3}\]|\d{1,3}[.)]?|[•–\-])?\s*"
+    r"(?:(?:[A-Z]\.\s*){1,3}[A-Z][\w'’\-]+,\s*){3,}(?:(?:and\s+)?(?:[A-Z]\.\s*){1,3}(?:[A-Z][\w'’\-]+)?[,.]?)?\s*$"
+)
+
+
 def is_citation_entry(text: str) -> bool:
     """A bibliographic entry: a note or reference of an author list, a year and a work.
 
@@ -84,6 +99,8 @@ def is_citation_entry(text: str) -> bool:
     text = (text or "").strip()
     if not text or len(text) > 600:
         return False
+    if _AUTHOR_LIST_RE.match(text):
+        return True
     author = bool(_AUTHOR_RE.match(text))
     body = _NOTE_NUMBER_RE.sub("", text, count=1)
     lead_title = body[:1] in {"“", '"', "*"} and (
