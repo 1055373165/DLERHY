@@ -273,13 +273,16 @@ class TranslationService:
         output_validator: OutputValidator | None = None,
         max_output_repairs: int = 1,
         polish: bool | None = None,
+        polish_reply: str | None = None,
     ):
         self.repository = repository
-        if polish is None:
-            from book_agent.core.config import get_settings
+        from book_agent.core.config import get_settings
 
+        if polish is None:
             polish = get_settings().translation_polish_enabled
         self.polish_enabled = bool(polish)
+        # "all" or "changed" (translation.polish.POLISH_REPLIES); anything else is "all".
+        self.polish_reply = polish_reply if polish_reply is not None else get_settings().translation_polish_reply
         self.worker = worker or EchoTranslationWorker()
         self.chapter_memory_repository = chapter_memory_repository or ChapterTranslationMemoryRepository(
             repository.session
@@ -551,6 +554,7 @@ class TranslationService:
                 locked_terms=[
                     (term.source_term, term.expected_target_term) for term in prepared.locked_terms if term.expected_target_term
                 ],
+                reply=self.polish_reply,
             )
         except Exception as exc:  # the draft already passed every check; a failed edit costs nothing but the edit
             usage = getattr(exc, "usage", None)

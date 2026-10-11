@@ -19,10 +19,15 @@ from tests.test_translation_output_guardrail import ScriptedWorker, _segments
 class _Editor:
     """Stands in for the provider client: rewrites segments with ``edit`` and records each request."""
 
-    def __init__(self, edit=None, *, fail: Exception | None = None, drop_one: bool = False) -> None:
+    def __init__(
+        self, edit=None, *, fail: Exception | None = None, drop_one: bool = False, only_changed: bool = False, extra_id: str | None = None
+    ) -> None:
         self.edit = edit or (lambda text: text)
         self.fail = fail
         self.drop_one = drop_one
+        # The "changed" reply: only the segments the edit changed (and, to test a bad reply, one it was not given).
+        self.only_changed = only_changed
+        self.extra_id = extra_id
         self.requests: list[dict] = []
 
     def generate_structured_object(self, **kwargs):
@@ -36,9 +41,12 @@ class _Editor:
                 continue
             segment_id = lines[0].strip("[]")
             draft = next(line[len("译文："):] for line in lines if line.startswith("译文："))
-            segments.append({"id": segment_id, "text_zh": self.edit(draft)})
+            if not self.only_changed or self.edit(draft) != draft:
+                segments.append({"id": segment_id, "text_zh": self.edit(draft)})
         if self.drop_one:
             segments = segments[:-1]
+        if self.extra_id:
+            segments.append({"id": self.extra_id, "text_zh": "多出来的"})
         return {"segments": segments}, TranslationUsage(token_in=40, token_out=20, total_tokens=60, latency_ms=5, cost_usd=0.002)
 
 
@@ -50,11 +58,11 @@ class _EditedWorker(ScriptedWorker):
 
 class TranslationPolishTests(guardrail.OutputGuardrailTests):
     # Reuse the guardrail fixture (a real EPUB packet); none of its own tests run here.
-    def _execute(self, editor, *, polish: bool = True, script=None):
+    def _execute(self, editor, *, polish: bool = True, script=None, polish_reply: str = "all"):
         worker = _EditedWorker(script or [lambda task: _segments(task)], editor)
         with self.session_factory() as session:
             artifacts = TranslationService(
-                TranslationRepository(session), worker=worker, max_output_repairs=0, polish=polish
+                TranslationRepository(session), worker=worker, max_output_repairs=0, polish=polish, polish_reply=polish_reply
             ).execute_packet(self.packet_id)
             session.commit()
             events = session.scalars(
@@ -107,6 +115,37 @@ class TranslationPolishTests(guardrail.OutputGuardrailTests):
         self.assertTrue(all(segment.text_zh.startswith("译::") for segment in artifacts.target_segments))
         self.assertEqual(artifacts.translation_run.output_json["polish"]["reverted_reason"], "failed: TimeoutError")
         self.assertIsNone(artifacts.translation_run.error_code)
+
+    def test_the_changed_reply_returns_only_edits_and_the_rest_stays_the_draft(self) -> None:
+        """docs/specs/cost-governance M2: half the calls changed nothing and still returned every segment."""
+        from book_agent.translation.polish import POLISH_SYSTEM_PROMPT_CHANGED_ONLY
+
+        first = {}
+
+        def edit_first(text: str) -> str:
+            first.setdefault("text", text)
+            return "润::" + text if text == first["text"] else text
+
+        editor = _Editor(edit_first, only_changed=True)
+        artifacts, _ = self._execute(editor, polish_reply="changed")
+
+        self.assertEqual(editor.requests[0]["system_prompt"], POLISH_SYSTEM_PROMPT_CHANGED_ONLY)
+        self.assertIn("只返回你修改过的段落", POLISH_SYSTEM_PROMPT_CHANGED_ONLY)
+        self.assertNotIn("每一段都要返回", POLISH_SYSTEM_PROMPT_CHANGED_ONLY)
+        texts = [segment.text_zh for segment in artifacts.target_segments]
+        self.assertTrue(texts[0].startswith("润::"))
+        self.assertTrue(all(text.startswith("译::") for text in texts[1:]))
+        audit = artifacts.translation_run.output_json["polish"]
+        self.assertEqual((audit["applied"], audit["changed_segments"]), (True, 1))
+
+    def test_a_changed_reply_with_nothing_changed_or_an_unknown_segment(self) -> None:
+        artifacts, _ = self._execute(_Editor(only_changed=True), polish_reply="changed")
+        audit = artifacts.translation_run.output_json["polish"]
+        self.assertEqual((audit["applied"], audit["changed_segments"], audit["draft"]), (True, 0, []))
+
+        artifacts, _ = self._execute(_Editor(lambda text: "改::" + text, only_changed=True, extra_id="T99"), polish_reply="changed")
+        self.assertTrue(all(segment.text_zh.startswith("译::") for segment in artifacts.target_segments))
+        self.assertEqual(artifacts.translation_run.output_json["polish"]["reverted_reason"], "segments_mismatch")
 
     def test_switched_off_the_editor_is_never_called(self) -> None:
         editor = _Editor(lambda text: "改::" + text)

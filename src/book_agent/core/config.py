@@ -131,6 +131,9 @@ class Settings(BaseSettings):
     translation_max_output_repairs: int = 1
     # Second pass over each accepted packet: a source-anchored Chinese editor (translation.polish).
     translation_polish_enabled: bool = True
+    # "changed": the editor returns only the segments it changed (docs/specs/cost-governance/SPEC.md,
+    # M2); "all": every segment, as before.
+    translation_polish_reply: str = "all"
     # "slim": the model leaves out the packet id and the alignment, which the caller knows
     # (docs/specs/cost-governance/SPEC.md, M1); "full": it writes them, as before.
     translation_reply_format: str = "full"
