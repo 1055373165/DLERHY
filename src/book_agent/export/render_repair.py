@@ -679,15 +679,22 @@ def apply_list_line_layouts(
     return repaired
 
 
+# Where a list collapsed onto one line starts its next item: a bullet glyph; an ASCII bullet after a
+# sentence end; an item number of one or two digits after a sentence end, a comma or Chinese. Never
+# inside a token: "10.1.1", "arXiv:2310.19736", "Jan. 2024", "contextual-retrieval", "Data + AI".
+_SENTENCE_END = ".。!?！？;；:："
+_INLINE_LIST_MARKER_RE = re.compile(
+    r"(?<!^)\s*(?=[•●▪◦○◯])"
+    rf"|(?<=[{_SENTENCE_END}])\s*(?=[-*+][\s​﻿])"
+    rf"|(?<=[{_SENTENCE_END}、，,）)】」』”㐀-鿿豈-﫿])(?<!\d[.)])\s*(?=\d{{1,2}}[.)](?![\d.]))"
+)
+
+
 def split_inline_list_target_lines(text: str, *, preserve_leading_ws: bool = False) -> list[str]:
     normalized = str(text or "").strip()
     if not normalized:
         return []
-    prepared = re.sub(
-        r"(?<!^)\s*(?=(?:[-*+•●▪◦○◯]|\d+[.)])(?:[\s\u200b\ufeff]*|$))",
-        "\n",
-        normalized,
-    )
+    prepared = _INLINE_LIST_MARKER_RE.sub("\n", normalized)
     if preserve_leading_ws:
         return [line.rstrip() for line in prepared.splitlines() if line.strip()]
     return [line.strip() for line in prepared.splitlines() if line.strip()]
