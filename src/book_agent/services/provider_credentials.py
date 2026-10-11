@@ -22,7 +22,7 @@ from book_agent.domain.models.provider_credential import ProviderCredential
 from book_agent.services.secrets import decrypt_secret, encrypt_secret
 from book_agent.translation.contracts import TranslationUsage
 from book_agent.workers.llm_calls import CALL_KIND_PROVIDER_TEST, observed_llm_call, record_llm_usage
-from book_agent.workers.providers.pricing import parse_off_peak_window
+from book_agent.workers.providers.pricing import parse_off_peak_window, parse_peak_schedule
 from book_agent.workers.providers.openai_compatible import (
     OpenAICompatibleTranslationClient,
     ProviderHTTPError,
@@ -105,6 +105,7 @@ PRICE_FIELDS = (
     "output_cost_per_1m_tokens",
     "peak_price_multiplier",
     "off_peak_window_utc",
+    "peak_schedule_utc",
 )
 # Request fields the client builds itself; overriding them would break prompts, tools or parsing.
 RESERVED_REQUEST_FIELDS = frozenset(
@@ -132,6 +133,12 @@ def _set_prices(record: ProviderCredential, prices: dict[str, float | str | None
             if window:
                 parse_off_peak_window(window)
             record.off_peak_window_utc = window or None
+            continue
+        if field_name == "peak_schedule_utc":
+            schedule = str(value).strip() if value is not None else ""
+            if schedule:
+                parse_peak_schedule(schedule)
+            record.peak_schedule_utc = schedule or None
             continue
         if value is not None and value < 0:
             raise ValueError(f"{field_name} must be >= 0")

@@ -1157,7 +1157,13 @@ def _merge_usage(first: TranslationUsage, second: TranslationUsage) -> Translati
         cost_usd=cost,
         provider_request_id=second.provider_request_id or first.provider_request_id,
         raw_usage={**second.raw_usage, "merged_calls": int(first.raw_usage.get("merged_calls", 1)) + 1},
+        prompt_cache_hit_tokens=_sum_known(first.prompt_cache_hit_tokens, second.prompt_cache_hit_tokens),
+        prompt_cache_miss_tokens=_sum_known(first.prompt_cache_miss_tokens, second.prompt_cache_miss_tokens),
     )
+
+
+def _sum_known(first: int | None, second: int | None) -> int | None:
+    return None if first is None and second is None else int(first or 0) + int(second or 0)
 
 
 @dataclass(slots=True)

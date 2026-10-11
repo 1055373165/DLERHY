@@ -70,10 +70,12 @@ class ProviderCredential(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     input_cost_per_1m_tokens: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
     input_cache_hit_cost_per_1m_tokens: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
     output_cost_per_1m_tokens: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
-    # The prices above are off-peak prices when these are set: outside the off-peak window
-    # ("16:30-00:30", UTC) a call costs peak_price_multiplier times as much (workers/providers/pricing.py).
+    # The prices above are off-peak prices when these are set: at peak a call costs
+    # peak_price_multiplier times as much (workers/providers/pricing.py). The peak is the schedule
+    # ("mon-fri 01:00-04:00,06:00-10:00", UTC) when set, else outside the off-peak window ("16:30-00:30").
     peak_price_multiplier: Mapped[Decimal | None] = mapped_column(Numeric(6, 3))
     off_peak_window_utc: Mapped[str | None] = mapped_column(String(11))
+    peak_schedule_utc: Mapped[str | None] = mapped_column(String(200))
     # Extra request fields sent with every call, e.g. {"thinking": {"type": "disabled"}} for reasoning models.
     request_overrides_json: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False, default=dict)
     # Bumped on every change that affects the worker built from this row

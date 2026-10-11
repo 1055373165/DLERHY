@@ -935,6 +935,7 @@ export interface ProviderCredentialCreate {
   output_cost_per_1m_tokens?: number | null;
   peak_price_multiplier?: number | null;
   off_peak_window_utc?: string | null;
+  peak_schedule_utc?: string | null;
   request_overrides?: Record<string, unknown>;
   api_key?: string | null;
   activate?: boolean;
@@ -955,6 +956,7 @@ export interface ProviderCredentialRead {
   output_cost_per_1m_tokens?: number | null;
   peak_price_multiplier?: number | null;
   off_peak_window_utc?: string | null;
+  peak_schedule_utc?: string | null;
   request_overrides?: Record<string, unknown>;
   id: string;
   is_active: boolean;
@@ -983,6 +985,7 @@ export interface ProviderCredentialUpdate {
   output_cost_per_1m_tokens?: number | null;
   peak_price_multiplier?: number | null;
   off_peak_window_utc?: string | null;
+  peak_schedule_utc?: string | null;
   request_overrides?: Record<string, unknown> | null;
 }
 
