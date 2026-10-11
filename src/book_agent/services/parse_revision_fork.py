@@ -276,12 +276,13 @@ class ParseRevisionForkService:
     # --- steps ----------------------------------------------------------------------
 
     def _rehome_stranded_blocks(self, document_id: str, chapter_ids: set[str], *, now: datetime) -> list[TranslationPacket]:
-        """Blocks no live packet translates any more join the live packet before them (or after).
+        """Blocks with untranslated sentences that no live packet translates join the live packet
+        before them (or after).
 
         A packet whose range started or ended on a block a refresh dropped (an old parse's stray copy)
-        is invalidated as empty, and a sound block inside that range lost the packet that translated
-        it: Art of AI chapter 2's p56 paragraph kept only context mappings and was never translated.
-        The packets they join are rebuilt and translated again.
+        is invalidated as empty, and a sound block inside that range, re-segmented, was left with
+        context mappings only: Art of AI chapter 2's p56 paragraph was never translated. Blocks whose
+        translation stands are left alone. The packets they join are rebuilt and translated again.
         """
         rehomed: dict[str, TranslationPacket] = {}
         for chapter_id in chapter_ids:
@@ -303,20 +304,6 @@ class ParseRevisionForkService:
                     )
                 ).all()
             )
-            # Stranded: sentences a packet translated that has since been invalidated. Sentences no
-            # packet ever took (a block a structure edit just made) are the caller's to packet, and
-            # are reported as unpacketed.
-            lost_sentence_ids = set(
-                self.session.scalars(
-                    select(PacketSentenceMap.sentence_id)
-                    .join(TranslationPacket, TranslationPacket.id == PacketSentenceMap.packet_id)
-                    .where(
-                        TranslationPacket.chapter_id == chapter_id,
-                        TranslationPacket.status == PacketStatus.INVALIDATED,
-                        PacketSentenceMap.role == PacketSentenceRole.CURRENT,
-                    )
-                ).all()
-            )
             blocks = self.session.scalars(
                 select(Block)
                 .where(Block.chapter_id == chapter_id, Block.status == ArtifactStatus.ACTIVE, Block.ordinal < 1_000_000)
@@ -327,8 +314,6 @@ class ParseRevisionForkService:
                     continue
                 sentences = [sentence for sentence in self._active_sentences(block.id) if sentence.translatable]
                 if not sentences or any(sentence.id in current_sentence_ids for sentence in sentences):
-                    continue
-                if not any(sentence.id in lost_sentence_ids for sentence in sentences):
                     continue
                 translated = set(
                     self.session.scalars(
