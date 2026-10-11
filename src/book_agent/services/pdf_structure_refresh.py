@@ -417,8 +417,8 @@ class PdfStructureRefreshService:
         AI chapter 2, imported by an older parser, read "COMMON PITFALLS" before the section it ends
         and a paragraph between two list items. Blocks the new parse has take its order; any it
         lacks stay right after the block before them. The export reads blocks in this order; a
-        packet's block range may now span another packet's block, which costs a retranslation if
-        that packet is rebuilt, never a duplicate in the reading copy.
+        packet's block range may now span another packet's block, which a rebuild of it leaves to
+        that packet (``TargetedRebuildService._rebuild_packets``).
         """
         position = {
             block.source_anchor: index

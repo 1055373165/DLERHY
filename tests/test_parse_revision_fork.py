@@ -335,5 +335,111 @@ class StrandedBlockTests(unittest.TestCase):
             )
             self.assertEqual(again, [])
 
+
+class ReorderedPacketTests(unittest.TestCase):
+    """Art of AI chapter 2: a refresh put the blocks in the new parse's order, so a packet's block
+    range spanned another packet's block. Rebuilding it then claimed that block too (139 sentences
+    were current in two live packets), and a packet whose range turned inside out was invalidated
+    with its translation left active beside the newer one (the review flagged it as an orphan)."""
+
+    def setUp(self) -> None:
+        from tests.pilot_repair_fixture import PilotBench
+
+        self.bench = PilotBench()
+        self.addCleanup(self.bench.close)
+        self.bench.translate_pilot()
+
+    def _owners(self, session, chapter_id: str) -> dict[str, list[str]]:
+        owners: dict[str, list[str]] = {}
+        for sentence_id, packet_id in session.execute(
+            select(PacketSentenceMap.sentence_id, PacketSentenceMap.packet_id)
+            .join(TranslationPacket, TranslationPacket.id == PacketSentenceMap.packet_id)
+            .where(
+                TranslationPacket.chapter_id == chapter_id,
+                TranslationPacket.status != PacketStatus.INVALIDATED,
+                PacketSentenceMap.role == PacketSentenceRole.CURRENT,
+            )
+        ).all():
+            owners.setdefault(sentence_id, []).append(packet_id)
+        return owners
+
+    def _two_ranged_packets(self, session):
+        from tests.pilot_repair_fixture import block_with_text
+
+        chapter_id = block_with_text(session, self.bench.document_id, "Figure 1.4 shows the two predi").chapter_id
+        ranged = []
+        for packet in session.scalars(select(TranslationPacket).where(TranslationPacket.chapter_id == chapter_id)).all():
+            start, end = session.get(Block, packet.block_start_id), session.get(Block, packet.block_end_id or packet.block_start_id)
+            if end.ordinal > start.ordinal:
+                ranged.append((start.ordinal, packet, start, end))
+        ranged.sort(key=lambda item: item[0])
+        (_, first, first_start, first_end), (_, second, second_start, _second_end) = ranged[-2:]
+        return chapter_id, first, first_start, first_end, second, second_start
+
+    def test_a_rebuilt_packet_leaves_another_packets_block_inside_its_range_alone(self) -> None:
+        from book_agent.infra.repositories.bootstrap import BootstrapRepository as _Bootstrap
+        from book_agent.services.rebuild import TargetedRebuildService
+
+        with self.bench.session_factory() as session:
+            chapter_id, first, first_start, first_end, second, second_start = self._two_ranged_packets(session)
+            before = self._owners(session, chapter_id)
+            # The reorder: the second packet's first block now reads inside the first packet's range.
+            inside = session.scalars(
+                select(Block).where(Block.chapter_id == chapter_id, Block.ordinal > first_start.ordinal, Block.ordinal < first_end.ordinal)
+            ).first()
+            inside_ordinal, moved_ordinal = inside.ordinal, second_start.ordinal
+            inside.ordinal = -1
+            session.flush()
+            second_start.ordinal = inside_ordinal
+            session.flush()
+            inside.ordinal = moved_ordinal
+            session.flush()
+
+            rebuild = TargetedRebuildService(session, _Bootstrap(session))
+            rebuild.rebuild_packets(self.bench.document_id, chapter_id, [first.id])
+            rebuild.rebuild_packets(self.bench.document_id, chapter_id, [second.id])
+            after = self._owners(session, chapter_id)
+
+            self.assertEqual({sid: owners for sid, owners in after.items() if len(owners) > 1}, {})
+            self.assertEqual(set(after), set(before), "a sentence lost its packet")
+            moved_sentences = session.scalars(select(Sentence.id).where(Sentence.block_id == second_start.id)).all()
+            self.assertEqual({after[sid][0] for sid in moved_sentences}, {second.id})
+
+    def test_an_invalidated_packets_translation_of_sentences_owned_elsewhere_is_superseded(self) -> None:
+        from datetime import datetime, timezone
+
+        from book_agent.domain.enums import TargetSegmentStatus
+        from book_agent.domain.models.translation import AlignmentEdge, TargetSegment
+
+        with self.bench.session_factory() as session:
+            chapter_id, first, _first_start, _first_end, second, _second_start = self._two_ranged_packets(session)
+            segments = session.scalars(
+                select(TargetSegment)
+                .join(TranslationRun, TranslationRun.id == TargetSegment.translation_run_id)
+                .where(TranslationRun.packet_id == first.id)
+            ).all()
+            owned_sentence = session.scalars(
+                select(AlignmentEdge.sentence_id).where(AlignmentEdge.target_segment_id == segments[0].id)
+            ).first()
+            # Another live packet now translates the first segment's sentence; the rest have no other home.
+            session.add(PacketSentenceMap(packet_id=second.id, sentence_id=owned_sentence, role=PacketSentenceRole.CURRENT))
+            first.status = PacketStatus.INVALIDATED
+            session.flush()
+
+            superseded = ParseRevisionForkService(session).supersede_translations_owned_elsewhere(
+                first.id, now=datetime.now(timezone.utc)
+            )
+
+            self.assertIn(segments[0].id, superseded)
+            for segment in segments:
+                sentence_ids = set(
+                    session.scalars(select(AlignmentEdge.sentence_id).where(AlignmentEdge.target_segment_id == segment.id)).all()
+                )
+                expected = TargetSegmentStatus.SUPERSEDED if sentence_ids == {owned_sentence} else segment.final_status
+                if sentence_ids != {owned_sentence}:
+                    self.assertNotIn(segment.id, superseded, "its sentences' only translation was superseded")
+                self.assertEqual(session.get(TargetSegment, segment.id).final_status, expected)
+
+
 if __name__ == "__main__":
     unittest.main()
