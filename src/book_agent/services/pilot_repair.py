@@ -158,6 +158,7 @@ class PilotRepairService:
         book = scope == SCOPE_BOOK
         self.max_seconds = max_seconds if max_seconds is not None else (BOOK_MAX_SECONDS if book else MAX_SECONDS)
         self.max_attempts = max_attempts if max_attempts is not None else (BOOK_MAX_ATTEMPTS if book else MAX_ATTEMPTS)
+        self._pages = None
 
     # --- entry points ---------------------------------------------------------------------------
 
@@ -241,15 +242,17 @@ class PilotRepairService:
         )
         ctx.spacing_convention = spacing_convention(self.session, ctx.chapter_ids)
         pages = self._open_pdf(document_id)
+        # Every QA pass reads the PDF through it: its tables and figures are read once per repair.
+        self._pages = pages
         if pages is not None:
             ctx.figure_problems = pages.figure_problems
         toolbox = PilotRepairToolbox(ctx)
         qa = PilotQualityService(self.session)
         try:
-            layers, _source = qa.evaluate(document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope)
+            layers, _source = qa.evaluate(document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope, pages=pages)
             # The reading copy on disk, judged now (the before report may predate a check): a copy the
             # export would write differently (literal emphasis markers) is written again at the end.
-            file_layers, file_source = qa.evaluate(document_id, ctx.chapter_ids, use_export_file=True, scope=self.scope)
+            file_layers, file_source = qa.evaluate(document_id, ctx.chapter_ids, use_export_file=True, scope=self.scope, pages=pages)
             stale_copy = file_source == "file" and needs_reexport(file_layers)
             initial = repairable_findings(layers)
             classes = self._classes(initial)
@@ -428,7 +431,7 @@ class PilotRepairService:
         try:
             result = toolbox.apply(item)
             self.session.flush()
-            new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope)
+            new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope, pages=self._pages)
             after = QaSnapshot.from_layers(new_layers)
             verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings})
             # Reverted only for the retranslation's own flake (a line back in English, a leaked note):
@@ -438,7 +441,7 @@ class PilotRepairService:
                 toolbox.retranslate(flaky, [RETRY_HINT])
                 self.session.flush()
                 result.params = {**result.params, "retried_packet_ids": flaky, "retry_reason": verdict.reason}
-                new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope)
+                new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope, pages=self._pages)
                 after = QaSnapshot.from_layers(new_layers)
                 verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings})
             if item.path.restores_content and restored_content_followups(verdict, before, new_layers, result.packet_ids):

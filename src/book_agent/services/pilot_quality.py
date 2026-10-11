@@ -292,21 +292,30 @@ def _review_blockers(session: Session, document_id: str, chapter_ids: Sequence[s
 class _Loaded:
     """The pilot's inputs plus the open PDF behind the figure-crop check (closed after the run)."""
 
-    def __init__(self, inputs: PilotQaInputs, export_source: str, pages: _PdfPages | None):
+    def __init__(self, inputs: PilotQaInputs, export_source: str, pages: _PdfPages | None, *, owns_pages: bool = True):
         self.inputs = inputs
         self.export_source = export_source
         self.pages = pages
+        # A PDF the caller opened (a repair's, read by every attempt's QA pass) stays open.
+        self.owns_pages = owns_pages
 
     def close(self) -> None:
-        if self.pages is not None:
+        if self.pages is not None and self.owns_pages:
             self.pages.close()
 
 
 def load_pilot_inputs(
-    session: Session, document_id: str, chapter_ids: Sequence[str], *, use_export_file: bool = True, scope: str = "pilot"
+    session: Session,
+    document_id: str,
+    chapter_ids: Sequence[str],
+    *,
+    use_export_file: bool = True,
+    scope: str = "pilot",
+    pages: _PdfPages | None = None,
 ) -> _Loaded:
     """``use_export_file=False`` judges what the export would write now (the repair loop's view,
-    before it re-exports), not the reading copy last written to disk."""
+    before it re-exports), not the reading copy last written to disk. ``pages``: the source PDF
+    already open, whose reads it remembers across passes (left open)."""
     from book_agent.services.export import ExportService
 
     document = session.get(Document, document_id)
@@ -474,8 +483,10 @@ def load_pilot_inputs(
     _document, health_chapters, health_blocks = load_document_inputs(session, document_id)
     wanted = set(chapter_ids)
     is_pdf = document.source_type in PDF_SOURCE_TYPES
-    pages: _PdfPages | None = None
-    if is_pdf and document.source_path and Path(document.source_path).exists():
+    owns_pages = pages is None
+    if not is_pdf:
+        pages, owns_pages = None, True
+    elif pages is None and document.source_path and Path(document.source_path).exists():
         try:
             pages = _PdfPages(Path(document.source_path))
         except Exception:  # pragma: no cover - an unreadable file only loses the crop check
@@ -507,7 +518,7 @@ def load_pilot_inputs(
         table_rows=pages.table_rows if pages else None,
         scope=scope,
     )
-    return _Loaded(inputs, export_source, pages)
+    return _Loaded(inputs, export_source, pages, owns_pages=owns_pages)
 
 
 # ---------------------------------------------------------------------------
@@ -521,10 +532,18 @@ class PilotQualityService:
         self.extra_checks = tuple(extra_checks)
 
     def evaluate(
-        self, document_id: str, chapter_ids: Sequence[str], *, use_export_file: bool = True, scope: str = "pilot"
+        self,
+        document_id: str,
+        chapter_ids: Sequence[str],
+        *,
+        use_export_file: bool = True,
+        scope: str = "pilot",
+        pages: _PdfPages | None = None,
     ) -> tuple[list[dict[str, Any]], str]:
         """The layers of a QA run on these chapters, not kept: (layers, export source)."""
-        loaded = load_pilot_inputs(self.session, document_id, chapter_ids, use_export_file=use_export_file, scope=scope)
+        loaded = load_pilot_inputs(
+            self.session, document_id, chapter_ids, use_export_file=use_export_file, scope=scope, pages=pages
+        )
         try:
             return pilot_qa.run_layers(loaded.inputs, self.extra_checks), loaded.export_source
         finally:
