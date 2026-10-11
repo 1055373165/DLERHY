@@ -74,22 +74,32 @@ def _int(value: Any) -> int | None:
 
 
 class _PdfPages:
-    """The source PDF, opened once: its outline, page sizes and ``figure_region_problems`` per page."""
+    """The source PDF, opened once: its outline, page sizes and ``figure_region_problems`` per page.
+
+    What it reads is remembered: the PDF does not change while it is open, and a repair judges every
+    attempt with a QA pass that reads the same tables and figures again (2–5 s a pass on a book).
+    """
 
     def __init__(self, path: Path):
         import fitz
 
         self.document = fitz.open(path)
+        self._outline: list[OutlineEntry] | None = None
+        self._page_sizes: dict[int, tuple[float, float]] | None = None
+        self._table_rows: dict[tuple[Any, ...], list[list[str]] | None] = {}
+        self._figure_problems: dict[tuple[Any, ...], list[Any]] = {}
 
     def close(self) -> None:
         self.document.close()
 
     def outline(self) -> list[OutlineEntry]:
-        return [
-            OutlineEntry(level=int(level), title=str(title), page=int(page))
-            for level, title, page, *_rest in self.document.get_toc(simple=True)
-            if int(page) >= 1
-        ]
+        if self._outline is None:
+            self._outline = [
+                OutlineEntry(level=int(level), title=str(title), page=int(page))
+                for level, title, page, *_rest in self.document.get_toc(simple=True)
+                if int(page) >= 1
+            ]
+        return list(self._outline)
 
     def inline_word_counts(self) -> Counter[str]:
         """The words each PDF line holds whole: the evidence for how the book writes a hyphenated word."""
@@ -98,7 +108,11 @@ class _PdfPages:
         return inline_word_counts(line for page in self.document for line in page.get_text("text").splitlines())
 
     def page_sizes(self) -> dict[int, tuple[float, float]]:
-        return {index + 1: (float(page.rect.width), float(page.rect.height)) for index, page in enumerate(self.document)}
+        if self._page_sizes is None:
+            self._page_sizes = {
+                index + 1: (float(page.rect.width), float(page.rect.height)) for index, page in enumerate(self.document)
+            }
+        return dict(self._page_sizes)
 
     def table_rows(self, page_number: int, bbox: Sequence[float]) -> list[list[str]] | None:
         """The ruled table at ``bbox`` read again with the current extractor (None: no data table there)."""
@@ -106,15 +120,23 @@ class _PdfPages:
 
         if not 1 <= page_number <= self.document.page_count:
             return None
-        return ruled_table_rows_at(self.document[page_number - 1], bbox)
+        key = (page_number, tuple(bbox))
+        if key not in self._table_rows:
+            self._table_rows[key] = ruled_table_rows_at(self.document[page_number - 1], bbox)
+        rows = self._table_rows[key]
+        return [list(row) for row in rows] if rows is not None else None
 
     def figure_problems(self, page_number: int, bbox: Sequence[float], furniture: list[Sequence[float]]) -> list[Any]:
         from book_agent.ingestion.pdf.figure_extent import figure_region_problems
 
         if not 1 <= page_number <= self.document.page_count:
             return []
-        page = self.document[page_number - 1]
-        return figure_region_problems(page, bbox, furniture_bboxes=[tuple(value) for value in furniture])
+        furniture_bboxes = [tuple(value) for value in furniture]
+        key = (page_number, tuple(bbox), tuple(furniture_bboxes))
+        if key not in self._figure_problems:
+            page = self.document[page_number - 1]
+            self._figure_problems[key] = figure_region_problems(page, bbox, furniture_bboxes=furniture_bboxes)
+        return list(self._figure_problems[key])
 
 
 def _is_academic_paper(document: Document) -> bool:

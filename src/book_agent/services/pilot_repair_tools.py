@@ -227,13 +227,45 @@ class PilotRepairToolbox:
             raise NotApplicable(f"no handler for {item.path.name}")
         self.memory_filled = []
         self._settled_cache = None
-        result = handler(item)
+        result = self._apply_batch(handler, item) if item.batch else handler(item)
         if self.memory_filled:
             filled = [entry["packet_id"] for entry in self.memory_filled]
             result.edited_packet_ids = list(dict.fromkeys([*result.edited_packet_ids, *filled]))
             result.packet_ids = [packet_id for packet_id in result.packet_ids if packet_id not in filled]
             result.params = {**result.params, "translation_memory": list(self.memory_filled)}
         return result
+
+    def _apply_batch(self, handler: Any, item: WorkItem) -> ToolResult:
+        """Each finding of a batch by itself, in its own savepoint: one that does not apply (or that
+        its tool refuses) is left out and the others stand. NotApplicable when none applies."""
+        merged = ToolResult(params={"batch": len(item.findings), "applied": [], "left_out": {}})
+        for finding in item.findings:
+            single = WorkItem(check_id=item.check_id, path=item.path, findings=[finding])
+            self._settled_cache = None
+            savepoint = self.session.begin_nested()
+            try:
+                result = handler(single)
+                self.session.flush()
+            except BudgetExhausted:
+                savepoint.rollback()
+                raise
+            except NotApplicable as exc:
+                savepoint.rollback()
+                merged.params["left_out"][str(finding["key"])] = f"not_applicable: {exc}"[:300]
+                continue
+            except Exception as exc:  # a tool's refusal (StructureEditRejected, EditRejected)
+                savepoint.rollback()
+                merged.params["left_out"][str(finding["key"])] = f"{type(exc).__name__}: {exc}"[:300]
+                continue
+            savepoint.commit()
+            merged.params["applied"].append({"key": str(finding["key"]), **result.params})
+            merged.block_ids = list(dict.fromkeys([*merged.block_ids, *result.block_ids]))
+            merged.packet_ids = list(dict.fromkeys([*merged.packet_ids, *result.packet_ids]))
+            merged.edited_packet_ids = list(dict.fromkeys([*merged.edited_packet_ids, *result.edited_packet_ids]))
+        if not merged.params["applied"]:
+            reasons = list(merged.params["left_out"].values())
+            raise NotApplicable(f"no finding of the batch applies ({len(reasons)}): {reasons[0] if reasons else ''}")
+        return merged
 
     # --- shared helpers --------------------------------------------------------------------
 

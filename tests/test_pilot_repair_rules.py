@@ -124,6 +124,34 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(rules.plan_work([finding("L7.stray_glyph", "g1")], set()), [])
 
 
+class BatchTests(unittest.TestCase):
+    """The AI Product book's 30 duplicated blocks were 30 attempts, each judged by a whole-book QA pass."""
+
+    def test_rule_paths_of_one_check_go_in_one_batch(self) -> None:
+        items = [finding("L1.duplicated_block", f"L1.duplicated_block:block:b{n}") for n in range(3)]
+        work = rules.batch_work(rules.plan_work(items, set()), set())
+        self.assertEqual([(item.path.name, len(item.findings), item.batch) for item in work], [("structure_edit.hide_duplicate_copy", 3, True)])
+
+    def test_a_lone_finding_model_paths_and_refused_batches_go_one_at_a_time(self) -> None:
+        lone = rules.batch_work(rules.plan_work([finding("L1.duplicated_block", "L1.duplicated_block:block:b1")], set()), set())
+        self.assertEqual([item.batch for item in lone], [False])
+        retranslations = [finding("L6.untranslated_sentence", f"u{n}", packet=f"p{n}") for n in range(2)]
+        self.assertEqual([item.batch for item in rules.batch_work(rules.plan_work(retranslations, set()), set())], [False, False])
+        items = [finding("L1.duplicated_block", f"L1.duplicated_block:block:b{n}") for n in range(2)]
+        refused = {("structure_edit.hide_duplicate_copy", "L1.duplicated_block")}
+        self.assertEqual([item.batch for item in rules.batch_work(rules.plan_work(items, set()), refused)], [False, False])
+
+    def test_a_batch_that_adds_a_finding_of_its_check_is_not_kept(self) -> None:
+        dup = lambda n: finding("L1.duplicated_block", f"L1.duplicated_block:block:b{n}")
+        before = rules.QaSnapshot.from_layers(layers(dup(1), dup(2), dup(3)))
+        # Two fixed, one new: the count went down, but one repair made a new copy.
+        after = rules.QaSnapshot.from_layers(layers(dup(3), dup(9)))
+        keys = [f"L1.duplicated_block:block:b{n}" for n in (1, 2, 3)]
+        self.assertTrue(rules.judge(before, after, keys, {"L1.duplicated_block"}).keep)
+        verdict = rules.judge(before, after, keys, {"L1.duplicated_block"}, batch=True)
+        self.assertEqual((verdict.keep, verdict.reason), (False, "worse:L1.duplicated_block"))
+
+
 class JudgeTests(unittest.TestCase):
     def test_kept_when_the_target_went_away_and_nothing_got_worse(self) -> None:
         before = rules.QaSnapshot.from_layers(layers(finding("L6.untranslated_sentence", "u1")))

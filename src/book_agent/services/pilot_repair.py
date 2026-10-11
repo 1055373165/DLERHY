@@ -58,6 +58,7 @@ from book_agent.domain.quality.pilot_repair import (
     QaSnapshot,
     Verdict,
     WorkItem,
+    batch_work,
     classify,
     escalation_question,
     findings_of,
@@ -158,6 +159,9 @@ class PilotRepairService:
         book = scope == SCOPE_BOOK
         self.max_seconds = max_seconds if max_seconds is not None else (BOOK_MAX_SECONDS if book else MAX_SECONDS)
         self.max_attempts = max_attempts if max_attempts is not None else (BOOK_MAX_ATTEMPTS if book else MAX_ATTEMPTS)
+        self._pages = None
+        # The book's misaligned targets after the last kept attempt (None: count them again).
+        self._misaligned: int | None = None
 
     # --- entry points ---------------------------------------------------------------------------
 
@@ -241,15 +245,18 @@ class PilotRepairService:
         )
         ctx.spacing_convention = spacing_convention(self.session, ctx.chapter_ids)
         pages = self._open_pdf(document_id)
+        # Every QA pass reads the PDF through it: its tables and figures are read once per repair.
+        self._pages = pages
+        self._misaligned = None
         if pages is not None:
             ctx.figure_problems = pages.figure_problems
         toolbox = PilotRepairToolbox(ctx)
         qa = PilotQualityService(self.session)
         try:
-            layers, _source = qa.evaluate(document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope)
+            layers, _source = qa.evaluate(document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope, pages=pages)
             # The reading copy on disk, judged now (the before report may predate a check): a copy the
             # export would write differently (literal emphasis markers) is written again at the end.
-            file_layers, file_source = qa.evaluate(document_id, ctx.chapter_ids, use_export_file=True, scope=self.scope)
+            file_layers, file_source = qa.evaluate(document_id, ctx.chapter_ids, use_export_file=True, scope=self.scope, pages=pages)
             stale_copy = file_source == "file" and needs_reexport(file_layers)
             initial = repairable_findings(layers)
             classes = self._classes(initial)
@@ -259,6 +266,8 @@ class PilotRepairService:
             self.session.commit()
 
             tried: set[tuple[str, str]] = set()
+            # (path, check) batches not kept: their findings are tried one at a time.
+            refused_batches: set[tuple[str, str]] = set()
             attempts = 0
             kept_any = False
             stop_reason: str | None = None
@@ -269,7 +278,7 @@ class PilotRepairService:
                 kept_in_round = 0
                 while True:
                     current = [finding for finding in repairable_findings(layers) if finding["key"] in round_keys]
-                    work = plan_work(current, tried)
+                    work = batch_work(plan_work(current, tried), refused_batches)
                     if not work:
                         break
                     if time.monotonic() - started > self.max_seconds:
@@ -279,8 +288,9 @@ class PilotRepairService:
                         stop_reason = "attempts"
                         break
                     item = work[0]
-                    for finding in item.findings:
-                        tried.add((finding["key"], item.path.name))
+                    if not item.batch:
+                        for finding in item.findings:
+                            tried.add((finding["key"], item.path.name))
                     attempts += 1
                     classification = classify(item.findings[0], self.ledger, document_id=document_id)
                     state = classes.setdefault(
@@ -291,6 +301,13 @@ class PilotRepairService:
                         state.ticket_id = self._ticket(repair, state, item.findings).id
                         tickets[state.issue_class] = state.ticket_id
                     result = self._attempt(repair, toolbox, qa, ctx, item, classification, state, layers, round_no, attempts)
+                    if item.batch:
+                        if result.outcome in {"kept", "skipped"}:
+                            # Kept, or applicable to none: one by one would do the same.
+                            for finding in item.findings:
+                                tried.add((finding["key"], item.path.name))
+                        else:
+                            refused_batches.add((item.path.name, item.check_id))
                     if result.outcome == "kept":
                         layers = result.layers or layers
                         kept_in_round += 1
@@ -417,7 +434,8 @@ class PilotRepairService:
         self.session.commit()
         self._begin_write()
         before = QaSnapshot.from_layers(layers)
-        misaligned_before = alignment_anomalies(self.session, ctx.chapter_ids)
+        # Only a kept attempt changes the book between attempts: its count after is this one's before.
+        misaligned_before = self._misaligned if self._misaligned is not None else alignment_anomalies(self.session, ctx.chapter_ids)
         chapter_ids_before = list(ctx.chapter_ids)
         spent_before = ctx.budget.spent_usd
         result: ToolResult | None = None
@@ -428,9 +446,9 @@ class PilotRepairService:
         try:
             result = toolbox.apply(item)
             self.session.flush()
-            new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope)
+            new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope, pages=self._pages)
             after = QaSnapshot.from_layers(new_layers)
-            verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings})
+            verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings}, batch=item.batch)
             # Reverted only for the retranslation's own flake (a line back in English, a leaked note):
             # retranslate those packets once more before giving up on a good repair.
             flaky = self_inflicted_packets(verdict, before, new_layers, result.packet_ids)
@@ -438,9 +456,9 @@ class PilotRepairService:
                 toolbox.retranslate(flaky, [RETRY_HINT])
                 self.session.flush()
                 result.params = {**result.params, "retried_packet_ids": flaky, "retry_reason": verdict.reason}
-                new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope)
+                new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope, pages=self._pages)
                 after = QaSnapshot.from_layers(new_layers)
-                verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings})
+                verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings}, batch=item.batch)
             if item.path.restores_content and restored_content_followups(verdict, before, new_layers, result.packet_ids):
                 # The restored content stays; its fresh translation's problems are the next round's work.
                 result.params = {**result.params, "kept_despite": verdict.reason}
@@ -463,7 +481,9 @@ class PilotRepairService:
         calls = [dict(event) for event in self.session.info.get(PENDING_LLM_EVENTS) or []]
         if outcome.outcome == "kept":
             savepoint.commit()
+            self._misaligned = misaligned_after
         else:
+            self._misaligned = misaligned_before
             # Paid for all the same: written again here, in this transaction, instead of by the
             # rollback hook on another connection.
             self.session.info.pop(PENDING_LLM_EVENTS, None)
