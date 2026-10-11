@@ -52,7 +52,9 @@
     {
       "id": "build-an-ai-agent",
       "path": "/Volumes/touch/Build an AI Agent Agents that reason, plan, and act autonomously (From Scratch) (Jungjun Hur, Younghee Song) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
-      "alt_paths": ["~/Downloads/ai 书籍/Build an AI Agent Agents that reason, plan, and act autonomously (From Scratch) (Jungjun Hur, Younghee Song) (z-library.sk, 1lib.sk, z-lib.sk).pdf"],
+      "alt_paths": [
+        "~/Downloads/ai 书籍/Build an AI Agent Agents that reason, plan, and act autonomously (From Scratch) (Jungjun Hur, Younghee Song) (z-library.sk, 1lib.sk, z-lib.sk).pdf"
+      ],
       "publisher": "Manning",
       "source_type": "pdf_text",
       "section_count": 21,
@@ -154,6 +156,59 @@
         "prose_inside_figures": "none since fix/pdf-figure-regions (4 before it: p21, p41, p273).",
         "duplicated_labels": "4 figures whose labels repeat in the text beside them: not examined yet.",
         "line_break_hyphens": "5 words split at a line-end hyphen ('comprehen- sive' p178, 'rec- ommendations' p274) and 'eff ectively' p368."
+      }
+    },
+    {
+      "id": "how-llms-work",
+      "path": "/Volumes/touch/How Large Language Models Work (Edward Raff, Drew Farris, Stella Biderman) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "alt_paths": [
+        "~/Downloads/ai 书籍/How Large Language Models Work (Edward Raff, Drew Farris, Stella Biderman) (z-library.sk, 1lib.sk, z-lib.sk).pdf"
+      ],
+      "publisher": "Manning",
+      "source_type": "pdf_text",
+      "section_count": 19,
+      "chapter_titles": [
+        "Front Matter",
+        "brief contents",
+        "contents",
+        "preface",
+        "acknowledgments",
+        "about this book",
+        "about the authors",
+        "about the cover illustration",
+        "1 Big picture: What are LLMs?",
+        "2 Tokenizers: How large language models see the world",
+        "3 Transformers: How inputs become outputs",
+        "4 How LLMs learn",
+        "5 How do we constrain the behavior of LLMs?",
+        "6 Beyond natural language processing",
+        "7 Misconceptions, limits, and eminent abilities of LLMs",
+        "8 Designing solutions with large language models",
+        "9 Ethics of building and using LLMs",
+        "References",
+        "index"
+      ],
+      "max_counts": {
+        "chapters_vs_outline": 0,
+        "chapter_titles": 0,
+        "front_matter_sections": 0,
+        "stray_glyphs": 0,
+        "pseudo_headings": 0,
+        "line_break_hyphens": 2,
+        "figure_regions": 1,
+        "image_fragments": 0,
+        "caption_folds": 0,
+        "duplicated_labels": 2,
+        "headings_as_text": 3,
+        "figure_residue": 1
+      },
+      "known_residuals": {
+        "chapters": "Recorded after fix/flat-outline-backmatter-chapters (2026-10-12): 19 sections, one per bookmark plus the front matter. Before it chapter 9 ran on through References and the index to p200, and about this book / about the authors / about the cover illustration / brief contents / contents were folded into their neighbours.",
+        "figure_regions": "p107: Listing 5.1 is an annotated code listing (notes beside the code, joined by arrows); its arrows make the upper half a figure that cuts the listing. Annotated listings are not modelled yet.",
+        "line_break_hyphens": "p190: URLs in the references broken as 'ht-tps'.",
+        "headings_as_text": "3 (p33, p53 contents-like lines; p166 9.1.2).",
+        "duplicated_labels": "2 on p132: the labels of a diagram (LLM properties and weaknesses) also kept as body text.",
+        "figure_residue": "p2: the text of a figure on an advertisement page kept as a table (| | 1 Split document ...)."
       }
     }
   ]
