@@ -241,6 +241,36 @@ class PdfStructureRefreshNewBlockTests(PdfStructureRefreshStaleSentenceTests):
         self.assertEqual(after["After some brainstorming, a couple of ideas emerge."][2], "pdf://page/1#p1-b9")
 
 
+class PdfStructureRefreshOrderTests(PdfStructureRefreshStaleSentenceTests):
+    # An older parse read the pitfalls box before the section it ends (Art of AI chapter 2).
+    ORIGINAL = [
+        ("p1-b1", "Emotional benefits come first in the section."),
+        ("p1-b2", "COMMON PITFALLS Let us characterize some bad candidates."),
+        ("p1-b3", "AI can create more human-like interactions on an emotional level."),
+    ]
+
+    test_changed_text_marks_sentences_stale = None
+    test_whitespace_only_change_keeps_sentences_current = None
+    test_a_paragraph_read_again_as_a_running_head_is_segmented_again = None
+
+    def test_blocks_take_the_new_parse_s_order_and_keep_their_ids(self) -> None:
+        from book_agent.domain.models import Block
+
+        with self.session_factory() as session:
+            before = {block.source_anchor.split("#")[-1]: block.id for block in session.query(Block)}
+        artifacts, _block = self._refresh([self.ORIGINAL[0], self.ORIGINAL[2], self.ORIGINAL[1]])
+        with self.session_factory() as session:
+            ordered = sorted(session.query(Block).all(), key=lambda block: block.ordinal)
+        self.assertEqual([block.source_anchor.split("#")[-1] for block in ordered], ["p1-b1", "p1-b3", "p1-b2"])
+        self.assertEqual({block.source_anchor.split("#")[-1]: block.id for block in ordered}, before)
+        self.assertEqual(len(artifacts.reordered_chapter_ids), 1)
+        self.assertEqual(artifacts.stale_sentence_block_ids, [])
+
+        # Read again in the same order, nothing moves.
+        artifacts, _block = self._refresh([self.ORIGINAL[0], self.ORIGINAL[2], self.ORIGINAL[1]])
+        self.assertEqual(artifacts.reordered_chapter_ids, [])
+
+
 class PdfStructureRefreshFigureTests(PdfStructureRefreshStaleSentenceTests):
     # The old parse took a sidebar's tinted panel for a figure.
     BOXES = {"p1-fig9": [100, 100, 500, 300], "p1-fig12": [100, 400, 500, 600]}
