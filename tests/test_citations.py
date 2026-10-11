@@ -19,6 +19,11 @@ ENTRIES = (
     "3 Guo, Daya et al. 2025. “DeepSeek-R1 incentivizes reasoning in LLMs through reinforcement learning.” *Nature* 645: 633–638.",
     "[12] Vaswani, Ashish et al. 2017. \"Attention Is All You Need.\" NeurIPS.",
     "“Fully Autonomous AI Agents Should Not Be Developed.” *arXiv, *2502.02649.",
+    # Art of AI: IEEE author lists, bulleted entries, a letter note marker, an author line on its own.
+    "[1] T. Mikolov, K. Chen, G. Corrado, and J. Dean, “Efficient Estimation of Word Representations in Vector Space,” arXiv, 2013.",
+    "• S. Russell and P. Norvig, Artificial Intelligence: A Modern Approach, 4th ed. Pearson, 2020.",
+    "aDastin, Jeffrey. “Amazon Scraps Secret AI Recruiting Tool That Showed Bias Against Women.” Reuters, 2018, https://mng.bz/rZmZ.",
+    "• J. Kirkpatrick, R. Pascanu, N. Rabinowitz, J. Veness, G. Desjardins, A. A. Rusu, K.",
 )
 PROSE = (
     "Gabriel et al. (2024) showed that agents in arXiv papers are risky.",
@@ -26,6 +31,8 @@ PROSE = (
     "However, Python and Java are both used in 2020 by many teams.",
     "The model was asked “What is the weather in Paris today?” and answered.",
     "As we discussed in Chapter 1, “agents” are systems that act.",
+    "Chen, Zaharia, and Zou showed that cascades cut costs in 2023.",
+    "• A. Users want answers, and the system gives them in 2024 at scale.",
 )
 
 

@@ -2665,6 +2665,29 @@ def check_emphasis_markers(inputs: PilotQaInputs) -> CheckRun:
     return run
 
 
+# A work's title in Chinese title marks stays as the source writes it (《The Functional Art》).
+_CJK_TITLE_MARKS_RE = re.compile(r"《[^《》]{1,300}》|〈[^〈〉]{1,300}〉")
+_QUOTED_SPAN_RE = re.compile(r"“([^“”]{2,400})”|\"([^\"]{2,400})\"")
+
+
+def _english_left_in_translation(target: str, source: str) -> list[str]:
+    """The ordinary English words of a translation, what untranslated prose is made of.
+
+    Left out, as the book keeps them in English by convention: text in Chinese title marks, quoted
+    text copied verbatim from the source (a prompt example, a sample input), and capitalised names
+    and acronyms (NVIDIA A100, SHAP, Google Dataset Search). What remains is lowercase words."""
+    text = _without_code_and_urls(without_titles(target))
+    text = _CJK_TITLE_MARKS_RE.sub(" ", text)
+    normalized_source = " ".join((source or "").split())
+
+    def copied(match: re.Match[str]) -> str:
+        inner = match.group(1) if match.group(1) is not None else match.group(2)
+        return " " if " ".join(inner.split()) in normalized_source else match.group(0)
+
+    text = _QUOTED_SPAN_RE.sub(copied, text)
+    return [word for word in english_words(text) if word.islower() and len(word) > 1]
+
+
 def check_purity(inputs: PilotQaInputs) -> list[CheckRun]:
     leaked = CheckRun("L7.leaked_marker")
     glyphs = CheckRun("L7.stray_glyph")
@@ -2706,6 +2729,8 @@ def check_purity(inputs: PilotQaInputs) -> list[CheckRun]:
             and block.block_id not in cited
             and len(english_words(reader)) >= 6
             and not cjk_count(reader)
+            # A name spaced out letter by letter ("M A N N I N G") is no paragraph.
+            and any(len(word) > 1 for word in english_words(reader))
         ):
             # The reader sees a whole English paragraph: program output or code parsed as prose, a
             # figure's text left in the body, a stale fragment of an older parse.
@@ -2724,7 +2749,8 @@ def check_purity(inputs: PilotQaInputs) -> list[CheckRun]:
         # A quoted English title stays in English by the book's convention: not untranslated words.
         plain = _without_code_and_urls(without_titles(target))
         words = english_words(plain)
-        if block.block_id not in cited and len(words) >= 6 and cjk_count(plain) * 4 < len(" ".join(words)):
+        left = _english_left_in_translation(target, block.source_text or "")
+        if block.block_id not in cited and len(left) >= 6 and cjk_count(plain) * 4 < len(" ".join(left)):
             english.findings.append(_block_finding("L7.untranslated_prose", block, "这段的“译文”还是英文"))
             continue
         run = None if block.block_id in cited else _ENGLISH_RUN_RE.search(plain.replace("“", " ").replace("”", " "))
