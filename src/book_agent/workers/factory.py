@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.orm import Session, sessionmaker
 
 from book_agent.core.config import Settings
+from book_agent.translation.contracts import REPLY_FORMATS
 from book_agent.workers.providers import OpenAICompatibleTranslationClient, ProviderNotConfigured
 from book_agent.workers.translator import (
     EchoTranslationWorker,
@@ -69,14 +70,18 @@ def _openai_compatible_worker(
         request_overrides=overrides,
         structured_output_mode=settings.translation_openai_structured_output_mode,
     )
+    reply_format = settings.translation_reply_format if settings.translation_reply_format in REPLY_FORMATS else "full"
     return LLMTranslationWorker(
         client,
         model_name=model_name,
-        prompt_version=prompt_version,
+        # A run says which reply format translated it (docs/specs/cost-governance/SPEC.md, M1).
+        prompt_version=f"{prompt_version}+slim-reply" if reply_format == "slim" else prompt_version,
         prompt_profile=settings.translation_prompt_profile,
+        reply_format=reply_format,
         runtime_config={
             "provider": "openai_compatible",
             "prompt_profile": settings.translation_prompt_profile,
+            "reply_format": reply_format,
             "base_url": base_url,
             "timeout_seconds": timeout_seconds,
             "max_retries": max_retries,

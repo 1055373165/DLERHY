@@ -482,6 +482,48 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
         self.assertLess(first_index, second_index)
         self.assertLess(second_index, third_index)
 
+    def test_a_packet_translated_in_the_slim_reply_format_aligns_every_sentence(self) -> None:
+        """docs/specs/cost-governance M1: the model leaves out the packet id and the alignment."""
+        import json
+        import re
+
+        def segment(temp_id: str, alias: str, text: str) -> dict:
+            return {"temp_id": temp_id, "text_zh": text, "segment_type": "sentence", "source_sentence_ids": [alias], "confidence": 0.9}
+
+        class AliasEchoTransport:
+            def __init__(self) -> None:
+                self.calls: list[dict] = []
+
+            def post_json(self, *, url, headers, payload, timeout_seconds):
+                self.calls.append(payload)
+                aliases = list(dict.fromkeys(re.findall(r"\bS\d+\b", payload["messages"][-1]["content"]))) or ["S1"]
+                reply = {
+                    "target_segments": [segment(f"T{index}", alias, f"第{index}句") for index, alias in enumerate(aliases, start=1)],
+                    "low_confidence_flags": [],
+                    "notes": [],
+                }
+                return {
+                    "id": "r1",
+                    "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120},
+                    "choices": [{"message": {"content": json.dumps(reply, ensure_ascii=False)}}],
+                }
+
+        _, packet_ids = self._bootstrap_to_db()
+        transport = AliasEchoTransport()
+        client = OpenAICompatibleTranslationClient(api_key="k", base_url="https://api.deepseek.com", timeout_seconds=30, transport=transport)
+        worker = LLMTranslationWorker(client, model_name="deepseek-chat", prompt_version="p+slim-reply", reply_format="slim")
+        with self.session_factory() as session:
+            artifacts = TranslationService(TranslationRepository(session), worker=worker).execute_packet(packet_ids[1])
+            session.commit()
+            sentence_ids = {sentence.id for sentence in TranslationRepository(session).load_packet_bundle(packet_ids[1]).current_sentences}
+            edges = session.scalars(
+                select(AlignmentEdge).where(AlignmentEdge.target_segment_id.in_([segment.id for segment in artifacts.target_segments]))
+            ).all()
+
+        self.assertEqual({edge.sentence_id for edge in edges}, sentence_ids)
+        self.assertNotIn("packet_id must equal", transport.calls[0]["messages"][-1]["content"])
+        self.assertNotIn("alignment_suggestions", json.dumps(transport.calls[0].get("response_format", {})))
+
     def test_translation_service_dedupes_duplicate_alignment_edges_from_worker_output(self) -> None:
         _, packet_ids = self._bootstrap_to_db()
         worker = LLMTranslationWorker(
