@@ -47,6 +47,7 @@ from book_agent.domain.enums import (
     IssueStatus,
     MemoryScopeType,
     MemoryStatus,
+    PacketStatus,
     ParseRevisionStatus,
     SnapshotType,
     SourceType,
@@ -426,6 +427,44 @@ class ChapterReparseService:
             }
         document.metadata_json = {**(document.metadata_json or {}), "pdf_page_evidence": merged}
 
+    def rebuild_chapter(self, document_id: str, chapter_id: str, *, actor_id: str = ACTOR_ID) -> ChapterReparse:
+        """Read one chapter again with the current parser and replace its structure, translated or
+        not: its old translations stay on the books (runs kept, packets invalidated) and its new
+        packets wait for translation. For a chapter an old parse read so badly that matching blocks
+        cannot save it (Art of AI's index, its two columns interleaved into every block)."""
+        document = self.session.get(Document, document_id)
+        if document is None:
+            raise LookupError(f"document not found: {document_id}")
+        if document.source_type not in PDF_SOURCE_TYPES:
+            raise ReparseRefused("只有 PDF 书需要按新的解析规则重新读取。")
+        parsed = self._parse(document)
+        chapters = list(self.session.scalars(select(Chapter).where(Chapter.document_id == document_id).order_by(Chapter.ordinal)).all())
+        self._check_boundaries(chapters, parsed.chapters)
+        chapter = next((item for item in chapters if item.id == chapter_id), None)
+        if chapter is None:
+            raise LookupError(f"chapter not found: {chapter_id}")
+        old_blocks = self._active_blocks(chapter.id)
+        new_blocks = sorted((block for block in parsed.blocks if block.chapter_id == chapter.id), key=lambda block: block.ordinal)
+        entry = ChapterReparse(
+            chapter_id=chapter.id,
+            ordinal=chapter.ordinal,
+            title=chapter.title_src,
+            outcome="refreshed",
+            before=block_stats(old_blocks),
+            after=block_stats(new_blocks),
+            old_block_count=len(old_blocks),
+            new_block_count=len(new_blocks),
+        )
+        now = _utcnow()
+        revision = self._open_revision(document, actor_id=actor_id, now=now)
+        images_by_block = {image.block_id: image for image in parsed.document_images}
+        entry.new_packet_count, record = self._replace_chapter(document, chapter, old_blocks, new_blocks, images_by_block, revision, now)
+        self._sync_layout_evidence(document, chapters, parsed, {chapter.id})
+        revision.metadata_json = {**(revision.metadata_json or {}), "chapters": {chapter.id: record}, "rebuilt_translated_chapter": True}
+        document.updated_at = now
+        self.session.flush()
+        return entry
+
     def _check_boundaries(self, chapters: list[Chapter], parsed_chapters: list[Chapter]) -> None:
         if len(chapters) != len(parsed_chapters):
             raise ChapterBoundaryMismatch(
@@ -493,9 +532,22 @@ class ChapterReparseService:
             sentence.updated_at = now
         old_packet_ids = list(self.session.scalars(select(TranslationPacket.id).where(TranslationPacket.chapter_id == chapter.id)).all())
         self._settle_issues(chapter.id, revision)
-        if old_packet_ids:
-            self.session.execute(delete(PacketSentenceMap).where(PacketSentenceMap.packet_id.in_(old_packet_ids)))
-            self.session.execute(delete(TranslationPacket).where(TranslationPacket.id.in_(old_packet_ids)))
+        # A translated packet keeps its runs (the translation history and its cost) and is only
+        # invalidated; untranslated ones go.
+        translated_packet_ids = set(
+            self.session.scalars(
+                select(TranslationRun.packet_id).where(TranslationRun.packet_id.in_(old_packet_ids or ["-"]))
+            ).all()
+        )
+        untranslated_packet_ids = [packet_id for packet_id in old_packet_ids if packet_id not in translated_packet_ids]
+        if untranslated_packet_ids:
+            self.session.execute(delete(PacketSentenceMap).where(PacketSentenceMap.packet_id.in_(untranslated_packet_ids)))
+            self.session.execute(delete(TranslationPacket).where(TranslationPacket.id.in_(untranslated_packet_ids)))
+        for packet in self.session.scalars(
+            select(TranslationPacket).where(TranslationPacket.id.in_(list(translated_packet_ids) or ["-"]))
+        ).all():
+            packet.status = PacketStatus.INVALIDATED
+            packet.updated_at = now
         self.session.flush()
 
         # 2. The new blocks, under ids of this revision (the parser's ids are the old blocks').
