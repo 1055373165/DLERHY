@@ -233,6 +233,7 @@ class ParseRevisionForkService:
                 if orphan is not None:
                     orphan.status = PacketStatus.INVALIDATED
                     orphan.updated_at = now
+                    self.supersede_translations_owned_elsewhere(packet_id, now=now)
                     result.invalidated_packet_ids.append(packet_id)
             for packet in rebuilt:
                 carried = self._carry_translation(
@@ -543,6 +544,40 @@ class ParseRevisionForkService:
                 packet.updated_at = now
                 invalidated.append(packet.id)
         return invalidated
+
+    def supersede_translations_owned_elsewhere(self, packet_id: str, *, now: datetime) -> list[str]:
+        """An invalidated packet's segments whose sentences a live packet translates now: superseded.
+
+        A packet whose range a reorder turned inside out is invalidated as empty although its blocks
+        live on in another packet. Its old translation then competed with the new one: the export
+        shows the newer, and the review flags the other as an orphan (Art of AI chapter 2's figure
+        2.10 caption). A segment that is still its sentences' only translation stays.
+        """
+        owned = set(
+            self.session.scalars(
+                select(PacketSentenceMap.sentence_id)
+                .join(TranslationPacket, TranslationPacket.id == PacketSentenceMap.packet_id)
+                .where(
+                    TranslationPacket.id != packet_id,
+                    TranslationPacket.status != PacketStatus.INVALIDATED,
+                    PacketSentenceMap.role == PacketSentenceRole.CURRENT,
+                )
+            ).all()
+        )
+        superseded: list[str] = []
+        for segment in self.session.scalars(
+            select(TargetSegment)
+            .join(TranslationRun, TranslationRun.id == TargetSegment.translation_run_id)
+            .where(TranslationRun.packet_id == packet_id, TargetSegment.final_status != TargetSegmentStatus.SUPERSEDED)
+        ).all():
+            sentence_ids = set(
+                self.session.scalars(select(AlignmentEdge.sentence_id).where(AlignmentEdge.target_segment_id == segment.id)).all()
+            )
+            if sentence_ids and sentence_ids <= owned:
+                segment.final_status = TargetSegmentStatus.SUPERSEDED
+                segment.updated_at = now
+                superseded.append(segment.id)
+        return superseded
 
     def collapse_document_duplicates(self, document_id: str) -> list[str]:
         """Heal a book whose earlier merges left duplicate packets (see ``collapse_duplicate_packets``)."""
