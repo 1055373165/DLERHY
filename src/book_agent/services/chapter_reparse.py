@@ -521,6 +521,19 @@ class ChapterReparseService:
             block.ordinal = parked_base + block.ordinal
             block.status = ArtifactStatus.INVALIDATED
             block.updated_at = now
+        # Blocks invalidated earlier but left at their ordinals (a structure refresh does not park
+        # them) would collide with the new blocks' ordinals.
+        for block in self.session.scalars(
+            select(Block).where(
+                Block.chapter_id == chapter.id,
+                Block.status != ArtifactStatus.ACTIVE,
+                Block.ordinal < 1_000_000,
+            )
+        ).all():
+            if block.id in old_ids:
+                continue
+            block.ordinal = parked_base + 50_000 + block.ordinal
+            block.updated_at = now
         self.session.flush()
         old_sentence_ids = list(
             self.session.scalars(

@@ -138,6 +138,11 @@ class ChapterReparseTests(unittest.TestCase):
             runs_before = session.scalar(select(func.count(TranslationRun.id)).where(TranslationRun.packet_id.in_(old_packets)))
             self.assertGreater(runs_before, 0)
 
+            # A block an earlier refresh invalidated where it stood (not parked) must not block the rebuild.
+            stray = self._active(session, chapter_id)[0]
+            stray.status = ArtifactStatus.INVALIDATED
+            session.flush()
+
             entry = ChapterReparseService(session).rebuild_chapter(self.bench.document_id, chapter_id)
             session.commit()
 
