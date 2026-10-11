@@ -209,6 +209,15 @@ class PdfStructureRefreshService:
             page_end = source_span.get("source_page_end")
             if isinstance(page_start, int) and isinstance(page_end, int) and page_start == page_end:
                 refreshed_blocks_by_page.setdefault(page_start, []).append(refreshed_block)
+        # Every page each refreshed block touches: a paragraph run over a page break counts on both.
+        refreshed_blocks_on_page: dict[int, list[Any]] = {}
+        for refreshed_block in parse_artifacts.blocks:
+            source_span = dict(refreshed_block.source_span_json or {})
+            page_start = source_span.get("source_page_start")
+            page_end = source_span.get("source_page_end", page_start)
+            if isinstance(page_start, int) and isinstance(page_end, int):
+                for page in range(page_start, page_end + 1):
+                    refreshed_blocks_on_page.setdefault(page, []).append(refreshed_block)
         refreshed_block_by_id = {block.id: block for block in parse_artifacts.blocks}
         refreshed_images_by_source_anchor = {}
         for image in parse_artifacts.document_images:
@@ -314,7 +323,9 @@ class PdfStructureRefreshService:
         for source_anchor, existing_block in existing_block_by_source_anchor.items():
             if source_anchor in refreshed_blocks_by_source_anchor:
                 continue
-            if not self._should_invalidate_unmatched_block(existing_block, refreshed_blocks_by_page):
+            if not self._should_invalidate_unmatched_block(
+                existing_block, refreshed_blocks_by_page, refreshed_blocks_on_page=refreshed_blocks_on_page
+            ):
                 continue
             existing_block.status = ArtifactStatus.INVALIDATED
             existing_block.source_span_json = {
@@ -844,22 +855,29 @@ class PdfStructureRefreshService:
         self,
         existing_block: Block,
         refreshed_blocks_by_page: dict[int, list[Any]],
+        *,
+        refreshed_blocks_on_page: dict[int, list[Any]] | None = None,
     ) -> bool:
         source_span = dict(existing_block.source_span_json or {})
         page_start = source_span.get("source_page_start")
         page_end = source_span.get("source_page_end")
-        if not isinstance(page_start, int) or not isinstance(page_end, int) or page_start != page_end:
+        if not isinstance(page_start, int) or not isinstance(page_end, int):
+            return False
+
+        # Text the new parse holds in another block of its pages: an old parse's stray copy (Art of
+        # AI chapter 2 had thirty paragraphs twice, the copy under the next anchor, some run over a
+        # page break) or a fragment the new parse joined. Dropping it loses nothing; text found
+        # nowhere else is kept.
+        own_text = _collapse_whitespace(existing_block.source_text)
+        if own_text and existing_block.block_type not in {BlockType.FIGURE, BlockType.IMAGE}:
+            on_pages = refreshed_blocks_on_page if refreshed_blocks_on_page is not None else refreshed_blocks_by_page
+            for page in range(page_start, page_end + 1):
+                if any(own_text in _collapse_whitespace(block.source_text) for block in on_pages.get(page, [])):
+                    return True
+        if page_start != page_end:
             return False
 
         refreshed_page_blocks = refreshed_blocks_by_page.get(page_start, [])
-        # Text the new parse holds in another block of the page: an old parse's stray copy (Art of AI
-        # chapter 2 had thirty paragraphs twice, the copy under the next anchor) or a fragment the
-        # new parse joined. Dropping it loses nothing; text found nowhere else is kept.
-        own_text = _collapse_whitespace(existing_block.source_text)
-        if own_text and existing_block.block_type not in {BlockType.FIGURE, BlockType.IMAGE} and any(
-            own_text in _collapse_whitespace(refreshed_block.source_text) for refreshed_block in refreshed_page_blocks
-        ):
-            return True
         if existing_block.block_type in {BlockType.FIGURE, BlockType.IMAGE}:
             # A figure the new parse no longer finds on a page it read (a sidebar's tinted panel
             # taken for a figure, its text now paragraphs of their own) would show the text twice.

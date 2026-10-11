@@ -221,6 +221,34 @@ class PdfStructureRefreshNewBlockTests(PdfStructureRefreshStaleSentenceTests):
         self.assertEqual(status["p1-b4"], ArtifactStatus.INVALIDATED)
         self.assertEqual(status["p1-b3"], ArtifactStatus.ACTIVE)
 
+    def test_a_stray_copy_run_over_a_page_break_is_dropped(self) -> None:
+        """Art of AI p54-55: the copy of a paragraph that continues on the next page stayed."""
+        from book_agent.domain.enums import ArtifactStatus
+        from book_agent.domain.models import Block
+
+        with self.session_factory() as session:
+            first = session.query(Block).first()
+            session.add(
+                Block(
+                    id="5f0b1e8c-0000-4000-8000-00000000c0b8",
+                    chapter_id=first.chapter_id,
+                    ordinal=9,
+                    block_type=BlockType.PARAGRAPH,
+                    source_text="After some brainstorming, a couple of ideas emerge.",
+                    normalized_text="After some brainstorming, a couple of ideas emerge.",
+                    source_anchor="pdf://page/1#p1-b5",
+                    source_span_json={"source_page_start": 1, "source_page_end": 2},
+                    protected_policy=first.protected_policy,
+                    status=ArtifactStatus.ACTIVE,
+                )
+            )
+            session.commit()
+        self._refresh([("p1-b1", "5 A retrospective"), ("p1-b3", "After some brainstorming, a couple of ideas emerge.")])
+        with self.session_factory() as session:
+            status = {block.source_anchor.split("#")[-1]: block.status for block in session.query(Block)}
+        self.assertEqual(status["p1-b5"], ArtifactStatus.INVALIDATED)
+        self.assertEqual(status["p1-b3"], ArtifactStatus.ACTIVE)
+
     def test_blocks_renumbered_by_the_new_parse_keep_their_ids(self) -> None:
         """A parser change earlier in the book shifts every anchor after it: the blocks match by text."""
         from book_agent.domain.models import Block
