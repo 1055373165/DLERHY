@@ -831,6 +831,12 @@ class PdfStructureRecoveryService:
                 *[("image", block) for block in ordered_image_blocks],
             ]
 
+        top_down = sorted(page.blocks, key=lambda block: (round(block.bbox[1], 2), round(block.bbox[0], 2)))
+        if [id(block) for block in ordered_text_blocks] != [id(block) for block in top_down]:
+            # The page was read column by column (``_ordered_page_blocks``). Sorting text and
+            # pictures together by height again would interleave the columns line by line (Art of
+            # AI's two-column index read "BART (Bidirectional and Auto-Regressive overview of 115").
+            return self._column_entries_with_images(ordered_text_blocks, ordered_image_blocks)
         combined_entries: list[tuple[str, PdfTextBlock | PdfImageBlock]] = [
             *[("text", block) for block in ordered_text_blocks],
             *[("image", block) for block in ordered_image_blocks],
@@ -844,6 +850,35 @@ class PdfStructureRecoveryService:
             )
         )
         return combined_entries
+
+    @staticmethod
+    def _column_entries_with_images(
+        text_blocks: list[PdfTextBlock],
+        image_blocks: list[PdfImageBlock],
+    ) -> list[tuple[str, PdfTextBlock | PdfImageBlock]]:
+        """Column-ordered text with each picture after the last text block of its column above it
+        (or before the first one below it), so pictures keep their place in their column."""
+        entries: list[tuple[str, PdfTextBlock | PdfImageBlock]] = [("text", block) for block in text_blocks]
+
+        def same_column(text: Any, image: PdfImageBlock) -> bool:
+            return min(text.bbox[2], image.bbox[2]) - max(text.bbox[0], image.bbox[0]) > 0
+
+        for image in image_blocks:
+            above = [
+                index
+                for index, (kind, block) in enumerate(entries)
+                if kind == "text" and same_column(block, image) and block.bbox[3] <= image.bbox[1] + 2
+            ]
+            if above:
+                entries.insert(above[-1] + 1, ("image", image))
+                continue
+            below = [
+                index
+                for index, (kind, block) in enumerate(entries)
+                if kind == "text" and same_column(block, image) and block.bbox[1] >= image.bbox[1] - 2
+            ]
+            entries.insert(below[0] if below else len(entries), ("image", image))
+        return entries
 
     def _ordered_page_image_blocks(self, page: PdfPage) -> list[PdfImageBlock]:
         return sorted(page.image_blocks, key=lambda block: (round(block.bbox[1], 2), round(block.bbox[0], 2)))
@@ -868,75 +903,102 @@ class PdfStructureRecoveryService:
         page: PdfPage,
         ordered_blocks: list[PdfTextBlock],
     ) -> list[PdfTextBlock] | None:
+        """The page's blocks column by column, left to right, or None when it cannot be grouped
+        cleanly. Narrow blocks are grouped into columns by their left edge (any number of columns:
+        a newsletter's three, an index's two); full-width blocks above every column come first and
+        below every column last; a full-width block between column rows means no clean grouping."""
+        # A figure's labels sit in a grid of their own (Art of AI figure 3.5): part of the picture,
+        # not columns of the page.
         substantive_blocks = [
             block
             for block in ordered_blocks
-            if len(_normalize_text(block.text)) >= 24 and self._page_zone(block.bbox, page.height) != "bottom"
+            if len(_normalize_text(block.text)) >= 24
+            and self._page_zone(block.bbox, page.height) != "bottom"
+            and not block.figure_label
         ]
         if len(substantive_blocks) < 6:
             return None
 
-        narrow_blocks = [block for block in substantive_blocks if (block.bbox[2] - block.bbox[0]) <= page.width * 0.62]
-        column_candidate_blocks = [
+        narrow_blocks = [block for block in ordered_blocks if (block.bbox[2] - block.bbox[0]) <= page.width * 0.62]
+        candidates = [
             block
-            for block in narrow_blocks
+            for block in substantive_blocks
             if (block.bbox[2] - block.bbox[0]) <= page.width * _MULTI_COLUMN_BLOCK_WIDTH_RATIO
         ]
-        left_blocks = [block for block in column_candidate_blocks if block.bbox[0] <= page.width * 0.3]
-        right_blocks = [block for block in column_candidate_blocks if block.bbox[0] >= page.width * 0.45]
-        if len(left_blocks) < 2:
+        # Columns by left edge: a new column starts where left edges jump by more than this.
+        gap = page.width * 0.12
+        starts: list[list[float]] = []
+        for left in sorted(block.bbox[0] for block in candidates):
+            if starts and left - starts[-1][-1] <= gap:
+                starts[-1].append(left)
+            else:
+                starts.append([left])
+        columns = [(min(lefts), max(lefts)) for lefts in starts]
+        counts = [len(lefts) for lefts in starts]
+        if len(columns) < 2 or counts[0] < 2:
             return None
-        if len(right_blocks) < 2:
-            tall_right_blocks = [
+        if any(count < 2 for count in counts[1:]):
+            # One tall block may make a column (a sidebar column set as a single block).
+            tall = [
                 block
                 for block in narrow_blocks
-                if block.bbox[0] >= page.width * 0.45
-                and (block.bbox[3] - block.bbox[1]) >= page.height * 0.24
+                if block.bbox[0] >= page.width * 0.45 and (block.bbox[3] - block.bbox[1]) >= page.height * 0.24
             ]
-            if not tall_right_blocks:
+            if not tall:
                 return None
-            right_blocks = tall_right_blocks
 
-        left_min_y = min(block.bbox[1] for block in left_blocks)
-        right_min_y = min(block.bbox[1] for block in right_blocks)
-        left_max_y = max(block.bbox[1] for block in left_blocks)
-        right_max_y = max(block.bbox[1] for block in right_blocks)
-        min_column_y = min(left_min_y, right_min_y)
-        max_column_y = max(left_max_y, right_max_y)
+        def column_of(block: PdfTextBlock) -> int | None:
+            left = block.bbox[0]
+            best: tuple[float, int] | None = None
+            for index, (low, high) in enumerate(columns):
+                distance = 0.0 if low - gap / 2 <= left <= high + gap / 2 else min(abs(left - low), abs(left - high))
+                if best is None or distance < best[0]:
+                    best = (distance, index)
+            return best[1] if best is not None and best[0] <= gap else None
 
+        column_blocks = [block for block in candidates if column_of(block) is not None]
+        # Columns sit side by side: blocks of different columns share heights. Indented code or a
+        # heading set left of its paragraph only stack (Art of AI p69, Art of Code p231).
+        side_by_side = 0
+        for index, first in enumerate(column_blocks):
+            for second in column_blocks[index + 1 :]:
+                if column_of(first) == column_of(second):
+                    continue
+                overlap = min(first.bbox[3], second.bbox[3]) - max(first.bbox[1], second.bbox[1])
+                shorter = min(first.bbox[3] - first.bbox[1], second.bbox[3] - second.bbox[1])
+                if shorter > 0 and overlap >= shorter * 0.5:
+                    side_by_side += 1
+        if side_by_side < 2:
+            return None
+        # The column region spans every block set in a column, short ones too: a full-width block
+        # between two of them (Art of Code p231, a listing's notes beside the code under a narrow
+        # code block) means the page does not group cleanly.
+        in_columns = [
+            block
+            for block in ordered_blocks
+            if (block.bbox[2] - block.bbox[0]) <= page.width * 0.62 and column_of(block) is not None
+        ]
+        min_column_y = min(block.bbox[1] for block in in_columns)
+        max_column_y = max(block.bbox[1] for block in in_columns)
         group_by_id: dict[int, int] = {}
-        for block in left_blocks:
-            group_by_id[id(block)] = 1
-        for block in right_blocks:
-            group_by_id[id(block)] = 2
-
+        last_group = len(columns) + 1
         for block in ordered_blocks:
-            if id(block) in group_by_id:
-                continue
-            block_width = block.bbox[2] - block.bbox[0]
-            if block_width <= page.width * 0.62:
-                if block.bbox[0] <= page.width * 0.3:
-                    group_by_id[id(block)] = 1
+            if (block.bbox[2] - block.bbox[0]) <= page.width * 0.62:
+                column = column_of(block)
+                if column is not None:
+                    group_by_id[id(block)] = column + 1
                     continue
-                if block.bbox[0] >= page.width * 0.45:
-                    group_by_id[id(block)] = 2
-                    continue
-                continue
             if block.bbox[1] <= min_column_y + 2:
                 group_by_id[id(block)] = 0
                 continue
             if block.bbox[1] >= max_column_y - 2:
-                group_by_id[id(block)] = 3
+                group_by_id[id(block)] = last_group
                 continue
             return None
 
         return sorted(
             ordered_blocks,
-            key=lambda block: (
-                group_by_id.get(id(block), 0 if block.bbox[1] <= min_column_y + 2 else 3),
-                round(block.bbox[1], 2),
-                round(block.bbox[0], 2),
-            ),
+            key=lambda block: (group_by_id[id(block)], round(block.bbox[1], 2), round(block.bbox[0], 2)),
         )
 
     def _page_evidence(
