@@ -130,6 +130,29 @@ class ChapterReparseTests(unittest.TestCase):
             self.assertTrue(by_page[pilot_page].get("layout_suspect"))
             self.assertEqual(session.get(Chapter, self.pilot[0]).metadata_json.get("suspicious_page_numbers"), [pilot_page])
 
+    def test_a_translated_chapter_is_rebuilt_keeping_its_translation_history(self) -> None:
+        """Art of AI's index, read with its two columns interleaved, could not be saved block by block."""
+        with self.bench.session_factory() as session:
+            chapter_id = self.pilot[0]
+            old_packets = set(session.scalars(select(TranslationPacket.id).where(TranslationPacket.chapter_id == chapter_id)).all())
+            runs_before = session.scalar(select(func.count(TranslationRun.id)).where(TranslationRun.packet_id.in_(old_packets)))
+            self.assertGreater(runs_before, 0)
+
+            entry = ChapterReparseService(session).rebuild_chapter(self.bench.document_id, chapter_id)
+            session.commit()
+
+            self.assertGreater(entry.new_packet_count, 0)
+            packets = list(session.scalars(select(TranslationPacket).where(TranslationPacket.chapter_id == chapter_id)).all())
+            kept = [packet for packet in packets if packet.id in old_packets]
+            new = [packet for packet in packets if packet.id not in old_packets]
+            # Translated packets stay, invalidated, with their runs; the new ones wait for translation.
+            self.assertTrue(kept)
+            self.assertEqual({packet.status for packet in kept}, {PacketStatus.INVALIDATED})
+            self.assertEqual(session.scalar(select(func.count(TranslationRun.id)).where(TranslationRun.packet_id.in_(old_packets))), runs_before)
+            self.assertEqual(len(new), entry.new_packet_count)
+            self.assertEqual({packet.status for packet in new}, {PacketStatus.BUILT})
+            self.assertTrue(all(block.status == ArtifactStatus.ACTIVE for block in self._active(session, chapter_id)))
+
     def test_revert_puts_the_old_structure_back(self) -> None:
         with self.bench.session_factory() as session:
             chapter = self._third_chapter(session)
