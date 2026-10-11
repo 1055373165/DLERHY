@@ -86,6 +86,11 @@ class RepairPath:
     def name(self) -> str:
         return f"{self.tool}.{self.path}"
 
+    @property
+    def batchable(self) -> bool:
+        """One finding at a time, by rule (no model, no agent): its findings can go in one attempt."""
+        return self.scope == SCOPE_FINDING and not self.costs_model and not self.needs_agent
+
 
 _RETRANSLATE = RepairPath(TOOL_RETRANSLATE, "with_hints", SCOPE_PACKET, costs_model=True)
 _STRUCTURE_AGENT = RepairPath(TOOL_STRUCTURE, "agent_proposal", SCOPE_FINDING, needs_agent=True)
@@ -440,6 +445,8 @@ class WorkItem:
     check_id: str
     path: RepairPath
     findings: list[dict[str, Any]]
+    # Several findings of one batchable path, applied one by one and judged once (``batch_work``).
+    batch: bool = False
 
     @property
     def keys(self) -> list[str]:
@@ -495,6 +502,30 @@ def plan_work(findings: Sequence[Mapping[str, Any]], tried: set[tuple[str, str]]
     )
 
 
+def batch_work(work: Sequence[WorkItem], refused: set[tuple[str, str]]) -> list[WorkItem]:
+    """``work`` with the items of one batchable path and check merged into one, where it was first.
+
+    Each attempt is judged by a whole-book QA pass: the AI Product book's 30 duplicated blocks were
+    30 attempts of 25 s each. A batch is applied finding by finding and judged once; ``refused``
+    holds the (path, check) batches that were not kept, whose findings go one at a time again.
+    """
+    merged: list[WorkItem] = []
+    batches: dict[tuple[str, str], WorkItem] = {}
+    for item in work:
+        group = (item.path.name, item.check_id)
+        if not item.path.batchable or group in refused:
+            merged.append(item)
+            continue
+        batch = batches.get(group)
+        if batch is None:
+            batches[group] = WorkItem(check_id=item.check_id, path=item.path, findings=list(item.findings))
+            merged.append(batches[group])
+        else:
+            batch.findings.extend(item.findings)
+            batch.batch = True
+    return merged
+
+
 # ---------------------------------------------------------------------------
 # Judging a repair
 
@@ -545,9 +576,19 @@ class Verdict:
     worse_checks: tuple[str, ...] = ()
 
 
-def judge(before: QaSnapshot, after: QaSnapshot, target_keys: Sequence[str], target_checks: Iterable[str]) -> Verdict:
+def judge(
+    before: QaSnapshot,
+    after: QaSnapshot,
+    target_keys: Sequence[str],
+    target_checks: Iterable[str],
+    *,
+    batch: bool = False,
+) -> Verdict:
     """Keep a repair when a targeted finding went away (or got less severe), its check did not grow,
     and no other blocking or major check got worse. Minor checks are reported, never decisive.
+
+    ``batch``: several findings' repairs judged at once. A new finding of a targeted check is then
+    one repair's harm that the others' fixes would hide in the count: the batch is not kept.
     """
     order = {BLOCKING: 0, MAJOR: 1, MINOR: 2}
     resolved = tuple(
@@ -568,6 +609,12 @@ def judge(before: QaSnapshot, after: QaSnapshot, target_keys: Sequence[str], tar
         worse.append("blocking")
     if worse:
         return Verdict(False, "worse:" + ",".join(worse), resolved, tuple(worse))
+    if batch:
+        fresh = sorted(
+            {key.split(":", 1)[0] for key in after.keys - before.keys if key.split(":", 1)[0] in targets}
+        )
+        if fresh:
+            return Verdict(False, "worse:" + ",".join(fresh), resolved, tuple(fresh))
     if not resolved:
         return Verdict(False, "not_improved", resolved)
     if any(after.check_counts.get(check_id, 0) > before.check_counts.get(check_id, 0) for check_id in targets):

@@ -58,6 +58,7 @@ from book_agent.domain.quality.pilot_repair import (
     QaSnapshot,
     Verdict,
     WorkItem,
+    batch_work,
     classify,
     escalation_question,
     findings_of,
@@ -262,6 +263,8 @@ class PilotRepairService:
             self.session.commit()
 
             tried: set[tuple[str, str]] = set()
+            # (path, check) batches not kept: their findings are tried one at a time.
+            refused_batches: set[tuple[str, str]] = set()
             attempts = 0
             kept_any = False
             stop_reason: str | None = None
@@ -272,7 +275,7 @@ class PilotRepairService:
                 kept_in_round = 0
                 while True:
                     current = [finding for finding in repairable_findings(layers) if finding["key"] in round_keys]
-                    work = plan_work(current, tried)
+                    work = batch_work(plan_work(current, tried), refused_batches)
                     if not work:
                         break
                     if time.monotonic() - started > self.max_seconds:
@@ -282,8 +285,9 @@ class PilotRepairService:
                         stop_reason = "attempts"
                         break
                     item = work[0]
-                    for finding in item.findings:
-                        tried.add((finding["key"], item.path.name))
+                    if not item.batch:
+                        for finding in item.findings:
+                            tried.add((finding["key"], item.path.name))
                     attempts += 1
                     classification = classify(item.findings[0], self.ledger, document_id=document_id)
                     state = classes.setdefault(
@@ -294,6 +298,13 @@ class PilotRepairService:
                         state.ticket_id = self._ticket(repair, state, item.findings).id
                         tickets[state.issue_class] = state.ticket_id
                     result = self._attempt(repair, toolbox, qa, ctx, item, classification, state, layers, round_no, attempts)
+                    if item.batch:
+                        if result.outcome in {"kept", "skipped"}:
+                            # Kept, or applicable to none: one by one would do the same.
+                            for finding in item.findings:
+                                tried.add((finding["key"], item.path.name))
+                        else:
+                            refused_batches.add((item.path.name, item.check_id))
                     if result.outcome == "kept":
                         layers = result.layers or layers
                         kept_in_round += 1
@@ -433,7 +444,7 @@ class PilotRepairService:
             self.session.flush()
             new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope, pages=self._pages)
             after = QaSnapshot.from_layers(new_layers)
-            verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings})
+            verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings}, batch=item.batch)
             # Reverted only for the retranslation's own flake (a line back in English, a leaked note):
             # retranslate those packets once more before giving up on a good repair.
             flaky = self_inflicted_packets(verdict, before, new_layers, result.packet_ids)
@@ -443,7 +454,7 @@ class PilotRepairService:
                 result.params = {**result.params, "retried_packet_ids": flaky, "retry_reason": verdict.reason}
                 new_layers, _source = qa.evaluate(ctx.document_id, ctx.chapter_ids, use_export_file=False, scope=self.scope, pages=self._pages)
                 after = QaSnapshot.from_layers(new_layers)
-                verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings})
+                verdict = judge(before, after, item.keys, {finding["check_id"] for finding in item.findings}, batch=item.batch)
             if item.path.restores_content and restored_content_followups(verdict, before, new_layers, result.packet_ids):
                 # The restored content stays; its fresh translation's problems are the next round's work.
                 result.params = {**result.params, "kept_despite": verdict.reason}

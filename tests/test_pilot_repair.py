@@ -487,6 +487,53 @@ class RunInHeadingAndHeaderTests(PilotRepairBenchCase):
             header = session.scalars(select(Block).where(Block.source_text == "3 Why retrieval")).one()
             self.assertTrue(header.source_span_json["repair_hidden_from_export"])
 
+    def _two_running_headers(self) -> None:
+        self.translate()
+        self._replace_text(
+            "An indexing pipeline splits",
+            "3 Why retrieval An indexing pipeline splits documents into chunks and stores each chunk with its embedding vector.",
+        )
+        self._replace_text(
+            "An LLM answers from what it sa",
+            "3 Why retrieval " + self._text_of("An LLM answers from what it sa"),
+        )
+        self.assertEqual(len(_findings(self.qa(), "L1.running_header_as_text")), 2)
+
+    def _text_of(self, contains: str) -> str:
+        with self.bench.session_factory() as session:
+            return block_with_text(session, self.bench.document_id, contains).source_text
+
+    def test_running_headers_in_two_blocks_are_hidden_by_one_attempt(self) -> None:
+        self._two_running_headers()
+
+        payload, final = self.repair()
+
+        hides = [attempt for attempt in payload["attempts"] if attempt["path"] == "hide_running_header"]
+        self.assertEqual([(attempt["outcome"], attempt["params"]["batch"]) for attempt in hides], [("kept", 2)])
+        self.assertEqual(len(hides[0]["finding_keys"]), 2)
+        self.assertEqual(_findings(final, "L1.running_header_as_text"), [])
+
+    def test_a_batch_that_is_not_kept_is_tried_one_finding_at_a_time(self) -> None:
+        from unittest import mock
+
+        from book_agent.domain.quality import pilot_repair as rules
+        from book_agent.services import pilot_repair as service
+
+        self._two_running_headers()
+
+        def refuse_batches(before, after, keys, checks, *, batch=False):
+            if batch:
+                return rules.Verdict(False, "worse:L1.running_header_as_text", ())
+            return rules.judge(before, after, keys, checks)
+
+        with mock.patch.object(service, "judge", side_effect=refuse_batches):
+            payload, final = self.repair()
+
+        hides = [attempt for attempt in payload["attempts"] if attempt["path"] == "hide_running_header"]
+        self.assertEqual([attempt["outcome"] for attempt in hides], ["reverted", "kept", "kept"])
+        self.assertEqual([len(attempt["finding_keys"]) for attempt in hides], [2, 1, 1])
+        self.assertEqual(_findings(final, "L1.running_header_as_text"), [])
+
 
 class _ScriptedModel:
     """An agent model that proposes one split, then stops."""
