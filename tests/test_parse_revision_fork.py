@@ -271,5 +271,69 @@ class ParseRevisionForkTests(unittest.TestCase):
             self.assertEqual(session.get(TranslationPacket, dead.id).status, PacketStatus.INVALIDATED)
 
 
+class StrandedBlockTests(unittest.TestCase):
+    """Art of AI chapter 2: a packet whose range ended on a dropped copy was invalidated, and the
+    sound paragraph inside it kept only context mappings; it was never translated."""
+
+    def test_a_block_left_without_a_live_packet_joins_one(self) -> None:
+        from tests.pilot_repair_fixture import PilotBench, block_with_text
+
+        bench = PilotBench()
+        self.addCleanup(bench.close)
+        bench.translate_pilot()
+        with bench.session_factory() as session:
+            stranded = block_with_text(session, bench.document_id, "The first technique reads")
+            sentence_ids = session.scalars(select(Sentence.id).where(Sentence.block_id == stranded.id, Sentence.retired_by_revision_id.is_(None))).all()
+            for packet_id in set(
+                session.scalars(
+                    select(PacketSentenceMap.packet_id).where(
+                        PacketSentenceMap.sentence_id.in_(sentence_ids), PacketSentenceMap.role == PacketSentenceRole.CURRENT
+                    )
+                ).all()
+            ):
+                session.get(TranslationPacket, packet_id).status = PacketStatus.INVALIDATED
+            # Re-segmented after its packet went: no translation yet (Art of AI p56).
+            from sqlalchemy import delete
+
+            from book_agent.domain.models.translation import AlignmentEdge
+
+            session.execute(delete(AlignmentEdge).where(AlignmentEdge.sentence_id.in_(sentence_ids)))
+            session.flush()
+            from datetime import datetime, timezone
+
+            rehomed = ParseRevisionForkService(session)._rehome_stranded_blocks(
+                bench.document_id, {stranded.chapter_id}, now=datetime.now(timezone.utc)
+            )
+
+            live_current = session.scalars(
+                select(PacketSentenceMap.packet_id)
+                .join(TranslationPacket, TranslationPacket.id == PacketSentenceMap.packet_id)
+                .where(
+                    PacketSentenceMap.sentence_id.in_(sentence_ids),
+                    PacketSentenceMap.role == PacketSentenceRole.CURRENT,
+                    TranslationPacket.status != PacketStatus.INVALIDATED,
+                )
+            ).all()
+            self.assertTrue(live_current, "the stranded sentences are in no live packet")
+            self.assertTrue(set(live_current) <= {packet.id for packet in rehomed})
+            self.assertEqual({packet.status for packet in rehomed}, {PacketStatus.BUILT})
+
+            # A block whose translation stands is left alone, live packet or not.
+            other = block_with_text(session, bench.document_id, "The second technique masks")
+            other_sentences = session.scalars(select(Sentence.id).where(Sentence.block_id == other.id, Sentence.retired_by_revision_id.is_(None))).all()
+            for packet_id in set(
+                session.scalars(
+                    select(PacketSentenceMap.packet_id).where(
+                        PacketSentenceMap.sentence_id.in_(other_sentences), PacketSentenceMap.role == PacketSentenceRole.CURRENT
+                    )
+                ).all()
+            ):
+                session.get(TranslationPacket, packet_id).status = PacketStatus.INVALIDATED
+            session.flush()
+            again = ParseRevisionForkService(session)._rehome_stranded_blocks(
+                bench.document_id, {stranded.chapter_id}, now=datetime.now(timezone.utc)
+            )
+            self.assertEqual(again, [])
+
 if __name__ == "__main__":
     unittest.main()
