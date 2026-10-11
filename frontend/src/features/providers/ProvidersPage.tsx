@@ -31,6 +31,7 @@ type Draft = {
   output_cost: string;
   peak_multiplier: string;
   off_peak_window: string;
+  peak_schedule: string;
   thinking_off: boolean;
   overrides: string;
 };
@@ -47,6 +48,7 @@ const EMPTY: Draft = {
   output_cost: "",
   peak_multiplier: "",
   off_peak_window: "",
+  peak_schedule: "",
   thinking_off: false,
   overrides: "",
 };
@@ -73,6 +75,7 @@ function draftFrom(provider: Provider): Draft {
     output_cost: price(provider.output_cost_per_1m_tokens),
     peak_multiplier: price(provider.peak_price_multiplier),
     off_peak_window: provider.off_peak_window_utc ?? "",
+    peak_schedule: provider.peak_schedule_utc ?? "",
     thinking_off: thinkingOff,
     overrides: Object.keys(overrides).length ? JSON.stringify(overrides, null, 2) : "",
   };
@@ -112,6 +115,7 @@ function payloadFrom(draft: Draft): Omit<ProviderCreate, "activate"> {
     output_cost_per_1m_tokens: price("输出单价", draft.output_cost),
     peak_price_multiplier: price("高峰倍数", draft.peak_multiplier),
     off_peak_window_utc: offPeakWindow(draft.off_peak_window),
+    peak_schedule_utc: draft.peak_schedule.trim() || null,
     request_overrides: overrides,
   };
 }
@@ -131,6 +135,7 @@ function priceLine(provider: Provider): string {
   if (input === null || input === undefined || output === null || output === undefined) return "未设置单价，花费无法计算";
   const line = `输入 $${input} / 输出 $${output} 每百万 token`;
   const multiplier = provider.peak_price_multiplier;
+  if (multiplier && provider.peak_schedule_utc) return `${line}（高峰时段 UTC ${provider.peak_schedule_utc} ×${multiplier}，其余时段为此价）`;
   if (!multiplier || !provider.off_peak_window_utc) return line;
   return `${line}（优惠时段 UTC ${provider.off_peak_window_utc}，其余时段 ×${multiplier}）`;
 }
@@ -318,6 +323,13 @@ export function ProvidersPage() {
               />
               <label htmlFor="provider-off-peak">优惠时段（UTC）</label>
               <input id="provider-off-peak" className={s.input} placeholder="16:30-00:30" {...field("off_peak_window")} />
+              <label htmlFor="provider-peak-schedule">高峰时段（UTC，按星期；填了就不看优惠时段）</label>
+              <input
+                id="provider-peak-schedule"
+                className={s.input}
+                placeholder="mon-fri 01:00-04:00,06:00-10:00"
+                {...field("peak_schedule")}
+              />
             </fieldset>
             <label className={s.checkbox}>
               <input

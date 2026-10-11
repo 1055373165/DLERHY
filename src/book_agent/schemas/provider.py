@@ -29,6 +29,11 @@ class ProviderCredentialBase(BaseModel):
     off_peak_window_utc: str | None = Field(
         default=None, max_length=11, description='Off-peak hours in UTC, e.g. "16:30-00:30"; may wrap past midnight.'
     )
+    peak_schedule_utc: str | None = Field(
+        default=None,
+        max_length=200,
+        description='Peak hours in UTC by weekday, e.g. "mon-fri 01:00-04:00,06:00-10:00"; replaces the off-peak window.',
+    )
     request_overrides: dict[str, Any] = Field(
         default_factory=dict,
         description='Extra request fields for every call, e.g. {"thinking": {"type": "disabled"}}.',
@@ -59,6 +64,7 @@ class ProviderCredentialUpdate(BaseModel):
     output_cost_per_1m_tokens: float | None = Field(default=None, ge=0)
     peak_price_multiplier: float | None = Field(default=None, gt=0)
     off_peak_window_utc: str | None = Field(default=None, max_length=11)
+    peak_schedule_utc: str | None = Field(default=None, max_length=200)
     request_overrides: dict[str, Any] | None = None
 
 

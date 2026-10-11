@@ -137,6 +137,8 @@ class Settings(BaseSettings):
     # The prices above are off-peak prices when both are set (see workers/providers/pricing.py).
     translation_peak_price_multiplier: float | None = None
     translation_off_peak_window_utc: str | None = None
+    # Peak hours by weekday ("mon-fri 01:00-04:00,06:00-10:00", UTC); replaces the off-peak window when set.
+    translation_peak_schedule_utc: str | None = None
     # Prepaid organisations are charged the provider cost of their calls times this
     # (1.0 passes the cost through; 1.5 adds a 50% margin).
     billing_price_multiplier: float = Field(default=1.0, gt=0)

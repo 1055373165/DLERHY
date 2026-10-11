@@ -421,6 +421,7 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
     output_cost_per_1m_tokens: float | None = None
     peak_price_multiplier: float | None = None
     off_peak_window_utc: str | None = None
+    peak_schedule_utc: str | None = None
     transport: JSONTransport = field(default_factory=shared_transport)
     extra_headers: dict[str, str] = field(default_factory=dict)
     # Some OpenAI-compatible endpoints (notably NVIDIA NIM serving
@@ -1102,6 +1103,7 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
             datetime.now(timezone.utc),
             peak_multiplier=self.peak_price_multiplier,
             off_peak_window_utc=self.off_peak_window_utc,
+            peak_schedule_utc=self.peak_schedule_utc,
         )
         return round((input_cost + output_cost) * multiplier, 8)
 

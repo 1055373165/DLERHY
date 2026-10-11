@@ -48,6 +48,7 @@ def _to_read(record, *, viewer_scope: str | None = None) -> ProviderCredentialRe
         output_cost_per_1m_tokens=_price(record.output_cost_per_1m_tokens),
         peak_price_multiplier=_price(record.peak_price_multiplier),
         off_peak_window_utc=record.off_peak_window_utc,
+        peak_schedule_utc=record.peak_schedule_utc,
         request_overrides=dict(record.request_overrides_json or {}),
         shared=record.org_id is None,
         last_test_status=record.last_test_status,
