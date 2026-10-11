@@ -151,11 +151,16 @@ def _translated_grid(text: str) -> list[list[str]] | None:
 
 
 def _flattened_grid(text: str, shape: Sequence[int]) -> list[list[str]] | None:
-    """A translated grid whose line breaks the model dropped ("| a | b | | c | d |"), cut back into
-    rows of ``shape`` (each row's cell count): a row boundary leaves one empty cell between rows."""
+    """A translated grid cut back into rows of ``shape`` (each row's cell count) whatever its line
+    breaks: dropped ("| a | b | | c | d |"), or two answers joined where a row ends mid-line. A row
+    boundary leaves one empty cell between rows; missing outer bars are put back."""
     stripped = " ".join(str(text or "").split())
-    if "\n" in str(text or "").strip() or not (stripped.startswith("|") and stripped.endswith("|")) or not shape:
+    if stripped.count("|") < 2 or not shape:
         return None
+    if not stripped.startswith("|"):
+        stripped = "| " + stripped
+    if not stripped.endswith("|"):
+        stripped = stripped + " |"
     cells = [cell.strip() for cell in stripped[1:-1].split("|")]
     if len(cells) != sum(shape) + len(shape) - 1:
         return None
@@ -171,17 +176,57 @@ def _flattened_grid(text: str, shape: Sequence[int]) -> list[list[str]] | None:
     return rows
 
 
-def split_shared_cell_translations(grid: list[list[str]] | None, translations: Mapping[str, str]) -> dict[str, str]:
-    """Cells that came back from the model as one translated table, split back cell by cell.
+def _looks_like_grid(text: str) -> bool:
+    """A translation that is itself table rows ("| AGIEval | ... |"), never one cell's text."""
+    stripped = str(text or "").strip()
+    return stripped.count("|") >= 3 and (stripped.startswith("|") or stripped.endswith("|"))
 
-    The model sometimes answers a table's cells with one segment holding the whole translated
-    grid ("| 策略 | 描述 |\\n| 生成 | ... |"); every cell then maps to that whole text and the
-    reader sees the grid in each cell. When such a shared text is a grid of the same shape as the
-    source rows its cells come from, each cell takes the translation at its own position.
+
+def split_shared_cell_translations(grid: list[list[str]] | None, translations: Mapping[str, str]) -> dict[str, str]:
+    """Cells that came back from the model as table rows, split back cell by cell.
+
+    The model sometimes answers a table's cells with a segment holding translated rows ("| 策略 |
+    描述 |\n| 生成 | ... |"): a whole grid shared by several cells, one row per segment (Art of AI
+    table 5.2, where only the description cell of a row is a sentence), or two segments joined so a
+    row ends mid-line (table 4.4, header and body answered apart). Every cell then shows the rows.
+    When the text is a grid of the shape of the source rows its cells come from (or of the whole
+    table), each cell takes the translation at its own position.
     """
     result = dict(translations)
     if not grid:
         return result
+    sources_by_text: dict[str, set[str]] = {}
+    for source, target in translations.items():
+        sources_by_text.setdefault(target, set()).add(source)
+    for target, sources in sources_by_text.items():
+        if len(sources) < 2 and not _looks_like_grid(target):
+            continue
+        # The rows those cells come from, or the whole table when the model translated all of it.
+        rows = [row for row in grid if any(" ".join(cell.split()) in sources for cell in row)]
+        translated = _translated_grid(target)
+
+        def fits(candidate_rows: list[list[str]], cells: list[list[str]] | None) -> bool:
+            return bool(cells) and len(candidate_rows) == len(cells) and all(
+                len(row) == len(row_cells) for row, row_cells in zip(candidate_rows, cells)
+            )
+
+        chosen: tuple[list[list[str]], list[list[str]]] | None = None
+        for candidate_rows in (rows, list(grid)):
+            if fits(candidate_rows, translated):
+                chosen = (candidate_rows, translated)
+                break
+            flattened = _flattened_grid(target, [len(row) for row in candidate_rows])
+            if fits(candidate_rows, flattened):
+                chosen = (candidate_rows, flattened)
+                break
+        if chosen is None:
+            continue
+        for row, cells in zip(*chosen):
+            for source_cell, target_cell in zip(row, cells):
+                key = " ".join(source_cell.split())
+                if key in sources and target_cell:
+                    result[key] = target_cell
+    return result
     sources_by_text: dict[str, set[str]] = {}
     for source, target in translations.items():
         sources_by_text.setdefault(target, set()).add(source)
