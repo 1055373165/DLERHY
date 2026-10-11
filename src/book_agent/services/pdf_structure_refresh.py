@@ -112,6 +112,8 @@ class PdfStructureRefreshArtifacts:
     # to a running head, now a body paragraph of its own). They have no sentences yet and carry the
     # stale flag, so the fork that follows segments, packs and translates them.
     created_block_ids: list[str] = field(default_factory=list)
+    # Chapters whose blocks were put in the new parse's reading order (an old parse had scrambled it).
+    reordered_chapter_ids: list[str] = field(default_factory=list)
     # Set when the refresh was followed by a sentence-level parse-revision fork.
     parse_revision_fork: Any = None
 
@@ -338,6 +340,14 @@ class PdfStructureRefreshService:
                 )
             )
 
+        reordered_chapter_ids: list[str] = []
+        for existing_chapter, refreshed_chapter in matched_chapters:
+            if self._reorder_like_parse(
+                existing_chapter,
+                refreshed_blocks=[block for block in parse_artifacts.blocks if block.chapter_id == refreshed_chapter.id],
+            ):
+                reordered_chapter_ids.append(existing_chapter.id)
+
         document.title = working_document.title or document.title
         document.title_src = working_document.title_src or document.title_src
         document.title_tgt = working_document.title_tgt or document.title_tgt
@@ -353,6 +363,7 @@ class PdfStructureRefreshService:
                 "refreshed_document_image_count": len(created_document_image_ids) + len(updated_document_image_ids),
                 "invalidated_block_count": len(invalidated_block_ids),
                 "created_block_count": len(created_block_ids),
+                "reordered_chapter_ids": reordered_chapter_ids,
                 "stale_sentence_block_count": len(stale_sentence_block_ids),
                 "chapter_scope_ids": sorted(selected_chapter_ids),
             },
@@ -380,7 +391,46 @@ class PdfStructureRefreshService:
             skipped_block_count=skipped_block_count,
             stale_sentence_block_ids=stale_sentence_block_ids,
             created_block_ids=created_block_ids,
+            reordered_chapter_ids=reordered_chapter_ids,
         )
+
+    def _reorder_like_parse(self, chapter: Chapter, *, refreshed_blocks: list[Block]) -> bool:
+        """Put the chapter's blocks in the new parse's reading order; True when anything moved.
+
+        Matching by anchor and text keeps each block's id and translation, but not its place: Art of
+        AI chapter 2, imported by an older parser, read "COMMON PITFALLS" before the section it ends
+        and a paragraph between two list items. Blocks the new parse has take its order; any it
+        lacks stay right after the block before them. The export reads blocks in this order; a
+        packet's block range may now span another packet's block, which costs a retranslation if
+        that packet is rebuilt, never a duplicate in the reading copy.
+        """
+        position = {
+            block.source_anchor: index
+            for index, block in enumerate(sorted(refreshed_blocks, key=lambda item: item.ordinal))
+            if isinstance(block.source_anchor, str) and block.source_anchor.strip()
+        }
+        blocks = sorted(
+            self.session.query(Block).filter(Block.chapter_id == chapter.id, Block.ordinal < _PARKED_ORDINAL_BASE),
+            key=lambda block: block.ordinal,
+        )
+        keyed: list[tuple[float, int, Block]] = []
+        previous = -1.0
+        for index, block in enumerate(blocks):
+            if block.source_anchor in position:
+                previous = float(position[block.source_anchor])
+                keyed.append((previous, index, block))
+            else:
+                keyed.append((previous + 0.5, index, block))
+        target = [block for _key, _index, block in sorted(keyed, key=lambda item: (item[0], item[1]))]
+        if [block.id for block in target] == [block.id for block in blocks]:
+            return False
+        for block in blocks:
+            block.ordinal += _ORDINAL_SHIFT_OFFSET
+        self.session.flush()
+        for ordinal, block in enumerate(target, start=1):
+            block.ordinal = ordinal
+        self.session.flush()
+        return True
 
     def _rematch_moved_text_blocks(
         self,
