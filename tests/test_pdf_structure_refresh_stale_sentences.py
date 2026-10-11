@@ -130,6 +130,29 @@ class PdfStructureRefreshStaleSentenceTests(unittest.TestCase):
         self.assertEqual(artifacts.stale_sentence_block_ids, [block.id])
         self.assertTrue(block.source_span_json["refresh_sentences_stale"])
 
+    def test_the_parser_profiles_the_pdf_again(self) -> None:
+        """The import's profile (its suspicious pages) is not handed to the re-parse."""
+        from book_agent.domain.models import Document
+
+        with self.session_factory() as session:
+            document = session.get(Document, self.document_id)
+            document.metadata_json = {**document.metadata_json, "pdf_profile": {"pdf_kind": "text_pdf", "suspicious_page_numbers": [1]}}
+            session.commit()
+        seen: list[object] = []
+        stub = _stub_parser(self.ORIGINAL)
+        original_parse = stub.parse
+
+        def spying_parse(file_path, profile=None):
+            seen.append(profile)
+            return original_parse(file_path, profile=profile)
+
+        stub.parse = spying_parse
+        with self.session_factory() as session:
+            PdfStructureRefreshService(session, BootstrapRepository(session), parse_service=ParseService(pdf_parser=stub)).refresh_document(
+                self.document_id
+            )
+        self.assertEqual(seen, [None])
+
     def test_whitespace_only_change_keeps_sentences_current(self) -> None:
         artifacts, block = self._refresh("Agents need memory.\nContext windows are finite.")
 
