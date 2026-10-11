@@ -128,10 +128,27 @@ def test_glossary_unchanged():
     assert _should_start_outlined_book_top_level_chapter("Glossary")
 
 
-def test_about_the_authors_does_not_start_chapter():
-    """'about the authors' is content-frontmatter, not a top-level chapter
-    in the outline-driven splitting model."""
-    assert not _should_start_outlined_book_top_level_chapter("about the authors")
+def test_front_matter_pages_and_back_matter_start_their_own_sections():
+    """How Large Language Models Work: "about this book", "about the authors" and "about the cover
+    illustration" were folded into the acknowledgments, and "References" and "index" into chapter
+    9, which ran on to page 200 (parse health: front matter sections, chapters vs bookmarks)."""
+    for title in ("about this book", "about the authors", "about the cover illustration", "References", "index"):
+        assert _should_start_outlined_book_top_level_chapter(title), title
+    assert not _should_start_outlined_book_top_level_chapter("Summary")
+
+
+def test_back_matter_after_the_last_chapter_is_not_folded_into_it():
+    from book_agent.ingestion.pdf.chapters import merge_outlined_book_auxiliary_chapters
+    from book_agent.domain.structure.models import ParsedChapter
+
+    def chapter(title: str) -> ParsedChapter:
+        return ParsedChapter(chapter_id=title, href="pdf://page/1", title=title, blocks=[], metadata={})
+
+    titles = ["Front Matter", "preface", "acknowledgments", "about this book", "about the authors",
+              "1 Big picture: What are LLMs?", "9 Ethics of building and using LLMs", "References", "index", "Summary"]
+    merged = merge_outlined_book_auxiliary_chapters([chapter(title) for title in titles])
+    assert [item.title for item in merged] == titles[:-1]
+    assert merged[-1].metadata["pdf_collapsed_auxiliary_titles"] == ["Summary"]
 
 
 # ---- Sanity: empty / whitespace-only inputs ----------------------------

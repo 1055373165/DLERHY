@@ -405,12 +405,30 @@ def _looks_like_outlined_book_glossary_title(text: str | None) -> bool:
     return normalized.casefold() == "glossary"
 
 
+# Pages a flat outline lists before chapter 1 that are sections of their own.
+_OUTLINED_BOOK_ABOUT_PAGE_TITLES = frozenset(
+    {"about this book", "about the author", "about the authors", "about the cover illustration"}
+)
+
+
+def _looks_like_outlined_book_backmatter_title(text: str | None) -> bool:
+    """The references or the index: their own chapters, not the end of the last one."""
+    normalized = _normalize_outline_heading_text(text or "").casefold()
+    return normalized in _REFERENCES_HEADING_TITLES or normalized in _INDEX_HEADING_TITLES
+
+
+def _looks_like_outlined_book_about_page_title(text: str | None) -> bool:
+    return _normalize_outline_heading_text(text or "").casefold() in _OUTLINED_BOOK_ABOUT_PAGE_TITLES
+
+
 def _should_start_outlined_book_top_level_chapter(title: str | None) -> bool:
     if _extract_book_main_chapter_number(title or "") is not None:
         return True
     if _looks_like_outlined_book_appendix_title(title):
         return True
     if _looks_like_outlined_book_glossary_title(title):
+        return True
+    if _looks_like_outlined_book_backmatter_title(title) or _looks_like_outlined_book_about_page_title(title):
         return True
     return _looks_like_outlined_book_frontmatter_title(title)
 

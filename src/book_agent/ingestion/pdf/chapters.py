@@ -29,7 +29,9 @@ from book_agent.ingestion.pdf.classify import (
     _looks_like_book_primary_outline_title,
     _looks_like_chapter_intro_cue,
     _looks_like_frontmatter_signal,
+    _looks_like_outlined_book_about_page_title,
     _looks_like_outlined_book_appendix_title,
+    _looks_like_outlined_book_backmatter_title,
     _looks_like_outlined_book_frontmatter_title,
     _looks_like_outlined_book_glossary_title,
     _looks_like_paper_title,
@@ -921,6 +923,14 @@ def fallback_chapter_title(blocks: list[_RecoveredBlock], ordinal: int) -> str:
 def merge_outlined_book_auxiliary_chapters(
     chapters: list[ParsedChapter],
 ) -> list[ParsedChapter]:
+    """Fold the outline's minor entries into the chapter before them; chapters, appendices, the
+    glossary, the references and the index stay their own, and so do the front matter's pages.
+
+    "How Large Language Models Work" bookmarks "References" and "index" after chapter 9: folded
+    into it, the reader's chapter 9 ran on through the bibliography and the index. Its "about
+    this book", "about the authors" and "about the cover illustration" were folded into the
+    acknowledgments.
+    """
     merged: list[ParsedChapter] = []
     next_expected_main_chapter = 1
     main_sequence_started = False
@@ -931,6 +941,8 @@ def merge_outlined_book_auxiliary_chapters(
         starts_appendix = _looks_like_outlined_book_appendix_title(title)
         starts_glossary = _looks_like_outlined_book_glossary_title(title)
         starts_frontmatter = _looks_like_outlined_book_frontmatter_title(title)
+        starts_backmatter = _looks_like_outlined_book_backmatter_title(title)
+        starts_about_page = _looks_like_outlined_book_about_page_title(title)
 
         start_new_group = False
         if main_chapter_number is not None:
@@ -938,11 +950,11 @@ def merge_outlined_book_auxiliary_chapters(
                 start_new_group = main_chapter_number == 1 or not merged
             elif main_chapter_number >= next_expected_main_chapter:
                 start_new_group = True
-        elif starts_appendix or starts_glossary:
+        elif starts_appendix or starts_glossary or (main_sequence_started and starts_backmatter):
             start_new_group = True
         elif not merged:
             start_new_group = True
-        elif not main_sequence_started and starts_frontmatter:
+        elif not main_sequence_started and (starts_frontmatter or starts_about_page):
             start_new_group = True
 
         if start_new_group or not merged:
