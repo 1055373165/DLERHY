@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { blogPublishProgressText, downloadDocumentExport, previewDocumentExport, publishToBlog } from "./api";
+import { blogPublishProgressText,
+  blogPublishResultText, downloadDocumentExport, previewDocumentExport, publishToBlog } from "./api";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -149,5 +150,18 @@ describe("publishToBlog", () => {
       "GET /blog/publish-jobs/j1",
       "GET /blog/publish-jobs/j1",
     ]);
+  });
+
+  it("says what a publish did: draft or body update, pictures, cover", () => {
+    const base = { article_id: 7, title: "书", edit_url: null, images_skipped: [] };
+    expect(
+      blogPublishResultText({ ...base, action: "created", images_uploaded: 3, images_reused: 0, cover: "uploaded" })
+    ).toBe("已新建博客草稿「书」，上传图片 3 张，已上传并设置封面。");
+    expect(
+      blogPublishResultText({ ...base, action: "updated", images_uploaded: 0, images_reused: 3, cover: "kept" })
+    ).toBe("已更新博客文章正文「书」，图片沿用上次上传的。");
+    expect(
+      blogPublishResultText({ ...base, action: "unchanged", images_uploaded: 0, images_reused: 3, cover: "kept" })
+    ).toBe("博客文章「书」已是最新，没有改动。");
   });
 });

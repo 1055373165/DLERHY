@@ -7,6 +7,7 @@ import { Surface } from "../../components/Surface";
 import {
   type BlogEdition,
   blogPublishProgressText,
+  blogPublishResultText,
   deleteDocument,
   downloadDocumentExport,
   getBlogTarget,
@@ -152,15 +153,9 @@ export function LibraryPage() {
             progress: job.stage === "images" && job.total > 0 ? { done: job.done, total: job.total } : undefined,
           }),
       });
-      const images = result.images_uploaded
-        ? `，上传图片 ${result.images_uploaded} 张`
-        : result.images_reused
-          ? "，图片沿用上次上传的"
-          : "";
-      const skipped = result.images_skipped.length ? `；${result.images_skipped.length} 张图片超过博客限制没有上传` : "";
       setFeedback({
         tone: "success",
-        text: `${result.action === "created" ? "已新建博客草稿" : "已更新博客文章"}「${result.title}」${images}${skipped}。`,
+        text: blogPublishResultText(result),
         link: result.edit_url ? { href: result.edit_url, label: "去博客后台查看" } : undefined,
       });
     } catch (err) {
