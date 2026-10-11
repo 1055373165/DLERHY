@@ -46,7 +46,15 @@ def usage_payload(usage: Any) -> dict[str, Any]:
         "cost_usd": float(cost) if cost is not None else None,
         "latency_ms": int(getattr(usage, "latency_ms", 0) or 0),
         "provider_request_id": getattr(usage, "provider_request_id", None),
+        # The prompt cache's share of the input (None: the provider did not say); the hit rate is
+        # hit / (hit + miss), measured instead of reconstructed from the cost.
+        "prompt_cache_hit_tokens": _known_int(getattr(usage, "prompt_cache_hit_tokens", None)),
+        "prompt_cache_miss_tokens": _known_int(getattr(usage, "prompt_cache_miss_tokens", None)),
     }
+
+
+def _known_int(value: Any) -> int | None:
+    return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
 @dataclass(slots=True)

@@ -154,6 +154,9 @@ class TranslationUsage(BaseSchema):
     cost_usd: float | None = None
     provider_request_id: str | None = None
     raw_usage: dict[str, Any] = Field(default_factory=dict)
+    # The input tokens the provider's prompt cache served (hit) or not (miss); None when unknown.
+    prompt_cache_hit_tokens: int | None = None
+    prompt_cache_miss_tokens: int | None = None
 
 
 class TranslationWorkerResult(BaseSchema):

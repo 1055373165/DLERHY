@@ -185,6 +185,12 @@ class UsageAccountingTests(unittest.TestCase):
         )
         _payload, usage = _structured(client)
         self.assertAlmostEqual(usage.cost_usd, 0.075 + 0.25)
+        # Kept for the hit rate, and written on the call's event.
+        self.assertEqual((usage.prompt_cache_hit_tokens, usage.prompt_cache_miss_tokens), (750_000, 250_000))
+        from book_agent.workers.llm_calls import usage_payload
+
+        payload = usage_payload(usage)
+        self.assertEqual((payload["prompt_cache_hit_tokens"], payload["prompt_cache_miss_tokens"]), (750_000, 250_000))
 
     def test_openai_cached_tokens_details(self) -> None:
         client = self._priced_client(
@@ -192,6 +198,7 @@ class UsageAccountingTests(unittest.TestCase):
         )
         _payload, usage = _structured(client)
         self.assertAlmostEqual(usage.cost_usd, 0.06 + 0.4)
+        self.assertEqual((usage.prompt_cache_hit_tokens, usage.prompt_cache_miss_tokens), (600_000, 400_000))
 
     def test_anthropic_style_cache_read_is_a_hit_and_creation_is_a_miss(self) -> None:
         client = self._priced_client(
@@ -209,6 +216,23 @@ class UsageAccountingTests(unittest.TestCase):
         client = self._priced_client({"prompt_tokens": 1_000_000, "completion_tokens": 500_000})
         _payload, usage = _structured(client)
         self.assertAlmostEqual(usage.cost_usd, 1.0 + 1.0)
+        # A provider silent about its cache is not a 0% hit rate.
+        self.assertEqual((usage.prompt_cache_hit_tokens, usage.prompt_cache_miss_tokens), (None, None))
+        from book_agent.workers.llm_calls import usage_payload
+
+        self.assertIsNone(usage_payload(usage)["prompt_cache_hit_tokens"])
+
+    def test_a_repair_or_polish_call_adds_its_cache_tokens(self) -> None:
+        from book_agent.services.translation import _merge_usage
+        from book_agent.translation.contracts import TranslationUsage
+
+        merged = _merge_usage(
+            TranslationUsage(token_in=100, prompt_cache_hit_tokens=80, prompt_cache_miss_tokens=20),
+            TranslationUsage(token_in=50, prompt_cache_hit_tokens=40, prompt_cache_miss_tokens=10),
+        )
+        self.assertEqual((merged.prompt_cache_hit_tokens, merged.prompt_cache_miss_tokens), (120, 30))
+        unknown = _merge_usage(TranslationUsage(token_in=1), TranslationUsage(token_in=1))
+        self.assertIsNone(unknown.prompt_cache_hit_tokens)
 
 
 if __name__ == "__main__":

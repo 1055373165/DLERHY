@@ -1076,6 +1076,9 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
             ),
             provider_request_id=self._coerce_str(response.get("id")),
             raw_usage=raw_usage,
+            # Only what the provider reported: a provider silent about its cache is not a 0% hit rate.
+            prompt_cache_hit_tokens=prompt_cache_hit_tokens if self._reports_prompt_cache(raw_usage) else None,
+            prompt_cache_miss_tokens=prompt_cache_miss_tokens if self._reports_prompt_cache(raw_usage) else None,
         )
 
     def _estimate_cost_usd(
@@ -1106,6 +1109,15 @@ class OpenAICompatibleTranslationClient(TranslationModelClient):
             peak_schedule_utc=self.peak_schedule_utc,
         )
         return round((input_cost + output_cost) * multiplier, 8)
+
+    @staticmethod
+    def _reports_prompt_cache(raw_usage: dict[str, Any]) -> bool:
+        if any(key in raw_usage for key in ("prompt_cache_hit_tokens", "prompt_cache_miss_tokens", "cache_read_input_tokens")):
+            return True
+        return any(
+            isinstance(raw_usage.get(key), dict) and "cached_tokens" in raw_usage[key]
+            for key in ("prompt_tokens_details", "input_tokens_details")
+        )
 
     def _prompt_cache_tokens(self, raw_usage: dict[str, Any], *, token_in: int) -> tuple[int, int]:
         """Split prompt tokens into (cache hits, cache misses).
