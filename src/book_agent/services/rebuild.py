@@ -20,6 +20,8 @@ from book_agent.domain.enums import (
     LockLevel,
     MemoryScopeType,
     MemoryStatus,
+    PacketSentenceRole,
+    PacketStatus,
     PacketType,
     SnapshotType,
     TermStatus,
@@ -375,6 +377,7 @@ class TargetedRebuildService:
             select(TranslationPacket).where(TranslationPacket.id.in_(packet_ids))
         ).all()
         packet_by_id = {packet.id: packet for packet in packets}
+        owned_elsewhere = self._blocks_owned_by_other_packets(chapter.id, packet_ids, chapter_sentences)
 
         rebuilt_packets: list[TranslationPacket] = []
         rebuilt_maps: list[PacketSentenceMap] = []
@@ -396,7 +399,13 @@ class TargetedRebuildService:
                 continue
             if end_index < start_index:
                 continue
-            current_blocks = translatable_blocks[start_index : end_index + 1]
+            # A block another live packet translates stays that packet's, though a reorder of the
+            # chapter's blocks (pdf_structure_refresh._reorder_like_parse) put it inside this range.
+            current_blocks = [
+                block for block in translatable_blocks[start_index : end_index + 1] if block.id not in owned_elsewhere
+            ]
+            if not current_blocks:
+                continue
             prev_blocks = translatable_blocks[max(0, start_index - 2):start_index]
             next_blocks = translatable_blocks[end_index + 1:end_index + 3]
             if len(current_blocks) == 1:
@@ -435,6 +444,24 @@ class TargetedRebuildService:
             rebuilt_packets.append(rebuilt_packet)
             rebuilt_maps.extend(packet_maps)
         return rebuilt_packets, rebuilt_maps
+
+    def _blocks_owned_by_other_packets(
+        self, chapter_id: str, packet_ids: list[str], chapter_sentences: list[Sentence]
+    ) -> set[str]:
+        """Blocks with a sentence that a live packet outside ``packet_ids`` translates."""
+        owned_sentence_ids = set(
+            self.session.scalars(
+                select(PacketSentenceMap.sentence_id)
+                .join(TranslationPacket, TranslationPacket.id == PacketSentenceMap.packet_id)
+                .where(
+                    TranslationPacket.chapter_id == chapter_id,
+                    TranslationPacket.status != PacketStatus.INVALIDATED,
+                    TranslationPacket.id.not_in(packet_ids),
+                    PacketSentenceMap.role == PacketSentenceRole.CURRENT,
+                )
+            ).all()
+        )
+        return {sentence.block_id for sentence in chapter_sentences if sentence.id in owned_sentence_ids}
 
     def _replace_packet_maps(self, packet_ids: list[str], packet_maps: list[PacketSentenceMap]) -> None:
         if not packet_ids:
