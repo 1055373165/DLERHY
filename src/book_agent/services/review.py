@@ -1073,6 +1073,9 @@ class ReviewService:
             role = (block.source_span_json or {}).get("pdf_block_role")
             if role not in {"header", "footer"}:
                 continue
+            if (block.source_span_json or {}).get("repair_hidden_from_export"):
+                # Hidden from the reading copy (the repair's hide_running_header): nothing leaks.
+                continue
             if any(sentence.translatable for sentence in sentences_by_block.get(block.id, [])):
                 leaked_blocks.append(block)
         if leaked_blocks:
