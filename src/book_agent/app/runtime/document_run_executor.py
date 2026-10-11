@@ -685,7 +685,9 @@ class DocumentRunExecutor:
         with session_scope(self.session_factory) as session:
             repository = RunControlRepository(session)
             execution = self._run_execution_service(session)
-            run = repository.get_run(run_id)
+            # Locked first: this tick reconciles work items and then seeds more, which locks the
+            # run; work items before the run deadlocked with workers completing packets.
+            run = repository.get_run_for_update(run_id)
             plan = plan or self._plan_for(run)
             packet_scope = plan.packet_ids
             next_stage = self._next_stage_label(plan, "translate")

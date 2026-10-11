@@ -217,6 +217,91 @@ class RunExecutionServiceTests(unittest.TestCase):
         self.assertEqual(summary.status_detail_json["usage_summary"]["latency_ms"], 750)
         self.assertAlmostEqual(summary.status_detail_json["usage_summary"]["cost_usd"], 0.0035, places=8)
 
+    def _write_order(self):
+        """Record the tables each UPDATE / INSERT writes, in order, per transaction."""
+        import re as _re
+
+        from sqlalchemy import event
+
+        transactions: list[list[str]] = [[]]
+
+        def on_execute(conn, cursor, statement, parameters, context, executemany):
+            match = _re.match(r"\s*(UPDATE|INSERT INTO)\s+(\w+)", statement, _re.IGNORECASE)
+            if match:
+                transactions[-1].append(match.group(2))
+
+        def on_commit(conn):
+            transactions.append([])
+
+        event.listen(self.engine, "before_cursor_execute", on_execute)
+        event.listen(self.engine, "commit", on_commit)
+        self.addCleanup(event.remove, self.engine, "before_cursor_execute", on_execute)
+        self.addCleanup(event.remove, self.engine, "commit", on_commit)
+        return transactions
+
+    def _assert_run_written_before_work_items(self, transactions: list[list[str]]) -> None:
+        checked = 0
+        for writes in transactions:
+            if "work_items" in writes and "document_runs" in writes:
+                checked += 1
+                self.assertLess(writes.index("document_runs"), writes.index("work_items"), writes)
+        self.assertGreater(checked, 0, transactions)
+
+    def test_claim_and_start_lock_the_run_before_the_work_item(self) -> None:
+        """Run 79998d77 retried 24 work items on deadlocks: claiming and starting wrote the work item
+        and then the run, while a worker completing a packet locks the run and then its work item."""
+        document_id, packet_ids_by_chapter = self._create_document_with_chapter_packets([[1, 2]])
+        run_id = self._create_running_run_for_document(document_id, run_type=DocumentRunType.TRANSLATE_TARGETED)
+        with self.session_factory() as session:
+            RunExecutionService(RunControlRepository(session)).seed_translate_work_items(
+                run_id=run_id, packet_ids=packet_ids_by_chapter[0]
+            )
+            session.commit()
+        transactions = self._write_order()
+        with self.session_factory() as session:
+            execution = RunExecutionService(RunControlRepository(session))
+            claimed = execution.claim_next_translate_work_item(
+                run_id=run_id, worker_name="test.translate", worker_instance_id="worker-1", lease_seconds=60
+            )
+            assert claimed is not None
+            session.commit()
+            execution.start_work_item(lease_token=claimed.lease_token, lease_seconds=60)
+            session.commit()
+            execution.complete_translate_success(
+                lease_token=claimed.lease_token,
+                packet_id=claimed.scope_id,
+                translation_run_id=str(uuid4()),
+                token_in=1,
+                token_out=1,
+                cost_usd=0.0,
+                latency_ms=1,
+            )
+            session.commit()
+        self.assertEqual(sum(1 for writes in transactions if "work_items" in writes), 3, transactions)
+        self._assert_run_written_before_work_items(transactions)
+
+    def test_the_translate_tick_locks_the_run_before_reconciling_work_items(self) -> None:
+        document_id, packet_ids_by_chapter = self._create_document_with_chapter_packets([[1], [2]])
+        run_id = self._create_running_run_for_document(document_id)
+        executor = DocumentRunExecutor(session_factory=self.session_factory, export_root="/tmp", translation_worker=None)
+        with self.session_factory() as session:
+            # A legacy item the tick reconciles (cancels) before it seeds and claims.
+            session.add(
+                WorkItem(
+                    run_id=run_id,
+                    stage=WorkItemStage.TRANSLATE,
+                    scope_type=WorkItemScopeType.PACKET,
+                    scope_id=document_id,
+                    priority=50,
+                    status=WorkItemStatus.RETRYABLE_FAILED,
+                    input_version_bundle_json={"packet_id": "pkt-1"},
+                )
+            )
+            session.commit()
+        transactions = self._write_order()
+        executor._process_translate_stage(run_id)
+        self._assert_run_written_before_work_items(transactions)
+
     def test_reclaim_expired_lease_requeues_work_item_and_increments_attempt_on_reclaim(self) -> None:
         run_id = self._create_running_run(
             budget=RunBudgetSummary(

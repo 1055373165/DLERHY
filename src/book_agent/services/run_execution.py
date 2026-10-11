@@ -153,7 +153,11 @@ class RunExecutionService:
         worker_instance_id: str,
         lease_seconds: int,
     ) -> ClaimedRunWorkItem | None:
-        run = self.repository.get_run(run_id)
+        # The run first, then its work items: the one lock order every writer keeps
+        # (``get_run_for_update``). The candidate scan locks work item rows, and the claim
+        # writes the run; taken the other way round they deadlocked with a worker
+        # completing a packet (which locks the run, then releases its work item).
+        run = self.repository.get_run_for_update(run_id)
         if run.status not in {DocumentRunStatus.QUEUED, DocumentRunStatus.RUNNING}:
             return None
         candidate_ids = self.repository.list_claimable_work_item_ids(
@@ -181,7 +185,8 @@ class RunExecutionService:
         lease_seconds: int,
     ) -> ClaimedRunWorkItem | None:
         work_item = self.repository.get_work_item(work_item_id)
-        run = self.repository.get_run(work_item.run_id)
+        # Run before work item (see claim_next_work_item).
+        run = self.repository.get_run_for_update(work_item.run_id)
         if run.status not in {DocumentRunStatus.QUEUED, DocumentRunStatus.RUNNING}:
             return None
         now = _utcnow()
@@ -235,13 +240,15 @@ class RunExecutionService:
 
     def start_work_item(self, *, lease_token: str, lease_seconds: int) -> ClaimedRunWorkItem:
         now = _utcnow()
+        # Run before work item (see claim_next_work_item): marking the item running and then
+        # saving the run took the locks in the order that deadlocked with a completing worker.
+        run = self.repository.get_run_for_update(self.repository.get_active_lease_by_token(lease_token).run_id)
         work_item = self.repository.mark_work_item_running(
             lease_token=lease_token,
             heartbeat_at=now,
             lease_expires_at=self._extend_lease(now, lease_seconds),
         )
         lease = self.repository.get_active_lease_by_token(lease_token)
-        run = self.repository.get_run(work_item.run_id)
         self.repository.save_run(
             run,
             audit_event=RunAuditEvent(
