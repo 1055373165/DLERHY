@@ -250,6 +250,15 @@ class ParseRevisionForkService:
                 chapter.status = ChapterStatus.PACKET_BUILT
                 chapter.updated_at = now
 
+        touched_chapters = set(packets_by_chapter) | {
+            block.chapter_id for block in (self.session.get(Block, block_id) for block_id in new_by_block) if block is not None
+        }
+        for packet in self._rehome_stranded_blocks(document_id, touched_chapters, now=now):
+            if packet.id not in result.retranslate_packet_ids:
+                result.retranslate_packet_ids.append(packet.id)
+            if packet.id not in result.rebuilt_packet_ids:
+                result.rebuilt_packet_ids.append(packet.id)
+
         for block_id, fresh in new_by_block.items():
             if not fresh:
                 continue
@@ -265,6 +274,99 @@ class ParseRevisionForkService:
         return result
 
     # --- steps ----------------------------------------------------------------------
+
+    def _rehome_stranded_blocks(self, document_id: str, chapter_ids: set[str], *, now: datetime) -> list[TranslationPacket]:
+        """Blocks no live packet translates any more join the live packet before them (or after).
+
+        A packet whose range started or ended on a block a refresh dropped (an old parse's stray copy)
+        is invalidated as empty, and a sound block inside that range lost the packet that translated
+        it: Art of AI chapter 2's p56 paragraph kept only context mappings and was never translated.
+        The packets they join are rebuilt and translated again.
+        """
+        rehomed: dict[str, TranslationPacket] = {}
+        for chapter_id in chapter_ids:
+            live = [
+                packet
+                for packet in self.session.scalars(
+                    select(TranslationPacket).where(
+                        TranslationPacket.chapter_id == chapter_id,
+                        TranslationPacket.status != PacketStatus.INVALIDATED,
+                    )
+                ).all()
+                if packet.block_start_id
+            ]
+            current_sentence_ids = set(
+                self.session.scalars(
+                    select(PacketSentenceMap.sentence_id).where(
+                        PacketSentenceMap.packet_id.in_([packet.id for packet in live] or ["-"]),
+                        PacketSentenceMap.role == PacketSentenceRole.CURRENT,
+                    )
+                ).all()
+            )
+            # Stranded: sentences a packet translated that has since been invalidated. Sentences no
+            # packet ever took (a block a structure edit just made) are the caller's to packet, and
+            # are reported as unpacketed.
+            lost_sentence_ids = set(
+                self.session.scalars(
+                    select(PacketSentenceMap.sentence_id)
+                    .join(TranslationPacket, TranslationPacket.id == PacketSentenceMap.packet_id)
+                    .where(
+                        TranslationPacket.chapter_id == chapter_id,
+                        TranslationPacket.status == PacketStatus.INVALIDATED,
+                        PacketSentenceMap.role == PacketSentenceRole.CURRENT,
+                    )
+                ).all()
+            )
+            blocks = self.session.scalars(
+                select(Block)
+                .where(Block.chapter_id == chapter_id, Block.status == ArtifactStatus.ACTIVE, Block.ordinal < 1_000_000)
+                .order_by(Block.ordinal)
+            ).all()
+            for block in blocks:
+                if not block_is_context_translatable(block):
+                    continue
+                sentences = [sentence for sentence in self._active_sentences(block.id) if sentence.translatable]
+                if not sentences or any(sentence.id in current_sentence_ids for sentence in sentences):
+                    continue
+                if not any(sentence.id in lost_sentence_ids for sentence in sentences):
+                    continue
+                translated = set(
+                    self.session.scalars(
+                        select(AlignmentEdge.sentence_id).where(AlignmentEdge.sentence_id.in_([sentence.id for sentence in sentences]))
+                    ).all()
+                )
+                if all(sentence.id in translated for sentence in sentences):
+                    # Its translation stands; the reading copy shows it without a live packet.
+                    continue
+                ranges = []
+                for packet in live:
+                    start = self.session.get(Block, packet.block_start_id)
+                    end = self.session.get(Block, packet.block_end_id or packet.block_start_id)
+                    if start is not None and end is not None:
+                        ranges.append((packet, start, end))
+                before = [(end.ordinal, packet) for packet, _start, end in ranges if end.ordinal < block.ordinal]
+                after = [(start.ordinal, packet) for packet, start, _end in ranges if start.ordinal > block.ordinal]
+                if before:
+                    packet = max(before, key=lambda item: item[0])[1]
+                    packet.block_end_id = block.id
+                elif after:
+                    packet = min(after, key=lambda item: item[0])[1]
+                    packet.block_start_id = block.id
+                else:
+                    continue
+                packet.updated_at = now
+                rehomed[packet.id] = packet
+            if rehomed:
+                self.session.flush()
+                rebuilt = self.rebuild_service.rebuild_packets(
+                    document_id, chapter_id, [packet.id for packet in rehomed.values() if packet.chapter_id == chapter_id]
+                )
+                for packet in rebuilt:
+                    packet.status = PacketStatus.BUILT
+                    packet.updated_at = now
+                    rehomed[packet.id] = packet
+        self.session.flush()
+        return list(rehomed.values())
 
     def _write_lineage(self, revision: DocumentParseRevision, old: list[Sentence], fresh: list[Sentence]) -> list[SentenceLink]:
         block_links = align_sentences([(s.id, s.source_text) for s in old], [(s.id, s.source_text) for s in fresh])
