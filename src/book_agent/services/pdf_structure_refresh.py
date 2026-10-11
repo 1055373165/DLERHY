@@ -70,6 +70,11 @@ def _bbox_overlap(first: dict | None, second: dict | None) -> float:
 
 
 def _clone_document(document: Document) -> Document:
+    """A detached copy to parse the book again with. The stored ``pdf_profile`` is left out so the
+    current parser profiles the PDF itself: given the import's profile, it kept the import's
+    suspicious pages (Art of AI p304 and the appendix, whose tables the old parser read as stray
+    prose) through every re-parse, and the review kept blocking them."""
+    metadata = {key: value for key, value in (document.metadata_json or {}).items() if key != "pdf_profile"}
     return Document(
         id=document.id,
         source_type=document.source_type,
@@ -85,7 +90,7 @@ def _clone_document(document: Document) -> Document:
         parser_version=document.parser_version,
         segmentation_version=document.segmentation_version,
         active_book_profile_version=document.active_book_profile_version,
-        metadata_json=dict(document.metadata_json or {}),
+        metadata_json=metadata,
         created_at=document.created_at,
         updated_at=document.updated_at,
     )
