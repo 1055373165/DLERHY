@@ -143,6 +143,33 @@ def _has_side_by_side(rects: list[_Rect]) -> bool:
     return False
 
 
+def _page_reads_by_column(blocks: list[Any], page: int) -> bool:
+    """The page's prose, in reading order, never goes back from a right column to a left one: a
+    two-column page read column by column (Art of AI's index) is in order, side by side or not."""
+    regions: list[_Rect] = []
+    for block in sorted(blocks, key=lambda item: getattr(item, "ordinal", 0)):
+        metadata = block.source_span_json or {}
+        if metadata.get("repair_hidden_from_export") or str(metadata.get("pdf_block_role") or "") not in _PDF_PROSE_ROLES:
+            continue
+        for region in (metadata.get("source_bbox_json") or {}).get("regions") or []:
+            bbox = region.get("bbox") if isinstance(region, dict) else None
+            if region.get("page_number") == page and isinstance(bbox, list) and len(bbox) == 4:
+                regions.append(tuple(float(value) for value in bbox))  # type: ignore[arg-type]
+    if len(regions) < 2:
+        return False
+    # Another column by the same measure as _has_side_by_side: a left edge set apart by more than
+    # 30% of the prose's width.
+    left_edge = min(rect[0] for rect in regions)
+    span = max(rect[2] for rect in regions) - left_edge
+    column = 0
+    for rect in regions:
+        here = 1 if rect[0] - left_edge > 0.3 * span else 0
+        if here < column:
+            return False
+        column = here
+    return True
+
+
 @dataclass(slots=True)
 class ChapterQualitySummary:
     coverage_ok: bool
@@ -1523,7 +1550,8 @@ class ReviewService:
         chapter_page_evidence: list[dict[str, Any]],
     ) -> bool:
         """Every flagged page is flagged for "multi_column" only, and on each its prose blocks
-        (outside figures, not hidden by a repair) never sit side by side."""
+        (outside figures, not hidden by a repair) never sit side by side, or are read column by
+        column."""
         flagged = sorted({int(page) for page in [*local_suspicious_pages, *local_layout_risk_pages] if isinstance(page, int)})
         if not flagged:
             return False
@@ -1545,7 +1573,10 @@ class ReviewService:
             figures = figures_by_page.get(page_number, [])
             prose = [rect for rect in prose_by_page.get(page_number, []) if not any(_inside(rect, figure) for figure in figures)]
             # Nothing to judge the page by: no evidence that it reads in one column.
-            if not prose or _has_side_by_side(prose):
+            if not prose:
+                return False
+            # Side by side is fine when the page is read column by column.
+            if _has_side_by_side(prose) and not _page_reads_by_column(bundle.blocks, page_number):
                 return False
         return True
 
