@@ -22,6 +22,7 @@ from book_agent.core.config import get_settings
 from book_agent.domain.document_titles import display_author_value, document_display_title, document_source_title
 from book_agent.export.blog_metadata import build_blog_metadata
 from book_agent.services.blog_publish import STATE_KEY, BlogClient, BlogPublishError, BlogTarget, glossary_terms, publish_markdown
+from book_agent.services.book_cover import book_cover
 
 documents_router = APIRouter()
 target_router = APIRouter()
@@ -34,12 +35,15 @@ class BlogPublishRequest(BaseModel):
 
 class BlogPublishResponse(BaseModel):
     article_id: int
-    action: Literal["created", "updated"]
+    # "unchanged": the article's body was already this one; nothing was sent.
+    action: Literal["created", "updated", "unchanged"]
     title: str
     edit_url: str | None = None
     images_uploaded: int
     images_reused: int
     images_skipped: list[str]
+    # "uploaded"/"reused": set as the article's cover; "kept": it had one; "none": no cover found.
+    cover: Literal["uploaded", "reused", "kept", "none"] = "none"
 
 
 class BlogPublishJobResponse(BaseModel):
@@ -194,16 +198,25 @@ def _run_publish(job: _Job, target: BlogTarget, markdown_path: Path, session_fac
                 glossary_terms=glossary_terms(session, job.document_id),
                 bilingual=bilingual,
             )
-            result, state = publish_markdown(
-                target=target,
-                state=(document.metadata_json or {}).get(STATE_KEY) or {},
-                markdown=markdown,
-                base_dir=markdown_path.parent,
-                metadata=metadata,
-                edition=job.edition,
-                client_factory=BlogClient,
-                progress=progress,
-            )
+            source_path = document.source_path
+            try:
+                result, state = publish_markdown(
+                    target=target,
+                    state=(document.metadata_json or {}).get(STATE_KEY) or {},
+                    markdown=markdown,
+                    base_dir=markdown_path.parent,
+                    metadata=metadata,
+                    edition=job.edition,
+                    cover=lambda: book_cover(source_path),
+                    client_factory=BlogClient,
+                    progress=progress,
+                )
+            except BlogPublishError as exc:
+                # Pictures uploaded before the failure are remembered, so a retry does not upload them again.
+                if exc.state is not None:
+                    document.metadata_json = {**(document.metadata_json or {}), STATE_KEY: exc.state}
+                    session.commit()
+                raise
             document.metadata_json = {**(document.metadata_json or {}), STATE_KEY: state}
             session.commit()
         job.result = BlogPublishResponse(
@@ -214,6 +227,7 @@ def _run_publish(job: _Job, target: BlogTarget, markdown_path: Path, session_fac
             images_uploaded=result.images_uploaded,
             images_reused=result.images_reused,
             images_skipped=result.images_skipped,
+            cover=result.cover,  # type: ignore[arg-type]
         )
         job.stage, job.status = "done", "succeeded"
     except BlogPublishError as exc:

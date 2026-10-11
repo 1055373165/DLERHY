@@ -1060,6 +1060,27 @@ export function blogPublishProgressText(job: BlogPublishJob): string {
   return "正在登录博客……";
 }
 
+/** What a finished publish did, in one sentence: new draft or update, pictures, cover. */
+export function blogPublishResultText(result: BlogPublishResult): string {
+  if (result.action === "unchanged") {
+    return `博客文章「${result.title}」已是最新，没有改动。`;
+  }
+  const head = result.action === "created" ? "已新建博客草稿" : "已更新博客文章正文";
+  const images = result.images_uploaded
+    ? `，上传图片 ${result.images_uploaded} 张`
+    : result.images_reused
+      ? "，图片沿用上次上传的"
+      : "";
+  const cover =
+    result.cover === "uploaded"
+      ? "，已上传并设置封面"
+      : result.cover === "reused"
+        ? "，已设置封面"
+        : "";
+  const skipped = result.images_skipped.length ? `；${result.images_skipped.length} 张图片超过博客限制没有上传` : "";
+  return `${head}「${result.title}」${images}${cover}${skipped}。`;
+}
+
 export type ReadableExportType = "merged_html" | "bilingual_html" | "merged_markdown" | "rebuilt_pdf" | "web_html";
 
 /** An export for reading in the app: HTML or Markdown text, or the PDF bytes (exporting first when needed). */

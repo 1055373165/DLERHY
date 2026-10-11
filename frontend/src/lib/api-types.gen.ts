@@ -79,12 +79,13 @@ export interface BlogPublishRequest {
 
 export interface BlogPublishResponse {
   article_id: number;
-  action: "created" | "updated";
+  action: "created" | "updated" | "unchanged";
   title: string;
   edit_url?: string | null;
   images_uploaded: number;
   images_reused: number;
   images_skipped: string[];
+  cover?: "uploaded" | "reused" | "kept" | "none";
 }
 
 export interface BlogTargetResponse {

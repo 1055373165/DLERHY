@@ -1,5 +1,6 @@
-"""Publishing a reading copy to the blog: log in, upload the pictures, save an article draft with a
-title, excerpt and SEO made by rule; publishing again updates the same article."""
+"""Publishing a reading copy to the blog: log in, upload the pictures and the book's cover, save an
+article draft with a title, excerpt and SEO made by rule; publishing again updates only the body of
+the same article and uploads nothing twice."""
 
 from __future__ import annotations
 
@@ -12,7 +13,8 @@ from unittest.mock import patch
 import httpx
 
 from book_agent.export.blog_metadata import build_blog_metadata
-from book_agent.services.blog_publish import BlogClient, BlogTarget
+from book_agent.services.blog_publish import BlogClient, BlogPublishError, BlogTarget
+from book_agent.services.book_cover import BookCover
 from tests import test_standalone_html as downloads
 
 TARGET_ENV = {
@@ -24,12 +26,15 @@ TARGET_ENV = {
 
 
 class FakeBlog:
-    """The blog's login, picture upload and article endpoints."""
+    """The blog's login, picture and cover upload and article endpoints."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, fail_upload_at: int | None = None) -> None:
         self.articles: dict[int, dict] = {}
         self.uploads: list[str] = []
+        self.covers: list[str] = []
+        self.puts: list[dict] = []
         self.logins = 0
+        self.fail_upload_at = fail_upload_at
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -43,17 +48,29 @@ class FakeBlog:
             return httpx.Response(401, json={"success": False, "error": "缺少token"})
         if path == "/api/upload/image":
             name = re.search(rb'filename="([^"]+)"', request.content).group(1).decode()
+            if self.fail_upload_at is not None and len(self.uploads) + 1 == self.fail_upload_at:
+                return httpx.Response(500, json={"success": False, "error": "磁盘满了"})
             self.uploads.append(name)
             return httpx.Response(200, json={"success": True, "data": {"url": f"http://blog.test/api/upload/image/{len(self.uploads)}-{name}"}})
+        if path == "/api/cover/upload":
+            assert "图书封面".encode() in request.content
+            self.covers.append(re.search(rb'filename="([^"]+)"', request.content).group(1).decode())
+            return httpx.Response(200, json={"success": True, "data": {"url": f"http://blog.test/api/upload/cover/图书封面/cover_{len(self.covers)}.jpg"}})
         if path == "/api/articles" and request.method == "POST":
             article_id = len(self.articles) + 1
             self.articles[article_id] = json.loads(request.content)
             return httpx.Response(201, json={"success": True, "data": {"id": article_id}})
         match = re.fullmatch(r"/api/articles/(\d+)", path)
+        if match and request.method == "GET":
+            article_id = int(match.group(1))
+            if article_id not in self.articles:
+                return httpx.Response(404, json={"success": False, "error": "文章不存在"})
+            return httpx.Response(200, json={"success": True, "data": {"cover_image": "", **self.articles[article_id], "id": article_id}})
         if match and request.method == "PUT":
             article_id = int(match.group(1))
             if article_id not in self.articles:
                 return httpx.Response(404, json={"success": False, "error": "文章不存在"})
+            self.puts.append(json.loads(request.content))
             self.articles[article_id].update(json.loads(request.content))
             return httpx.Response(200, json={"success": True, "data": {"id": article_id}})
         return httpx.Response(404, json={"error": f"unhandled {request.method} {path}"})
@@ -122,6 +139,67 @@ class PublishProgressTest(unittest.TestCase):
         self.assertEqual(result.images_uploaded, 3)
 
 
+class PublishStateTest(unittest.TestCase):
+    def test_pictures_uploaded_before_a_failure_are_not_uploaded_again(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        from book_agent.services.blog_publish import publish_markdown
+
+        target = BlogTarget(api_url="http://blog.test", email="admin@blog.test", password="secret")
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "assets").mkdir()
+            for name in ("a.png", "b.png", "c.png"):
+                (Path(tmp) / "assets" / name).write_bytes(name.encode())
+            markdown = "# 书\n\n![](assets/a.png)\n\n![](assets/b.png)\n\n![](assets/c.png)\n"
+            meta = build_blog_metadata(markdown=markdown, title="书", source_title=None, authors=None)
+
+            def publish(blog: FakeBlog, state: dict):
+                transport = httpx.MockTransport(blog.handle)
+                return publish_markdown(
+                    target=target, state=state, markdown=markdown, base_dir=Path(tmp), metadata=meta, edition="zh",
+                    client_factory=lambda t: BlogClient(t, transport=transport),
+                )
+
+            failing = FakeBlog(fail_upload_at=3)
+            with self.assertRaises(BlogPublishError) as caught:
+                publish(failing, {})
+            self.assertEqual(len(caught.exception.state["http://blog.test"]["images"]), 2)
+            retry = FakeBlog()
+            result, _state = publish(retry, caught.exception.state)
+        self.assertEqual((result.images_uploaded, result.images_reused), (1, 2))
+        self.assertEqual(retry.uploads, ["c.png"])
+
+
+    def test_a_blog_that_does_not_show_the_article_gets_an_update_not_a_second_article(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        from book_agent.services.blog_publish import publish_markdown
+
+        class OlderBlog(FakeBlog):
+            def handle(self, request: httpx.Request) -> httpx.Response:
+                if request.method == "GET" and request.url.path.startswith("/api/articles/"):
+                    return httpx.Response(404, json={"success": False, "error": "文章不存在"})
+                return super().handle(request)
+
+        blog = OlderBlog()
+        transport = httpx.MockTransport(blog.handle)
+        target = BlogTarget(api_url="http://blog.test", email="admin@blog.test", password="secret")
+        meta = build_blog_metadata(markdown="# 书\n\n正文。\n", title="书", source_title=None, authors=None)
+        state: dict = {}
+        actions = []
+        for _ in range(2):
+            result, state = publish_markdown(
+                target=target, state=state, markdown="# 书\n\n正文。\n", base_dir=Path(tempfile.gettempdir()), metadata=meta,
+                edition="zh", cover=lambda: BookCover(b"c", "cover.jpg", "image/jpeg"),
+                client_factory=lambda t: BlogClient(t, transport=transport),
+            )
+            actions.append((result.action, result.cover))
+        self.assertEqual(actions, [("created", "uploaded"), ("updated", "kept")])
+        self.assertEqual((len(blog.articles), len(blog.covers), list(blog.puts[-1])), (1, 1, ["content"]))
+
+
 class BlogPublishApiTest(unittest.TestCase):
     """The API on the download tests' exported book (its Markdown references assets/pdf-images/fig.png)."""
 
@@ -138,6 +216,15 @@ class BlogPublishApiTest(unittest.TestCase):
         factory = patch("book_agent.app.api.routes.blog.BlogClient", lambda target: BlogClient(target, transport=transport))
         factory.start()
         self.addCleanup(factory.stop)
+        self.cover_calls = 0
+
+        def cover(source_path: str | None) -> BookCover:
+            self.cover_calls += 1
+            return BookCover(b"jpeg-bytes", "cover.jpg", "image/jpeg")
+
+        cover_patch = patch("book_agent.app.api.routes.blog.book_cover", cover)
+        cover_patch.start()
+        self.addCleanup(cover_patch.stop)
 
     def _start(self, edition: str = "zh") -> httpx.Response:
         return self.client.post(f"/v1/documents/{self.document_id}/blog-publish", json={"edition": edition})
@@ -173,16 +260,37 @@ class BlogPublishApiTest(unittest.TestCase):
         for field in ("title", "excerpt", "meta_title", "meta_description", "meta_keywords"):
             self.assertTrue(article[field], field)
 
-        # Again: the same article is updated, its picture not uploaded twice, its state left alone.
+        # The book's cover went to the blog's cover library and is the article's cover.
+        self.assertEqual(body["cover"], "uploaded")
+        self.assertEqual(self.blog.covers, ["cover.jpg"])
+        self.assertEqual(article["cover_image"], "http://blog.test/api/upload/cover/图书封面/cover_1.jpg")
+
+        # Again with the same body: nothing is sent or uploaded, the cover is kept.
         again = self._publish()["result"]
-        self.assertEqual((again["action"], again["article_id"]), ("updated", body["article_id"]))
-        self.assertEqual((again["images_uploaded"], again["images_reused"]), (0, 1))
-        self.assertEqual(len(self.blog.uploads), 1)
+        self.assertEqual((again["action"], again["article_id"]), ("unchanged", body["article_id"]))
+        self.assertEqual((again["images_uploaded"], again["images_reused"], again["cover"]), (0, 1, "kept"))
+        self.assertEqual((len(self.blog.uploads), len(self.blog.covers), self.blog.puts), (1, 1, []))
         self.assertEqual(len(self.blog.articles), 1)
+
+        # A changed body is the only thing sent: the title, SEO and a cover chosen on the blog stay.
+        self.blog.articles[body["article_id"]].update(content="旧正文", title="博客上改过的标题", cover_image="http://blog.test/mine.jpg")
+        changed = self._publish()["result"]
+        self.assertEqual((changed["action"], changed["cover"]), ("updated", "kept"))
+        self.assertEqual(list(self.blog.puts[-1]), ["content"])
+        self.assertEqual(self.blog.articles[body["article_id"]]["title"], "博客上改过的标题")
+        self.assertEqual(self.blog.articles[body["article_id"]]["cover_image"], "http://blog.test/mine.jpg")
+
+        # An article without a cover (published before covers, or removed on the blog) gets the one uploaded.
+        self.blog.articles[body["article_id"]]["cover_image"] = ""
+        covered = self._publish()["result"]
+        self.assertEqual((covered["action"], covered["cover"]), ("updated", "reused"))
+        self.assertEqual(self.blog.puts[-1], {"cover_image": "http://blog.test/api/upload/cover/图书封面/cover_1.jpg"})
+        self.assertEqual(len(self.blog.covers), 1)
 
         # The bilingual edition is its own article; one deleted on the blog is created anew.
         bilingual = self._publish("bilingual")["result"]
         self.assertNotEqual(bilingual["article_id"], body["article_id"])
+        self.assertEqual((bilingual["cover"], len(self.blog.covers)), ("reused", 1))
         self.assertTrue(self.blog.articles[bilingual["article_id"]]["title"].endswith("（中英对照）"))
         del self.blog.articles[body["article_id"]]
         self.assertEqual(self._publish()["result"]["action"], "created")
