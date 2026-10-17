@@ -1363,6 +1363,11 @@ class PdfStructureRecoveryService:
             content_family = "references"
         elif index_like_count >= 3 and index_like_ratio >= 0.6:
             content_family = "index"
+        if content_family == "references" and not heading_present and not contents_running_head:
+            # Numbered entries ending in page ranges ("[5] ... 91, 1357-1392") have contents lines'
+            # shape: How Large Language Models Work's reference pages read as contents, and the
+            # reading copy, which leaves the printed contents out, lost its References.
+            is_toc_page = False
         detected_backmatter_cue = _detect_backmatter_cue(content_texts)
         if detected_backmatter_cue is not None:
             backmatter_cue, backmatter_cue_source = detected_backmatter_cue

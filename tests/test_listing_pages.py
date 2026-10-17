@@ -104,5 +104,24 @@ class ListingPagesReviewTests(unittest.TestCase):
         self.assertEqual(listing, {192, 8})
 
 
+class ReferencePagesCorpusTests(unittest.TestCase):
+    @unittest.skipUnless(__import__("os").getenv("BOOK_AGENT_RUN_CORPUS_TESTS") == "1", "Set BOOK_AGENT_RUN_CORPUS_TESTS=1 to parse the real book.")
+    def test_how_large_language_models_work_keeps_its_references_out_of_the_contents(self) -> None:
+        """Entries ending in page ranges ("91, 1357-1392") have contents lines' shape: the book's reference
+        pages read as contents, and the reading copy (which leaves the printed contents out) lost them."""
+        from pathlib import Path
+
+        from book_agent.domain.structure.pdf import PDFParser
+
+        path = Path("~/Downloads/ai 书籍/How Large Language Models Work (Edward Raff, Drew Farris, Stella Biderman) (z-library.sk, 1lib.sk, z-lib.sk).pdf").expanduser()
+        if not path.exists():
+            self.skipTest(f"corpus book not on this machine: {path}")
+        parsed = PDFParser().parse(path)
+        references = next(chapter for chapter in parsed.chapters if chapter.title == "References")
+        families = [block.metadata.get("pdf_page_family") for block in references.blocks]
+        self.assertNotIn("toc", families)
+        self.assertNotIn("table", [block.block_type for block in references.blocks])
+
+
 if __name__ == "__main__":
     unittest.main()
