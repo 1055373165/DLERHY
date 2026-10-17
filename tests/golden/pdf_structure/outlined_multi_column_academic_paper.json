@@ -741,7 +741,7 @@
       "sanity_ok": true
      },
      "metadata": {
-      "nontranslatable_reason": null,
+      "nontranslatable_reason": "pdf_reference_entry",
       "pdf_block_role": "body",
       "pdf_font_names": [
        "Helvetica"
@@ -768,7 +768,7 @@
       },
       "source_page_end": 4,
       "source_page_start": 4,
-      "translatable": true
+      "translatable": false
      },
      "ordinal": 2,
      "parse_confidence": 0.82,
@@ -776,7 +776,7 @@
      "source_path": "pdf://page/4",
      "style_hints": {},
      "text": "[1] A. Researcher and B. Scientist. 2024. Structured recovery for compact academic PDFs. ACL. [2] C. Author and D. W",
-     "translatability": "translate_all"
+     "translatability": "translate_none"
     },
     {
      "anchor": "p4-b17",

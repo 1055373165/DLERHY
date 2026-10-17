@@ -142,16 +142,20 @@
    "blocks": [
     {
      "anchor": "p2-b4",
-     "block_type": "paragraph",
+     "block_type": "list_item",
      "confidence_breakdown": {
       "sanity_ok": true
      },
      "metadata": {
-      "nontranslatable_reason": null,
-      "pdf_block_role": "body",
+      "detected_by": "bullet_pattern",
+      "list_kind": "number",
+      "list_level": 1,
+      "nontranslatable_reason": "pdf_reference_entry",
+      "pdf_block_role": "list_item",
       "pdf_font_names": [
        "Helvetica"
       ],
+      "pdf_list_marker": "number",
       "pdf_page_content_family": "references",
       "pdf_page_family": "references",
       "pdf_page_family_source": "content_signature",
@@ -175,7 +179,7 @@
       },
       "source_page_end": 2,
       "source_page_start": 2,
-      "translatable": true
+      "translatable": false
      },
      "ordinal": 1,
      "parse_confidence": 0.96,
@@ -183,20 +187,24 @@
      "source_path": "pdf://page/2",
      "style_hints": {},
      "text": "[1] Smith, J. Durable Advantage. 2024.",
-     "translatability": "translate_all"
+     "translatability": "translate_none"
     },
     {
      "anchor": "p2-b5",
-     "block_type": "paragraph",
+     "block_type": "list_item",
      "confidence_breakdown": {
       "sanity_ok": true
      },
      "metadata": {
-      "nontranslatable_reason": null,
-      "pdf_block_role": "body",
+      "detected_by": "bullet_pattern",
+      "list_kind": "number",
+      "list_level": 1,
+      "nontranslatable_reason": "pdf_reference_entry",
+      "pdf_block_role": "list_item",
       "pdf_font_names": [
        "Helvetica"
       ],
+      "pdf_list_marker": "number",
       "pdf_page_content_family": "references",
       "pdf_page_family": "references",
       "pdf_page_family_source": "content_signature",
@@ -220,7 +228,7 @@
       },
       "source_page_end": 2,
       "source_page_start": 2,
-      "translatable": true
+      "translatable": false
      },
      "ordinal": 2,
      "parse_confidence": 0.96,
@@ -228,7 +236,7 @@
      "source_path": "pdf://page/2",
      "style_hints": {},
      "text": "[2] Lee, S. Network Density. 2023.",
-     "translatability": "translate_all"
+     "translatability": "translate_none"
     },
     {
      "anchor": "p2-b6",
@@ -560,8 +568,8 @@
      ],
      "relocated_footnote_count": 0,
      "role_counts": {
-      "body": 2,
-      "footer": 1
+      "footer": 1,
+      "list_item": 2
      },
      "toc_entries": []
     },

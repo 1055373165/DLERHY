@@ -287,7 +287,7 @@
       "sanity_ok": true
      },
      "metadata": {
-      "nontranslatable_reason": null,
+      "nontranslatable_reason": "pdf_reference_entry",
       "pdf_block_role": "body",
       "pdf_font_names": [
        "Helvetica"
@@ -318,7 +318,7 @@
       },
       "source_page_end": 3,
       "source_page_start": 3,
-      "translatable": true
+      "translatable": false
      },
      "ordinal": 2,
      "parse_confidence": 0.96,
@@ -326,7 +326,7 @@
      "source_path": "pdf://page/3",
      "style_hints": {},
      "text": "[1] Smith, J. Durable Advantage. 2024. [2] Lee, S. Network Density. 2023",
-     "translatability": "translate_all"
+     "translatability": "translate_none"
     },
     {
      "anchor": "p3-b8",
@@ -381,7 +381,7 @@
       "sanity_ok": true
      },
      "metadata": {
-      "nontranslatable_reason": null,
+      "nontranslatable_reason": "pdf_reference_entry",
       "pdf_block_role": "body",
       "pdf_font_names": [
        "Helvetica"
@@ -405,7 +405,7 @@
       },
       "source_page_end": 4,
       "source_page_start": 4,
-      "translatable": true
+      "translatable": false
      },
      "ordinal": 4,
      "parse_confidence": 0.96,
@@ -413,7 +413,7 @@
      "source_path": "pdf://page/4",
      "style_hints": {},
      "text": "[3] Patel, R. Attention Systems. 2022.",
-     "translatability": "translate_all"
+     "translatability": "translate_none"
     },
     {
      "anchor": "p4-b10",

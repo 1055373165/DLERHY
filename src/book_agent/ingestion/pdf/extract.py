@@ -468,12 +468,29 @@ def _split_enumerated_line_blocks(
 
 _BULLET_ITEM_LINE = re.compile(r"^[•●◦▪]\s+\S")
 _DASH_ITEM_LINE = re.compile(r"^[–—]\s+\S")
-_NUMBER_ITEM_LINE = re.compile(r"^(\d{1,3})[.)]?\s+[^\d\s]")
+# "1 Data layer" / "2. Model layer" / "[3] Lin, S. (2022). ..." (a numbered reference list).
+_NUMBER_ITEM_LINE = re.compile(r"^(?:\[(\d{1,3})\]|(\d{1,3})[.)]?)\s+[^\d\s]")
 # A table-of-contents line ends in its page number ("1 What is an AI agent? 1").
 _TRAILING_PAGE_NUMBER = re.compile(r"\s\d{1,4}$")
 # How far (pt) two lines may start apart and still be set at the same indent.
 _INDENT_TOLERANCE = 2.0
 
+
+def _item_number(match: re.Match[str]) -> int:
+    return int(match.group(1) or match.group(2))
+
+
+def _numbers_share_an_indent(markers: list[tuple[float, int]]) -> bool:
+    """Whether numbered markers (x0, number) are set at one indent. A book may set them
+    right-aligned, so "[10]" starts a digit's width left of "[9]": numbers with as many digits
+    share an indent, and a number with more digits starts no further right."""
+    indents: dict[int, list[float]] = {}
+    for x0, number in markers:
+        indents.setdefault(len(str(number)), []).append(x0)
+    if any(max(xs) - min(xs) > _INDENT_TOLERANCE for xs in indents.values()):
+        return False
+    lefts = [min(indents[digits]) for digits in sorted(indents)]
+    return all(wider <= narrower + _INDENT_TOLERANCE and narrower - wider <= 8.0 for narrower, wider in zip(lefts, lefts[1:]))
 
 def _list_item_kinds(lines: list[str], line_bboxes: list[tuple[float, float, float, float]]) -> list[str]:
     """The list marker each line starts with: "bullet", "dash", "number" or "".
@@ -486,11 +503,10 @@ def _list_item_kinds(lines: list[str], line_bboxes: list[tuple[float, float, flo
         "bullet" if _BULLET_ITEM_LINE.match(line) else "dash" if _DASH_ITEM_LINE.match(line) else ""
         for line in lines
     ]
-    numbered = [(index, int(match.group(1))) for index, line in enumerate(lines) if (match := _NUMBER_ITEM_LINE.match(line))]
+    numbered = [(index, _item_number(match)) for index, line in enumerate(lines) if (match := _NUMBER_ITEM_LINE.match(line))]
     if len(numbered) >= 2:
-        first_x = line_bboxes[numbered[0][0]][0]
         numbers = [number for _index, number in numbered]
-        same_indent = all(abs(line_bboxes[index][0] - first_x) <= _INDENT_TOLERANCE for index, _number in numbered)
+        same_indent = _numbers_share_an_indent([(line_bboxes[index][0], number) for index, number in numbered])
         toc_like = sum(bool(_TRAILING_PAGE_NUMBER.search(lines[index])) for index, _number in numbered) * 2 >= len(numbered)
         if same_indent and not toc_like and numbers == list(range(numbers[0], numbers[0] + len(numbers))):
             for index, _number in numbered:
@@ -527,7 +543,8 @@ def _split_hanging_list_blocks(
         kinds = _list_item_kinds(lines, line_bboxes)
         marked = [index for index, kind in enumerate(kinds) if kind]
         if (marked and sum(bool(_TRAILING_PAGE_NUMBER.search(lines[index])) for index in marked) * 2 >= len(marked)) or any(
-            line.strip().isdigit() for line in lines
+            # (A wrapped DOI's digits, "0956797617742725", are no page or chapter number.)
+            line.strip().isdigit() and len(line.strip()) <= 4 for line in lines
         ):
             # Table-of-contents entries ("• LLMs and the need for RAG 3", a chapter
             # number on its own line) are not a list of the text.
@@ -608,7 +625,7 @@ def _mark_numbered_list_blocks(blocks: list[PdfTextBlock]) -> list[PdfTextBlock]
             index += 1
             continue
         marker_x = block.bbox[0]
-        expected = int(start.group(1))
+        expected = _item_number(start)
         items: list[list[PdfTextBlock]] = []
         cursor = index
         while cursor < len(blocks):
@@ -617,7 +634,7 @@ def _mark_numbered_list_blocks(blocks: list[PdfTextBlock]) -> list[PdfTextBlock]
             match = _NUMBER_ITEM_LINE.match(first_line)
             if (
                 match
-                and int(match.group(1)) == expected
+                and _item_number(match) == expected
                 and abs(candidate.bbox[0] - marker_x) <= _INDENT_TOLERANCE
                 and not candidate.list_marker
                 and not _TRAILING_PAGE_NUMBER.search(first_line)

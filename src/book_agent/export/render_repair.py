@@ -584,6 +584,9 @@ def infer_refresh_split_fragment_target_text(
     return candidate or None
 
 
+_REFERENCE_SECTION_TITLES = frozenset({"references", "bibliography", "works cited", "notes", "endnotes"})
+
+
 def should_drop_book_heading_label(
     bundle: ChapterExportBundle,
     index: int,
@@ -593,6 +596,10 @@ def should_drop_book_heading_label(
     if not normalized or not _PURE_CHAPTER_LABEL_PATTERN.match(normalized):
         return False
     chapter_title = _normalize_render_text(bundle.chapter.title_src)
+    if chapter_title.casefold() in _REFERENCE_SECTION_TITLES:
+        # Back-matter references grouped by chapter ("Chapter 3", then its entries): the label
+        # heads a group, it is no chapter opening's kicker.
+        return False
     if chapter_title and chapter_title.casefold() == normalized.casefold():
         return True
     return index > 0
@@ -1759,6 +1766,9 @@ def render_mode_for_block(
         return "source_artifact_full_width"
     if effective_block_type == BlockType.TABLE:
         return "translated_wrapper_with_preserved_artifact"
+    if source_metadata.get("nontranslatable_reason") == "pdf_reference_entry":
+        # A bibliography entry kept as written reads as the text it is, not as a code artifact.
+        return "zh_primary_with_optional_source"
     if block.protected_policy.value == "protect":
         return "source_artifact_full_width"
     if block.protected_policy.value == "mixed":

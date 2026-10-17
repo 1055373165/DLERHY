@@ -53,6 +53,38 @@ from book_agent.ingestion.pdf.models import (
 from book_agent.ingestion.text import _HEADING_PATTERN, _normalize_text
 
 
+# A book's closing bibliography stays as the authors wrote it, as Chinese editions keep it: an entry's
+# author names, title and venue are what a reader searches for. (Notes, which carry prose, are translated.)
+_SOURCE_KEPT_REFERENCE_TITLES = {"references", "bibliography", "works cited"}
+_REFERENCE_ENTRY_START = re.compile(r"^\s*\[\d{1,3}\]\s+\S")
+_REFERENCE_CONTINUATION = re.compile(r"https?://|doi\.org/|\((?:19|20)\d{2}[a-z]?[,)]|\(n\.d\.\)")
+
+
+def _keep_reference_entries_in_source(blocks: list[ParsedBlock]) -> list[ParsedBlock]:
+    """Mark a references chapter's numbered entries ("[3] Lin, S. (2022). TruthfulQA: ...") not to be
+    translated, and the rest of an entry a page break cut off ("(2023, March 27). GPT-4 technical
+    report. https://...") with them."""
+    kept: list[ParsedBlock] = []
+    previous_was_entry = False
+    for block in blocks:
+        metadata = block.metadata
+        is_entry = (
+            metadata.get("translatable") is not False
+            and block.block_type in {"paragraph", "list_item"}
+            and metadata.get("pdf_block_role") in {"body", "list_item"}
+            and (
+                bool(_REFERENCE_ENTRY_START.match(block.text or ""))
+                or (previous_was_entry and bool(_REFERENCE_CONTINUATION.search(block.text or "")))
+            )
+        )
+        if is_entry:
+            metadata = {**metadata, "translatable": False, "nontranslatable_reason": "pdf_reference_entry"}
+            block = replace(block, metadata=metadata, translatability=derive_translatability(block.block_type, metadata))
+        if metadata.get("pdf_block_role") not in {"header", "footer"}:
+            previous_was_entry = is_entry
+        kept.append(block)
+    return kept
+
 def build_chapters(
     recovered_blocks: list[_RecoveredBlock],
     outline_entries: list[PdfOutlineEntry],
@@ -152,6 +184,8 @@ def build_chapters(
             _build_parsed_block(ordinal, block)
             for ordinal, block in enumerate(current_blocks, start=1)
         ]
+        if str(title or "").strip().casefold() in _SOURCE_KEPT_REFERENCE_TITLES:
+            parsed_blocks = _keep_reference_entries_in_source(parsed_blocks)
         chapters.append(
             ParsedChapter(
                 chapter_id=chapter_id,
