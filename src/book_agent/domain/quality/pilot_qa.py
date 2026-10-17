@@ -256,6 +256,9 @@ class QaBlock:
     folded_headings: tuple[tuple[str, str], ...] = ()
     # A figure whose page gives it no caption, accepted as such (the repair's ``accept_uncaptioned_figure``).
     caption_absent_accepted: bool = False
+    # Figures: whether the caption has text in the book's body face (False: all of it is in the caption's
+    # own face, however long; None: not known).
+    caption_in_body_face: bool | None = None
     # Headings: the level the parser gave it (1 chapter, 2 x.y, 3 x.y.z and below).
     heading_level: int | None = None
     # EPUB blocks: the structure version the parser read them with (``epub.EPUB_STRUCTURE_VERSION``;
@@ -1438,8 +1441,12 @@ def check_figures(inputs: PilotQaInputs) -> list[CheckRun]:
                 words = len(caption.split())
                 sentences = _sentence_count(caption)
                 zh = block.target_text or ""
-                if words > CAPTION_MAX_WORDS or sentences > CAPTION_MAX_SENTENCES or (
-                    cjk_count(zh) > CAPTION_MAX_CJK and _zh_sentence_count(zh) > CAPTION_MAX_SENTENCES
+                # A long caption the page sets wholly in its caption face is the book's (How Large
+                # Language Models Work, figure 2.8: 82 words, 5 sentences); body text is in the body face.
+                if block.caption_in_body_face is not False and (
+                    words > CAPTION_MAX_WORDS
+                    or sentences > CAPTION_MAX_SENTENCES
+                    or (cjk_count(zh) > CAPTION_MAX_CJK and _zh_sentence_count(zh) > CAPTION_MAX_SENTENCES)
                 ):
                     swallowed.findings.append(
                         _block_finding(

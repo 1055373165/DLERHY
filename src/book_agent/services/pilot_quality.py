@@ -304,6 +304,27 @@ class _Loaded:
             self.pages.close()
 
 
+def _body_face(bundle) -> str | None:
+    """The font most of the paragraphs' text is set in (None for a book without font evidence)."""
+    weight: dict[str, int] = {}
+    for chapter_bundle in bundle.chapters:
+        for candidate in chapter_bundle.blocks:
+            if getattr(candidate.block_type, "value", candidate.block_type) != "paragraph":
+                continue
+            names = (candidate.source_span_json or {}).get("pdf_font_names") or ()
+            for name in names[:1]:
+                weight[str(name)] = weight.get(str(name), 0) + len(candidate.source_text or "")
+    return max(weight, key=weight.get) if weight else None
+
+
+def _caption_in_body_face(block, block_fonts: dict[str, tuple[str, ...]], body_face: str | None) -> bool | None:
+    caption_id = block.source_metadata.get("linked_caption_block_id")
+    fonts = block_fonts.get(str(caption_id)) if caption_id else None
+    if not fonts or body_face is None:
+        return None
+    return body_face in fonts
+
+
 def load_pilot_inputs(
     session: Session,
     document_id: str,
@@ -376,6 +397,12 @@ def load_pilot_inputs(
     block_texts = {
         candidate.id: candidate.source_text for chapter_bundle in bundle.chapters for candidate in chapter_bundle.blocks
     }
+    block_fonts = {
+        candidate.id: tuple(str(name) for name in ((candidate.source_span_json or {}).get("pdf_font_names") or ()) if name)
+        for chapter_bundle in bundle.chapters
+        for candidate in chapter_bundle.blocks
+    }
+    body_face = _body_face(bundle)
     parsed_heading_ids = {
         candidate.id
         for chapter_bundle in bundle.chapters
@@ -445,6 +472,7 @@ def load_pilot_inputs(
                     context_texts=tuple(str(block_texts.get(str(context_id)) or "") for context_id in context_ids),
                     parsed_text=str(block_texts.get(block.block_id) or ""),
                     font_names=tuple(str(name) for name in block.source_metadata.get("pdf_font_names") or () if name),
+                    caption_in_body_face=_caption_in_body_face(block, block_fonts, body_face),
                     regions=tuple(parse_health.block_regions(block.source_metadata)),
                     merged_blocks=tuple(
                         (str(merged_id), str(block_texts.get(str(merged_id)) or ""))
