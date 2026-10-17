@@ -411,6 +411,21 @@ class KnownIssueTests(unittest.TestCase):
         self.assertEqual(finding["location"]["page"], 22)
         self.assertEqual(finding["repair"], "structure_edit")
 
+    def test_a_long_caption_set_wholly_in_the_caption_face_is_the_books(self) -> None:
+        # How Large Language Models Work, figure 2.8: 82 words in 5 sentences, all in the caption's face.
+        long_caption = (
+            "Figure 2.8 A comparison of how two LLMs learn to perform arithmetic computations over time. Time is "
+            "shown on the x-axis. The upper curve is a typical BPE tokenizer, while the lower curve is the same "
+            "tokenizer modified to use tokens that represent individual digits. The y-axis describes the ability of "
+            "the LLM to perform accurately, where a smaller number means fewer errors. The bottom line is that LLMs "
+            "that use digit-level tokenization can learn how to do math better and faster."
+        )
+        caption_face = replace_block(clean_blocks(), "b-fig", source_text=long_caption, caption_in_body_face=False)
+        found = {finding["check_id"] for layer in pilot_qa.run_layers(build(caption_face)) for finding in layer["findings"]}
+        self.assertNotIn("L2.caption_swallows_body", found)
+        body_face = replace_block(clean_blocks(), "b-fig", source_text=long_caption, caption_in_body_face=True)
+        self.assertFound(build(body_face), "L2.caption_swallows_body", BLOCKING, target_id="b-fig")
+
     def test_body_text_folded_into_a_caption_by_the_export_grouping(self) -> None:
         blocks = clean_blocks()
         folded = dataclasses.replace(

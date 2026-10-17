@@ -887,6 +887,10 @@ class StructureEditService:
         if second_regions:
             first_span["source_bbox_json"] = {**(first_span.get("source_bbox_json") or {}), "regions": [*first_regions, *second_regions]}
         first_span["structure_merged_block_ids"] = [*first_span.get("structure_merged_block_ids", []), second.id]
+        # The merged block is set in both blocks' fonts: a caption that took in body text shows it.
+        fonts = [*(first_span.get("pdf_font_names") or []), *(second_span.get("pdf_font_names") or [])]
+        if fonts:
+            first_span["pdf_font_names"] = list(dict.fromkeys(fonts))
         first.source_span_json = first_span
         first.updated_at = now
         second.status = ArtifactStatus.INVALIDATED

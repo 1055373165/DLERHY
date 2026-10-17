@@ -67,6 +67,10 @@ def _needs_literal_source(term: LockedTerm) -> bool:
     source = term.source_term.strip()
     if _CODE_CHARS.search(source):
         return True
+    if re.fullmatch(r"[A-Z][a-z]+", source):
+        # One capitalized word is a name or a label ("Figure" -> 图, "Gray", "Raft", "Meta"): it does
+        # not claim the ordinary word ("figure out what STOP represents" kept failing the "Figure" lock).
+        return True
     kept_as_is = any(rendering.strip() == source for rendering in term.renderings)
     return kept_as_is
 
