@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from book_agent.domain.structure.inline_marks import unbalanced_against
+from book_agent.domain.structure.citations import is_citation_entry
 from book_agent.domain.terminology.enforcement import LockedTerm, TermViolation, find_term_violations
 from book_agent.translation.contracts import TranslationWorkerOutput
 
@@ -270,6 +271,7 @@ class OutputValidator:
         source_texts: Mapping[str, str] | None = None,
         locked_terms: Sequence[LockedTerm] = (),
         line_locked: Iterable[str] = (),
+        term_exempt: Iterable[str] = (),
     ) -> OutputValidationReport:
         """A sentence is covered when an alignment links it to a target segment the worker returned.
 
@@ -277,7 +279,8 @@ class OutputValidator:
 
         ``source_texts`` (sentence id -> source text) enables the echo,
         locked-term and length-ratio checks; without it only coverage is
-        validated. ``locked_terms`` are the glossary locks for the chapter.
+        validated. ``locked_terms`` are the glossary locks for the chapter; ``term_exempt`` are
+        sentences no locked term applies to (the pieces of a citation entry).
         """
         expected = list(dict.fromkeys(current_sentence_ids))
         expected_set = set(expected)
@@ -289,6 +292,7 @@ class OutputValidator:
         ratio_findings: list[LengthRatioFinding] = []
         unbalanced: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
         term_units: list[tuple[str, str, str]] = []
+        exempt = set(term_exempt)
         locked_lines = set(line_locked) & expected_set
         lines_by_target: dict[str, list[str]] = {}
         for suggestion in output.alignment_suggestions:
@@ -329,7 +333,11 @@ class OutputValidator:
                     unbalanced.append((tuple(known_sources), tuple(markers)))
             if locked_terms:
                 # Each sentence is checked against the translation of its aligned group.
-                term_units.extend((sentence_id, source_texts.get(sentence_id) or "", target_text) for sentence_id in known_sources)
+                term_units.extend(
+                    (sentence_id, source_texts.get(sentence_id) or "", target_text)
+                    for sentence_id in known_sources
+                    if sentence_id not in exempt
+                )
             if self.check_length_ratio and not self._ratio_exempt_group(valid_targets, segments_by_temp_id):
                 finding = self._length_ratio_finding(known_sources, valid_targets, source_text, target_text)
                 if finding is not None:
@@ -357,12 +365,23 @@ class OutputValidator:
     ) -> OutputValidationReport:
         """Validate against a ``TranslationTask`` (current sentences with source text)."""
         sentences = list(task.current_sentences)
+        # A citation entry split into sentences ("[1] Friederici, A. D." / "(2011)." / "The brain basis
+        # of language processing: ..."): its title keeps the paper's English, which a sentence alone
+        # does not show (How Large Language Models Work's references failed the "language processing" lock).
+        packet = getattr(task, "context_packet", None)
+        citation_sentences = [
+            sentence_id
+            for block in (getattr(packet, "current_blocks", None) or [])
+            if is_citation_entry(block.text or "")
+            for sentence_id in block.sentence_ids
+        ]
         return self.validate(
             [sentence.id for sentence in sentences],
             output,
             source_texts={sentence.id: (sentence.source_text or "") for sentence in sentences},
             locked_terms=locked_terms,
             line_locked=[*callout_line_sentence_ids(sentences), *getattr(task, "line_locked_sentence_ids", ())],
+            term_exempt=citation_sentences,
         )
 
     def _is_echo(self, source_text: str, target_text: str) -> bool:
