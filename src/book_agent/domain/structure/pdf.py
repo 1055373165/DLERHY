@@ -2827,6 +2827,17 @@ class PdfStructureRecoveryService:
         # Hyphenated break — accept any reasonable continuation lead.
         if last_char == "-":
             return first_char.isalnum()
+        # No sentence ends with a comma: what follows it on the next page goes on.
+        if last_char == ",":
+            return first_char.isalnum()
+        # A list of names cut between two of them ("..., Federico Grasso, Florian" / "Braun, Georg
+        # Sommer, ..."): a capital goes on the list when the page ends inside one.
+        if (
+            first_char.isupper()
+            and re.match(r"^[A-Z][\w'’.\-]*,\s", curr_text)
+            and prev_tail[-160:].count(", ") >= 3
+        ):
+            return True
         # Standard continuation: current begins with lowercase letter.
         # A digit or capital-letter lead almost always signals a new
         # paragraph (section number, sentence, list item, etc.).
