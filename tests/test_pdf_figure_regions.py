@@ -303,6 +303,43 @@ class FigureExtentUnitTests(unittest.TestCase):
                 self.assertNotIn("image_bytes", asset)
 
 
+class NonWebImageFormatTests(unittest.TestCase):
+    """How Large Language Models Work embeds its figures as JPEG 2000 ("jpx"): the reading copy kept
+    them as .jpx files no browser shows, and the export failed writing a crop under that name
+    ("Image format jpx not in ('png', ...)")."""
+
+    def test_a_jpeg_2000_original_is_written_as_png(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "jpx.pdf"
+            document = fitz.open()
+            page = document.new_page(width=531, height=666)
+            page.insert_image(fitz.Rect(100, 100, 400, 300), stream=_solid_png((200, 200, 240)), keep_proportion=False)
+            document.save(pdf_path)
+
+            class Jpx:
+                """The document, reporting its image as JPEG 2000 the way such a PDF does."""
+
+                def __init__(self, inner) -> None:
+                    self.inner = inner
+
+                def __getattr__(self, name):
+                    return getattr(self.inner, name)
+
+                def extract_image(self, xref):
+                    return {**self.inner.extract_image(xref), "ext": "jpx"}
+
+            with fitz.open(pdf_path) as reopened:
+                asset = pdf_crop.probe_pdf_original_asset(Jpx(reopened), reopened[0], fitz.Rect(100, 100, 400, 300))
+        self.assertEqual(asset["extension"], ".png")
+        self.assertTrue(asset["image_bytes"].startswith(b"\x89PNG"))
+
+    def test_a_recorded_non_web_suffix_is_written_as_png(self) -> None:
+        recorded = SimpleNamespace(storage_path="document-images/d/b.jpx", metadata_json={"image_ext": "jpx"})
+        self.assertEqual(pdf_crop.document_image_asset_suffix(recorded, default_ext=".png"), ".png")
+        kept = SimpleNamespace(storage_path="document-images/d/b.jpeg", metadata_json={})
+        self.assertEqual(pdf_crop.document_image_asset_suffix(kept, default_ext=".png"), ".jpeg")
+
+
 class RepeatedFigureLabelTests(unittest.TestCase):
     def test_label_repeated_at_the_top_of_figures_is_not_a_running_header(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
