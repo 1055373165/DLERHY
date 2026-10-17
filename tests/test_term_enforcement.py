@@ -104,6 +104,23 @@ class GuardrailLockedTermTests(unittest.TestCase):
         self.assertTrue(report.ok)
 
 
+class CapitalizedWordTermTests(unittest.TestCase):
+    """How Large Language Models Work: the repair locked "Figure" -> 图 and every "figure out" failed it."""
+
+    TERMS = [LockedTerm("Figure", ("图",)), LockedTerm("Gray", ("Gray",)), LockedTerm("model", ("模型",))]
+
+    def violated(self, source: str, target: str) -> list[str]:
+        return [item.source_term for item in find_term_violations([("u", source, target)], self.TERMS)]
+
+    def test_one_capitalized_word_applies_only_where_the_source_capitalizes_it(self) -> None:
+        self.assertEqual(self.violated("Can you figure out what STOP represents?", "你能推断出 STOP 代表什么吗？"), [])
+        self.assertEqual(self.violated("The gray area is small.", "灰色区域很小。"), [])
+        self.assertEqual(self.violated("Figure 2.8 shows the curves.", "Figure 2.8 展示了曲线。"), ["Figure"])
+        self.assertEqual(self.violated("Figure 2.8 shows the curves.", "图 2.8 展示了曲线。"), [])
+        # A lowercase word still folds case: "Model" at a sentence start is the locked "model".
+        self.assertEqual(self.violated("Models learn.", "它们会学习。"), ["model"])
+
+
 class LiteralTermTests(unittest.TestCase):
     """The Agent book's terminology locked identifiers as-is ("@tool", "step()", "Event"): 200 false violations."""
 
