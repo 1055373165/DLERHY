@@ -1289,7 +1289,7 @@ class ReviewService:
         """The flagged pages that hold only an index's or a contents' entries (and their running heads)."""
         flagged = set(pages)
         families: dict[int, set[str]] = {}
-        for block in bundle.blocks:
+        for block in getattr(bundle, "blocks", None) or ():
             span = block.source_span_json or {}
             page = span.get("source_page_start")
             if page in flagged and span.get("pdf_block_role") not in {"header", "footer"}:
