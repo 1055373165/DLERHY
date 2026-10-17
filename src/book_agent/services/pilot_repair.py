@@ -1037,6 +1037,28 @@ def open_questions(session: Session, document_id: str) -> list[Approval]:
     )
 
 
+def _remaining_now(session: Session, repair: PilotRepair) -> tuple[int, int]:
+    """(blocking, major) left: the repair's count, or a QA report written after it (a fix made since)."""
+    remaining = (int(repair.remaining_blocking or 0), int(repair.remaining_major or 0))
+    if repair.status != "finished":
+        return remaining
+    after = session.get(PilotQualityReport, repair.after_report_id) if repair.after_report_id else None
+    since = after.created_at if after is not None else repair.created_at
+    latest = session.scalars(
+        select(PilotQualityReport)
+        .where(PilotQualityReport.document_id == repair.document_id, PilotQualityReport.scope == repair.scope)
+        .order_by(PilotQualityReport.created_at.desc(), PilotQualityReport.id.desc())
+        .limit(1)
+    ).first()
+    if latest is None or since is None or latest.created_at is None or _aware(latest.created_at) <= _aware(since):
+        return remaining
+    return int(latest.blocking_count or 0), int(latest.major_count or 0)
+
+
+def _aware(moment: datetime) -> datetime:
+    return moment if moment.tzinfo is not None else moment.replace(tzinfo=timezone.utc)
+
+
 def overview_summary(session: Session, repair: PilotRepair | None) -> dict[str, Any] | None:
     """What the pilot card says of the repair: what was repaired, what is left, what waits on the reader.
 
@@ -1064,7 +1086,8 @@ def overview_summary(session: Session, repair: PilotRepair | None) -> dict[str, 
             if int(entry.get("kept") or 0) > 0:
                 kept[str(entry.get("title") or entry.get("check_id"))] += int(entry.get("kept") or 0)
     questions = open_questions(session, repair.document_id)
-    left = int(repair.remaining_blocking or 0) + int(repair.remaining_major or 0)
+    remaining_blocking, remaining_major = _remaining_now(session, repair)
+    left = remaining_blocking + remaining_major
     if repair.status == "running":
         text = "正在自动修复全书里的问题…" if repair.scope == SCOPE_BOOK else "正在自动修复试译里的问题…"
     elif repair.status == "error":
@@ -1073,9 +1096,9 @@ def overview_summary(session: Session, repair: PilotRepair | None) -> dict[str, 
         text = "质检没有发现需要修复的严重或一般问题。"
     else:
         parts = [f"自动修复了 {repaired} 个问题" if repaired else "自动修复没能解决这些问题"]
-        if repair.remaining_blocking:
+        if remaining_blocking:
             parts.append(
-                f"还有 {repair.remaining_blocking} 个严重问题需要你看" + (f"（{len(questions)} 个问题等你回答）" if questions else "")
+                f"还有 {remaining_blocking} 个严重问题需要你看" + (f"（{len(questions)} 个问题等你回答）" if questions else "")
             )
         elif left:
             parts.append(f"还有 {left} 个一般问题，不影响阅读")
@@ -1092,7 +1115,7 @@ def overview_summary(session: Session, repair: PilotRepair | None) -> dict[str, 
         "stop_reason": repair.stop_reason,
         "rounds": repair.rounds,
         "repaired": repaired,
-        "remaining": {"blocking": int(repair.remaining_blocking or 0), "major": int(repair.remaining_major or 0)},
+        "remaining": {"blocking": remaining_blocking, "major": remaining_major},
         "questions": len(questions),
         "attempts": int(summary.get("attempts") or 0),
         "before": summary.get("before"),

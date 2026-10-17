@@ -379,6 +379,16 @@ class BoundsAndEscalationTests(PilotRepairBenchCase):
                 (sentence,) = sentence_ids(session, self.bench.document_id, text)
                 edit_translation(session, sentence, lambda current: current.replace("¡", "一"))
             session.commit()
+        # A QA run alone (a fix made outside the repair) withdraws it, and the card counts what is left now.
+        with self.bench.session_factory() as session:
+            from book_agent.services.pilot_repair import latest_repair, overview_summary
+
+            PilotQualityService(session).run(self.bench.document_id, chapter_ids=self.bench.pilot_chapter_ids(session))
+            session.commit()
+            (question,) = session.scalars(select(Approval).where(Approval.kind == "pilot_question")).all()
+            self.assertEqual(question.status, ApprovalStatus.EXPIRED)
+            summary = overview_summary(session, latest_repair(session, self.bench.document_id))
+            self.assertEqual((summary["remaining"]["blocking"], summary["questions"]), (0, 0))
         payload, _final = self.repair()
         self.assertEqual(payload["questions"], [])
         with self.bench.session_factory() as session:
