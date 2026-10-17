@@ -264,6 +264,8 @@ class QaBlock:
     # EPUB blocks: the structure version the parser read them with (``epub.EPUB_STRUCTURE_VERSION``;
     # 1 for blocks parsed before it was recorded). None for other sources.
     epub_structure_version: int | None = None
+    # A closing bibliography's entry the book keeps as written (``pdf_reference_entry``): English by design.
+    reference_entry: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -1041,6 +1043,8 @@ def trailing_heading_span(text: str, font_names: Sequence[str], faces: frozenset
         or last.endswith((".", ",", ";", ":", "!", "?"))
         or not re.search(r"[A-Za-z]{2}", last)
         or _ARTIFACT_TITLE_RE.match(last)
+        # A reference's wrapped link ("https://mng.bz/oKxd", "Forbes. https://...") is no title.
+        or re.search(r"https?://|www\.|doi\.org/", last)
         or not lines[-2].rstrip().endswith(_RUN_IN_BEFORE)
     ):
         return None
@@ -2626,7 +2630,11 @@ def shown_markers(fragment: str) -> list[str]:
 
 def citation_blocks(inputs: PilotQaInputs) -> set[str]:
     """Blocks that are citation or reference entries: their English titles stay by convention."""
-    return {block.block_id for block in inputs.blocks if citations.is_citation_entry(block.source_text)}
+    return {
+        block.block_id
+        for block in inputs.blocks
+        if block.reference_entry or citations.is_citation_entry(block.source_text)
+    }
 
 
 def check_emphasis_markers(inputs: PilotQaInputs) -> CheckRun:
