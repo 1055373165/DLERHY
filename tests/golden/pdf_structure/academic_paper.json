@@ -419,7 +419,7 @@
       "sanity_ok": true
      },
      "metadata": {
-      "nontranslatable_reason": null,
+      "nontranslatable_reason": "pdf_reference_entry",
       "pdf_block_role": "body",
       "pdf_font_names": [
        "Helvetica"
@@ -446,7 +446,7 @@
       },
       "source_page_end": 4,
       "source_page_start": 4,
-      "translatable": true
+      "translatable": false
      },
      "ordinal": 2,
      "parse_confidence": 0.82,
@@ -454,7 +454,7 @@
      "source_path": "pdf://page/4",
      "style_hints": {},
      "text": "[1] Ashish Vaswani, Noam Shazeer, and Niki Parmar. 2017. Attention Is All You Need. Advances in Neural Information",
-     "translatability": "translate_all"
+     "translatability": "translate_none"
     },
     {
      "anchor": "p4-b12",
@@ -507,7 +507,7 @@
       "sanity_ok": true
      },
      "metadata": {
-      "nontranslatable_reason": null,
+      "nontranslatable_reason": "pdf_reference_entry",
       "pdf_block_role": "body",
       "pdf_font_names": [
        "Helvetica"
@@ -531,7 +531,7 @@
       },
       "source_page_end": 5,
       "source_page_start": 5,
-      "translatable": true
+      "translatable": false
      },
      "ordinal": 4,
      "parse_confidence": 0.82,
@@ -539,7 +539,7 @@
      "source_path": "pdf://page/5",
      "style_hints": {},
      "text": "[2] Dzmitry Bahdanau, Kyunghyun Cho, and Yoshua Bengio. 2015. Neural machine translation by jointly learning to alig",
-     "translatability": "translate_all"
+     "translatability": "translate_none"
     },
     {
      "anchor": "p5-b14",

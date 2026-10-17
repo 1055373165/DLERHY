@@ -667,7 +667,7 @@
       "sanity_ok": true
      },
      "metadata": {
-      "nontranslatable_reason": null,
+      "nontranslatable_reason": "pdf_reference_entry",
       "pdf_block_role": "body",
       "pdf_font_names": [
        "Helvetica"
@@ -694,7 +694,7 @@
       },
       "source_page_end": 5,
       "source_page_start": 5,
-      "translatable": true
+      "translatable": false
      },
      "ordinal": 2,
      "parse_confidence": 0.82,
@@ -702,7 +702,7 @@
      "source_path": "pdf://page/5",
      "style_hints": {},
      "text": "[1] A. Researcher and B. Scientist. 2024. Structured recovery for compact academic PDFs. ACL. [2] C. Author and D. W",
-     "translatability": "translate_all"
+     "translatability": "translate_none"
     },
     {
      "anchor": "p5-b13",
@@ -755,7 +755,7 @@
       "sanity_ok": true
      },
      "metadata": {
-      "nontranslatable_reason": null,
+      "nontranslatable_reason": "pdf_reference_entry",
       "pdf_block_role": "body",
       "pdf_font_names": [
        "Helvetica"
@@ -779,7 +779,7 @@
       },
       "source_page_end": 6,
       "source_page_start": 6,
-      "translatable": true
+      "translatable": false
      },
      "ordinal": 4,
      "parse_confidence": 0.82,
@@ -787,7 +787,7 @@
      "source_path": "pdf://page/6",
      "style_hints": {},
      "text": "[2] C. Author and D. Writer. 2023. Attention models for translation pipelines. EMNLP. [1] A. Researcher and B. Scientis",
-     "translatability": "translate_all"
+     "translatability": "translate_none"
     },
     {
      "anchor": "p6-b15",

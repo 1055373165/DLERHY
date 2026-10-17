@@ -618,7 +618,7 @@
       "sanity_ok": true
      },
      "metadata": {
-      "nontranslatable_reason": null,
+      "nontranslatable_reason": "pdf_reference_entry",
       "pdf_block_role": "body",
       "pdf_font_names": [
        "Helvetica"
@@ -645,7 +645,7 @@
       },
       "source_page_end": 3,
       "source_page_start": 3,
-      "translatable": true
+      "translatable": false
      },
      "ordinal": 2,
      "parse_confidence": 0.82,
@@ -653,7 +653,7 @@
      "source_path": "pdf://page/3",
      "style_hints": {},
      "text": "[1] A. Researcher. 2024. Structured recovery for academic PDFs. ACL.",
-     "translatability": "translate_all"
+     "translatability": "translate_none"
     },
     {
      "anchor": "p3-b18",
