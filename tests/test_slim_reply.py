@@ -43,9 +43,17 @@ class CompleteReplyTests(unittest.TestCase):
         completed = complete_model_reply({"packet_id": "X", "target_segments": [_segment("T1", ["a"])], "alignment_suggestions": own}, packet_id="P")
         self.assertEqual((completed["packet_id"], completed["alignment_suggestions"]), ("X", own))
 
-    def test_a_segment_without_sentences_aligns_nothing(self) -> None:
-        completed = complete_model_reply({"target_segments": [_segment("T1", [])]}, packet_id="P")
-        self.assertEqual(completed["alignment_suggestions"], [])
+    def test_a_segment_without_sentences_joins_its_neighbour(self) -> None:
+        # How Large Language Models Work: "WARNING We use the word 'thinking' loosely" came back as
+        # "警告" with no sentence, and the reading copy lost the label.
+        completed = complete_model_reply(
+            {"target_segments": [_segment("T1", [], "警告"), _segment("T2", ["s1"], "我们对“思考”一词的使用比较宽泛。"), _segment("T3", [], "（注）")]},
+            packet_id="P",
+        )
+        self.assertEqual([segment["text_zh"] for segment in completed["target_segments"]], ["警告 我们对“思考”一词的使用比较宽泛。 （注）"])
+        self.assertEqual([item["target_temp_ids"] for item in completed["alignment_suggestions"]], [["T2"]])
+        # Alone, a segment without sentences aligns nothing (the validator reports the sentences uncovered).
+        self.assertEqual(complete_model_reply({"target_segments": [_segment("T1", [])]}, packet_id="P")["alignment_suggestions"], [])
 
 
 def _chat_response(content: dict) -> dict:
