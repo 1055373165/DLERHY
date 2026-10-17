@@ -162,6 +162,30 @@ class TranslationModelReply(BaseSchema):
 REPLY_FORMATS = ("full", "slim")
 
 
+def _join_sourceless_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """A segment that names no sentence joins the next one (or the one before, at the end).
+
+    Without an alignment it would never be shown: How Large Language Models Work's "WARNING We use the
+    word 'thinking' loosely..." came back as "警告" alone, and the reading copy lost the label.
+    """
+    if not any(not (segment.get("source_sentence_ids") or []) for segment in segments):
+        return segments
+    joined: list[dict[str, Any]] = []
+    carry = ""
+    for segment in segments:
+        text = str(segment.get("text_zh") or "")
+        if not (segment.get("source_sentence_ids") or []):
+            carry = f"{carry} {text}".strip() if carry else text
+            continue
+        if carry:
+            segment = {**segment, "text_zh": f"{carry} {text}".strip()}
+            carry = ""
+        joined.append(segment)
+    if carry and joined:
+        joined[-1] = {**joined[-1], "text_zh": f"{joined[-1].get('text_zh') or ''} {carry}".strip()}
+    return joined
+
+
 def complete_model_reply(payload: dict[str, Any], *, packet_id: str) -> dict[str, Any]:
     """The full output from a reply that left out the packet id or the alignment.
 
@@ -174,7 +198,10 @@ def complete_model_reply(payload: dict[str, Any], *, packet_id: str) -> dict[str
         completed["packet_id"] = packet_id
     if "alignment_suggestions" in completed and completed["alignment_suggestions"]:
         return completed
-    segments = [segment for segment in completed.get("target_segments") or [] if isinstance(segment, dict)]
+    segments = _join_sourceless_segments(
+        [segment for segment in completed.get("target_segments") or [] if isinstance(segment, dict)]
+    )
+    completed["target_segments"] = segments
     uses: dict[str, int] = {}
     for segment in segments:
         for sentence_id in segment.get("source_sentence_ids") or []:
