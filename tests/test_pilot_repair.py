@@ -585,6 +585,10 @@ class RepairAgentTests(PilotRepairBenchCase):
             block = session.get(Block, block_id)
             block.source_text = text
             block.normalized_text = text
+            # Body text in a caption brings the body's fonts with it.
+            body = block_with_text(session, self.bench.document_id, "The first technique reads")
+            fonts = [*(block.source_span_json or {}).get("pdf_font_names", []), *(body.source_span_json or {}).get("pdf_font_names", [])]
+            block.source_span_json = {**(block.source_span_json or {}), "pdf_font_names": list(dict.fromkeys(fonts))}
             session.flush()
             fork = ParseRevisionForkService(session).resegment_blocks(self.bench.document_id, block_ids=[block.id], reason="inject")
             workflow = self.bench.workflow(session)
