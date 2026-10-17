@@ -2318,11 +2318,16 @@ def leading_emphasis_line_count(line_styles: tuple[tuple[float, bool], ...]) -> 
     return count
 
 
+# The label of a note set in the heading face ("NOTE Vision and language are not the only options..."):
+# it opens the note's paragraph, it is not a section heading (How Large Language Models Work, 25 notes).
+ADMONITION_LABELS = frozenset({"NOTE", "TIP", "WARNING", "IMPORTANT", "CAUTION", "DEFINITION"})
+
+
 def styled_heading_and_remainder(text: str, emphasis_text: str) -> tuple[str, str] | None:
     """Split ``text`` at its font-emphasized leading lines when they read as a heading."""
     heading = _normalize_text(emphasis_text)
     normalized = _normalize_text(text)
-    if not heading or not normalized.startswith(heading):
+    if not heading or not normalized.startswith(heading) or heading.upper() in ADMONITION_LABELS:
         return None
     remainder = normalized[len(heading):].strip()
     if not remainder:

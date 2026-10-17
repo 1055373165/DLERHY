@@ -110,6 +110,21 @@ class LeadingEmphasisLineCountTest(unittest.TestCase):
         self.assertIsNone(styled_heading_and_remainder("Other text first", "What is RSI?"))
         self.assertIsNone(styled_heading_and_remainder("What is RSI?", "What is RSI?"))
 
+    def test_a_note_label_opens_its_paragraph_not_a_heading(self) -> None:
+        """How Large Language Models Work sets "NOTE" in its heading face: 25 notes became headings,
+        and the export blocked on headings that skip levels."""
+        for label in ("NOTE", "TIP", "WARNING"):
+            self.assertIsNone(
+                styled_heading_and_remainder(f"{label}\nVision and language are not the only options.", label), label
+            )
+        from book_agent.domain.structure.pdf import _heading_face_pieces
+        from book_agent.ingestion.pdf.models import _RecoveredBlock
+
+        block = _RecoveredBlock.__new__(_RecoveredBlock)
+        object.__setattr__(block, "text", "NOTE\nVision and language are not the only options for generative AI.")
+        object.__setattr__(block, "block_type", BlockType.PARAGRAPH)
+        self.assertIsNone(_heading_face_pieces(block, {"NOTE": 9.0}))
+
 
 class StyledHeadingRecoveryTest(unittest.TestCase):
     def test_bold_line_becomes_heading_and_plain_prose_stays_intact(self) -> None:

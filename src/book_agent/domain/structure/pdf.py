@@ -38,6 +38,7 @@ from book_agent.domain.structure.models import (
 )
 from book_agent.ingestion.pdf import chapters as pdf_chapters
 from book_agent.ingestion.pdf.classify import (
+    ADMONITION_LABELS,
     ARTIFACT_TITLE_PATTERN,
     _CHAPTER_PREFIX_PATTERN,
     _FOOTNOTE_PATTERN,
@@ -5625,7 +5626,7 @@ def _heading_face_pieces(block: _RecoveredBlock, candidates: dict[str, float]) -
     found = False
     for index, line in enumerate(lines):
         text = _normalize_text(line)
-        size = candidates.get(text)
+        size = None if text.upper() in ADMONITION_LABELS else candidates.get(text)
         if size is not None and (
             block.block_type == BlockType.CODE
             or (index > 0 and not lines[index - 1].rstrip().endswith((".", "?", "!", ":", "”", '"', "’", ")")))
