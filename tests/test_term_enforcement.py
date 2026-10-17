@@ -154,5 +154,41 @@ class LiteralTermTests(unittest.TestCase):
         self.assertEqual(self.violated("Agents act on their own.", "智能体自主行动。"), [])
 
 
+class CitationBlockGuardrailTests(unittest.TestCase):
+    """How Large Language Models Work: a reference split into sentences failed the "language processing"
+    lock on its English title, three times, because the title sentence alone is not a citation."""
+
+    def test_the_pieces_of_a_citation_entry_are_not_held_to_locked_terms(self) -> None:
+        from types import SimpleNamespace
+
+        from book_agent.translation.contracts import PacketBlock
+
+        sentences = [
+            SimpleNamespace(id="s1", source_text="[1] Friederici, A. D."),
+            SimpleNamespace(id="s2", source_text="(2011)."),
+            SimpleNamespace(id="s3", source_text="The brain basis of language processing: From structure to function."),
+        ]
+        block = PacketBlock(
+            block_id="b1",
+            block_type="list_item",
+            sentence_ids=["s1", "s2", "s3"],
+            text="[1] Friederici, A. D. (2011). The brain basis of language processing: From structure to function. "
+            "Physiology Review, 91, 1357-1392. https://doi.org/10.1152/physrev.00006.2011",
+        )
+        task = SimpleNamespace(current_sentences=sentences, context_packet=SimpleNamespace(current_blocks=[block]))
+        output = TranslationWorkerOutput(
+            packet_id="p",
+            target_segments=[TranslationTargetSegment(temp_id=f"T{i}", text_zh=s.source_text, segment_type="sentence", source_sentence_ids=[s.id]) for i, s in enumerate(sentences, 1)],
+            alignment_suggestions=[AlignmentSuggestion(source_sentence_ids=[s.id], target_temp_ids=[f"T{i}"], relation_type="1:1") for i, s in enumerate(sentences, 1)],
+        )
+        report = OutputValidator().validate_task(task, output, locked_terms=[LockedTerm("language processing", ("语言处理",))])
+        self.assertEqual(report.term_violations, ())
+        # The same title in prose is held to the lock.
+        prose = SimpleNamespace(current_sentences=[sentences[2]], context_packet=SimpleNamespace(current_blocks=[
+            PacketBlock(block_id="b2", block_type="paragraph", sentence_ids=["s3"], text=sentences[2].source_text)]))
+        prose_output = TranslationWorkerOutput(packet_id="p", target_segments=[output.target_segments[2]], alignment_suggestions=[output.alignment_suggestions[2]])
+        self.assertTrue(OutputValidator().validate_task(prose, prose_output, locked_terms=[LockedTerm("language processing", ("语言处理",))]).term_violations)
+
+
 if __name__ == "__main__":
     unittest.main()
