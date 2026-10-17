@@ -401,6 +401,7 @@ class TranslationService:
                 "cost_usd": float(usage.cost_usd) if usage.cost_usd is not None else None,
                 "latency_ms": int(usage.latency_ms or 0),
                 "provider_request_id": usage.provider_request_id,
+                **_cache_fields(usage),
             },
         )
         output = worker_result.output
@@ -662,6 +663,7 @@ class TranslationService:
                 "cost_usd": float(_usage.cost_usd) if _usage.cost_usd is not None else None,
                 "latency_ms": int(_usage.latency_ms or 0),
                 "provider_request_id": _usage.provider_request_id,
+                **_cache_fields(_usage),
             },
         )
         validation = self.output_validator.validate(
@@ -1146,6 +1148,12 @@ def _only_blocks_of(packet: Any, sentence_ids: set[str]) -> Any:
             "next_blocks": [*blocks[last + 1 :], *packet.next_blocks],
         }
     )
+
+
+def _cache_fields(usage: TranslationUsage) -> dict[str, int | None]:
+    """The prompt cache's hits and misses, as every call event carries them (``usage_payload``)."""
+    payload = usage_payload(usage)
+    return {key: payload[key] for key in ("prompt_cache_hit_tokens", "prompt_cache_miss_tokens")}
 
 
 def _merge_usage(first: TranslationUsage, second: TranslationUsage) -> TranslationUsage:
