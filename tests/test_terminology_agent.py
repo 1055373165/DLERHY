@@ -109,7 +109,7 @@ class TerminologyAgentTests(unittest.TestCase):
             decisions = AgentLedgerRepository(session).latest_decisions(self.document_id, scope=DecisionScope.BOOK)
             self.assertEqual(decisions["term:momentum"].value_json["note"], "技术分析术语")
 
-    def test_policy_auto_locks_names_and_frequent_terms_but_not_rare_concepts(self) -> None:
+    def test_policy_auto_locks_names_and_frequent_terms_and_records_rare_concepts_as_preferred(self) -> None:
         policy = terminology_policy()
         lock = book_tool_registry().get("lock_term")
         with self.session_factory() as session:
@@ -119,7 +119,15 @@ class TerminologyAgentTests(unittest.TestCase):
             rare = policy.decide(lock, ctx, lock.parse_arguments({"source_term": "rate of change", "target_term": "变化率"}))
         self.assertEqual(person.policy_id, "auto.lock_names_and_abbreviations")
         self.assertEqual(frequent.policy_id, "auto.lock_frequent_terms")
-        self.assertEqual(rare.kind.value, "require_approval")
+        self.assertIsNone(frequent.redirect_tool)
+        # A rare concept no longer stops the run (How Large Language Models Work's pilot waited on 18):
+        # its lock is recorded as the preferred rendering.
+        self.assertEqual((rare.kind.value, rare.policy_id, rare.redirect_tool), ("allow", "auto.prefer_rare_terms", "propose_term"))
+        # Fast reading mode still locks it.
+        fast = terminology_policy(fast_reading=True)
+        with self.session_factory() as session:
+            fast_rare = fast.decide(lock, self._ctx(session), lock.parse_arguments({"source_term": "rate of change", "target_term": "变化率"}))
+        self.assertEqual((fast_rare.policy_id, fast_rare.redirect_tool), ("auto.fast_reading_mode", None))
 
     def test_the_default_budget_fits_a_technical_book_glossary(self) -> None:
         # A distributed-systems book locked 100 terms; at 120 tool calls the run stopped to ask
@@ -169,16 +177,18 @@ class TerminologyAgentTests(unittest.TestCase):
             compaction_threshold_tokens=None,
         )
         outcome = runner.run(seed.turn_id)
-        # "rate of change" is rare: the turn waits for a human.
-        self.assertEqual(outcome.status, AgentTurnStatus.AWAITING_APPROVAL)
+        # "rate of change" is rare: recorded as preferred, and the turn goes on without a human.
+        self.assertEqual(outcome.status, AgentTurnStatus.SUCCEEDED)
         with self.session_factory() as session:
             ledger = AgentLedgerRepository(session)
             approvals = ledger.approvals_for_turn(seed.turn_id)
-            self.assertEqual(sorted(a.status.value for a in approvals), [ApprovalStatus.AUTO_APPROVED.value, ApprovalStatus.PENDING.value])
+            self.assertEqual(sorted(a.status.value for a in approvals), [ApprovalStatus.AUTO_APPROVED.value] * 2)
+            rare = next(a for a in approvals if a.policy_id == "auto.prefer_rare_terms")
+            self.assertEqual((rare.kind, rare.payload_json["tool"], rare.payload_json["redirected_to"]), ("propose_term", "lock_term", "propose_term"))
             entries = {e.source_term: e for e in GlossaryService(session).list_document_entries(self.document_id)}
             self.assertEqual(entries["momentum"].lock_level, LockLevel.PREFERRED)
             self.assertEqual(entries["RSI"].lock_level, LockLevel.LOCKED)
-            self.assertNotIn("rate of change", entries)
+            self.assertEqual(entries["rate of change"].lock_level, LockLevel.PREFERRED)
             guide = load_book_guide(session, self.document_id)
             markdown = guide.render_markdown(title="Momentum Trading")
             self.assertIn("## 语域与文风", markdown)

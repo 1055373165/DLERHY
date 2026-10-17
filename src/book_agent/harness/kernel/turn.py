@@ -251,12 +251,18 @@ class AgentTurnRunner:
                 )
                 return self._outcome(turn)
             if decision.auto_approved:
+                redirected = self.registry.get(decision.redirect_tool) if decision.redirect_tool else None
+                payload = {"tool": tool.name, "arguments": arguments.model_dump(mode="json"), "reason": decision.reason}
+                if redirected is not None:
+                    # Softened, not allowed: the call runs as the other tool, and the record says so.
+                    payload["redirected_to"] = redirected.name
+                    tool, arguments = redirected, redirected.parse_arguments(call.arguments)
                 ledger.create_approval(
                     document_id=turn.document_id,
                     turn_id=turn.id,
                     tool_call_item_id=tool_item.id,
                     kind=tool.approval_kind or tool.name,
-                    payload={"tool": tool.name, "arguments": arguments.model_dump(mode="json"), "reason": decision.reason},
+                    payload=payload,
                     status=ApprovalStatus.AUTO_APPROVED,
                     policy_id=decision.policy_id,
                     decided_by=decision.policy_id,

@@ -46,7 +46,7 @@ describe("Fast reading mode", () => {
     const user = userEvent.setup();
     const { fetchMock, toggle, dialog } = await openStartDialog(user);
     expect(toggle).toBeChecked();
-    expect(within(dialog).getByText(/术语直接锁定，不停下来等你确认/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/出现次数少的术语也直接锁定/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "开始翻译" }));
     await waitFor(() => expect(runRequestSent(fetchMock)).toEqual({ fast_reading: "on" }));
   });

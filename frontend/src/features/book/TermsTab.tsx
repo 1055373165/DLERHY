@@ -36,6 +36,8 @@ export function TermsTab() {
     },
   });
   const locked = (terms.data ?? []).filter((term) => term.lock_level === "locked");
+  // Rare terms the terminology agent recorded as preferred instead of stopping the run to ask.
+  const preferred = (terms.data ?? []).filter((term) => term.lock_level === "preferred");
 
   return (
     <div className={s.columns}>
@@ -95,6 +97,26 @@ export function TermsTab() {
           </ul>
         )}
         {save.isError && <div className={s.error}>{save.error instanceof Error ? save.error.message : "保存失败"}</div>}
+        {preferred.length > 0 && (
+          <>
+            <h2 className={s.heading}>首选译法 · {preferred.length} 个</h2>
+            <p className={s.meta}>出现次数少的术语：翻译时优先用这个译法，但不强制，也不会停下来问你。需要全书统一时可以锁定。</p>
+            <ul className={s.list}>
+              {preferred.map((term) => (
+                <li key={term.source_term} className={s.item}>
+                  <span>
+                    {term.source_term} → {term.target_term}
+                  </span>
+                  <span>
+                    <button className="btn btn-sm" disabled={save.isPending} onClick={() => save.mutate({ term, lock: true, target: term.target_term })}>
+                      锁定
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </section>
       <section>
         <h2 className={s.heading}>翻译决策（BOOK.md）</h2>

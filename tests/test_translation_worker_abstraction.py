@@ -504,7 +504,7 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
                 }
                 return {
                     "id": "r1",
-                    "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120},
+                    "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120, "prompt_cache_hit_tokens": 80, "prompt_cache_miss_tokens": 20},
                     "choices": [{"message": {"content": json.dumps(reply, ensure_ascii=False)}}],
                 }
 
@@ -522,6 +522,14 @@ class TranslationWorkerAbstractionTests(unittest.TestCase):
 
         self.assertEqual({edge.sentence_id for edge in edges}, sentence_ids)
         self.assertNotIn("packet_id must equal", transport.calls[0]["messages"][-1]["content"])
+        # The call's event carries the prompt cache's hits and misses (the translate path built its own
+        # payload), summed over the translation and its polish (two calls of 80 / 20).
+        from book_agent.domain.event_kinds import LLM_CALL_COMPLETED
+        from book_agent.domain.models import Event
+
+        with self.session_factory() as session:
+            (event,) = session.scalars(select(Event).where(Event.kind == LLM_CALL_COMPLETED, Event.packet_id == packet_ids[1])).all()
+            self.assertEqual((event.payload["prompt_cache_hit_tokens"], event.payload["prompt_cache_miss_tokens"]), (160, 40))
         self.assertNotIn("alignment_suggestions", json.dumps(transport.calls[0].get("response_format", {})))
 
     def test_translation_service_dedupes_duplicate_alignment_edges_from_worker_output(self) -> None:

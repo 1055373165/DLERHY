@@ -78,8 +78,8 @@ export function StartDialog({
         <label className={s.option}>
           <input type="checkbox" checked={fastReading} onChange={(event) => setFastReading(event.target.checked)} />
           <span>
-            <strong>快速阅读模式</strong>：术语直接锁定，不停下来等你确认，一口气翻完。锁定的术语之后可以在「术语与决策」里改。
-            {!fastReading && "关闭后，遇到需要锁定的术语会停下来等你批准。"}
+            <strong>快速阅读模式</strong>：出现次数少的术语也直接锁定。锁定的术语之后可以在「术语与决策」里改。
+            {!fastReading && "关闭时，名称、缩写和常见术语自动锁定，出现次数少的术语记为首选译法（不强制），都不会停下来问你。"}
           </span>
         </label>
 

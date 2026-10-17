@@ -288,6 +288,7 @@ def book_tool_registry() -> ToolRegistry:
 
 
 FAST_READING_POLICY_ID = "auto.fast_reading_mode"
+RARE_TERM_PREFERRED_POLICY_ID = "auto.prefer_rare_terms"
 
 
 def terminology_policy(*, fast_reading: bool = False) -> PermissionPolicy:
@@ -322,6 +323,16 @@ def terminology_policy(*, fast_reading: bool = False) -> PermissionPolicy:
                 ]
                 if fast_reading
                 else []
+            ),
+            # Last: a term that is neither a name nor frequent is not worth stopping the run for. It is
+            # recorded as the preferred rendering (prompts use it, review does not block on it) and can be
+            # locked from the glossary later. How Large Language Models Work's pilot waited on 18 of them.
+            AutoApproveRule(
+                RARE_TERM_PREFERRED_POLICY_ID,
+                "lock_term",
+                lambda ctx, args: True,
+                "terms in fewer sentences are recorded as preferred, not locked (lock them in the glossary)",
+                redirect_tool="propose_term",
             ),
         ]
     )
