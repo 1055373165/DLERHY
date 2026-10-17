@@ -1285,6 +1285,17 @@ class ReviewService:
 
         return issues
 
+    def _listing_pages(self, bundle: ChapterReviewBundle, pages: list[int]) -> set[int]:
+        """The flagged pages that hold only an index's or a contents' entries (and their running heads)."""
+        flagged = set(pages)
+        families: dict[int, set[str]] = {}
+        for block in getattr(bundle, "blocks", None) or ():
+            span = block.source_span_json or {}
+            page = span.get("source_page_start")
+            if page in flagged and span.get("pdf_block_role") not in {"header", "footer"}:
+                families.setdefault(int(page), set()).add(str(span.get("pdf_page_family") or "body"))
+        return {page for page, family in families.items() if family <= {"index", "toc"}}
+
     def _pdf_layout_review_policy(
         self,
         bundle: ChapterReviewBundle,
@@ -1307,6 +1318,27 @@ class ReviewService:
             "recovery_lane": recovery_lane,
             "reason": "default_blocking_layout_risk",
         }
+
+        # An index's or contents' columns: short alphabetical entries, read column by column since the
+        # column-major fix (How Large Language Models Work's index blocked the export on every page, as
+        # the AI Product book's did). Those pages say nothing against the reading order; the chapter's
+        # other flagged pages (an advertisement after the index) are judged as before.
+        listing_pages = self._listing_pages(bundle, [*local_suspicious_pages, *local_layout_risk_pages])
+        if listing_pages:
+            local_suspicious_pages = [page for page in local_suspicious_pages if page not in listing_pages]
+            local_layout_risk_pages = [page for page in local_layout_risk_pages if page not in listing_pages]
+            local_high_layout_risk_pages = [page for page in local_high_layout_risk_pages if page not in listing_pages]
+            chapter_page_evidence = [
+                item for item in chapter_page_evidence if item.get("page_number") not in listing_pages
+            ]
+            if not local_suspicious_pages and not local_layout_risk_pages:
+                return {
+                    "severity": Severity.LOW,
+                    "blocking": False,
+                    "emit_issue": True,
+                    "recovery_lane": recovery_lane,
+                    "reason": "listing_pages_multi_column",
+                }
 
         if layout_risk == "high" and self._pdf_scan_single_page_locally_anchored_is_advisory(
             bundle=bundle,
