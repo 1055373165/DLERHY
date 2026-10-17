@@ -143,14 +143,21 @@ def _is_text_panel_background(
         return False
     if min(float(channel) for channel in fill) < 0.85 or bbox[2] - bbox[0] < page_width * 0.45:
         return False
-    return any(
-        getattr(line, "prose", False)
-        and line.bbox[0] >= bbox[0] - 1.0
+    inside = [
+        line
+        for line in text_lines
+        if line.bbox[0] >= bbox[0] - 1.0
         and line.bbox[2] <= bbox[2] + 1.0
         and line.bbox[1] >= bbox[1] - 1.0
         and line.bbox[3] <= bbox[3] + 1.0
-        for line in text_lines
-    )
+    ]
+    if any(getattr(line, "prose", False) for line in inside):
+        return True
+    # A column of text on it (three lines or more from one left edge) is a panel's too: a chapter's
+    # "This chapter covers" list, set narrow and small, has no line wide enough to be prose, and How
+    # Large Language Models Work showed seven of its nine as pictures. A drawing's labels are scattered.
+    lefts = sorted(round(float(line.bbox[0])) for line in inside)
+    return any(sum(1 for left in lefts if abs(left - anchor) <= 2) >= 3 for anchor in lefts)
 
 
 def _is_background_panel(

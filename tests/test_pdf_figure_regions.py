@@ -434,6 +434,45 @@ def _labelled_figure_page(page: fitz.Page) -> None:
     page.insert_text((310, 440), "Figure 1.1 Example of a language model's generalization", fontsize=8)
 
 
+class ChapterOpenerPanelTests(unittest.TestCase):
+    def test_a_this_chapter_covers_list_on_a_tint_is_text_not_a_figure(self) -> None:
+        """How Large Language Models Work: the "This chapter covers" box (a light borderless tint, a
+        small sans list with wrapped items, no line wide enough to be prose) became a picture of
+        English text in seven of nine chapters."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = Path(tmpdir) / "opener.pdf"
+            document = fitz.open()
+            page = document.new_page(width=531, height=666)
+            page.insert_text((164, 150), "1 Big picture: What are LLMs?", fontsize=20)
+            page.draw_rect(fitz.Rect(68, 273, 318, 413), color=None, fill=(0.97, 0.958, 0.913))
+            page.insert_text((88, 290), "This chapter covers", fontsize=11)
+            lines = ["What Generative Pretrained Transformers", "and large language models are", "How LLMs work in plain language",
+                     "How humans and machines represent", "languages differently", "Why tools like ChatGPT perform so well"]
+            for index, line in enumerate(lines):
+                if not line[0].islower():
+                    page.draw_rect(fitz.Rect(88, 300 + index * 16, 91, 303 + index * 16), color=None, fill=(0.2, 0.3, 0.5))
+                page.insert_text((100, 306 + index * 16), line, fontsize=9)
+            _body(page, 440, 600)
+            document.save(pdf_path)
+            parsed = PDFParser(image_output_dir=Path(tmpdir) / "images").parse(pdf_path)
+        self.assertEqual(_figure_blocks(parsed), [])
+        texts = " ".join(block.text for chapter in parsed.chapters for block in chapter.blocks)
+        self.assertIn("This chapter covers", texts)
+        self.assertIn("How LLMs work in plain language", texts)
+
+    def test_a_drawing_with_scattered_labels_on_a_tint_stays_a_figure(self) -> None:
+        from types import SimpleNamespace
+
+        from book_agent.ingestion.pdf.extract import _is_text_panel_background
+
+        tint = {"fill": (0.97, 0.96, 0.91), "color": None, "items": [("re",)]}
+        label = lambda x, y: SimpleNamespace(bbox=(x, y, x + 40, y + 8), prose=False)
+        scattered = [label(80, 280), label(200, 300), label(140, 340), label(250, 380)]
+        column = [label(100, 300 + 16 * index) for index in range(3)]
+        self.assertFalse(_is_text_panel_background(tint, (68.0, 273.0, 318.0, 413.0), 531.0, scattered))
+        self.assertTrue(_is_text_panel_background(tint, (68.0, 273.0, 318.0, 413.0), 531.0, column))
+
+
 class MeasuredLabelTests(unittest.TestCase):
     """Labels the extractor measured with a drawing are the figure's, however long or sentence-like.
 
