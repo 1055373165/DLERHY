@@ -26,6 +26,8 @@ class PermissionDecision:
     # True when an irreversible call was allowed by an auto-approval rule;
     # the runner records an AUTO_APPROVED approval so the decision is auditable.
     auto_approved: bool = False
+    # Run this tool instead, with the same arguments (a rule that softens a call rather than allowing it).
+    redirect_tool: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +38,8 @@ class AutoApproveRule:
     tool_name: str
     predicate: Callable[[ToolContext, BaseModel], bool]
     description: str = ""
+    # The tool to run instead (same arguments): e.g. a rare term's lock_term recorded as propose_term.
+    redirect_tool: str | None = None
 
 
 @dataclass(slots=True)
@@ -61,7 +65,11 @@ class PermissionPolicy:
         for rule in self.auto_approve:
             if rule.tool_name == tool.name and rule.predicate(ctx, arguments):
                 return PermissionDecision(
-                    PermissionKind.ALLOW, rule.policy_id, rule.description or "auto-approved", auto_approved=True
+                    PermissionKind.ALLOW,
+                    rule.policy_id,
+                    rule.description or "auto-approved",
+                    auto_approved=True,
+                    redirect_tool=rule.redirect_tool,
                 )
         return PermissionDecision(
             PermissionKind.REQUIRE_APPROVAL, "policy.write_irreversible", f"{tool.name} changes the book irreversibly"
