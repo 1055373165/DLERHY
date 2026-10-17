@@ -194,6 +194,16 @@ class AgentStageExecutionTests(unittest.TestCase):
         self.assertEqual(self._stage("terminology"), StageStatus.RUNNING)
 
     def test_awaiting_approval_blocks_the_stage_until_a_decision_then_resumes(self) -> None:
+        # The terminology policy no longer asks about terms (a rare one is recorded as preferred); a
+        # policy that asks before every lock exercises the stage's wait for a decision.
+        from unittest import mock
+
+        from book_agent.harness.agents.terminology import TerminologyAgent
+        from book_agent.harness.tools.permissions import PermissionPolicy
+
+        patcher = mock.patch.object(TerminologyAgent, "policy", staticmethod(lambda *, fast_reading=False: PermissionPolicy()))
+        patcher.start()
+        self.addCleanup(patcher.stop)
         model = _ScriptedModel(
             [
                 AgentStep(text=None, tool_calls=[ToolCall("c1", "lock_term", {"source_term": "Momentum", "target_term": "动量"})], usage=TranslationUsage(token_in=1, token_out=1)),
