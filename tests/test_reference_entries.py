@@ -13,6 +13,8 @@ import unittest
 from types import SimpleNamespace
 
 from book_agent.domain.enums import BlockType, ProtectedPolicy
+from book_agent.domain.quality import pilot_qa
+from book_agent.domain.quality.pilot_qa import PilotQaInputs, QaBlock, QaChapter
 from book_agent.domain.structure.models import TRANSLATE_NONE, ParsedBlock
 from book_agent.export.render_repair import render_mode_for_block, should_drop_book_heading_label
 from book_agent.ingestion.pdf.chapters import _keep_reference_entries_in_source
@@ -85,6 +87,40 @@ class ReferenceExportTests(unittest.TestCase):
         self.assertFalse(should_drop_book_heading_label(bundle, 4, label))
         body_chapter = SimpleNamespace(chapter=SimpleNamespace(title_src="3 Transformers"))
         self.assertTrue(should_drop_book_heading_label(body_chapter, 4, label))
+
+
+def _qa_entry(text: str, *, reference_entry: bool = True, font_names: tuple[str, ...] = ()) -> QaBlock:
+    return QaBlock(
+        block_id="r1", chapter_id="c18", block_type="list_item", render_mode="zh_primary_with_optional_source",
+        artifact_kind=None, source_text=" ".join(text.split()), target_text="", html="", page=187,
+        parsed_text=text, font_names=font_names, reference_entry=reference_entry,
+    )
+
+
+def _qa_inputs(blocks: list[QaBlock]) -> PilotQaInputs:
+    return PilotQaInputs(chapters=[QaChapter(id="c18", ordinal=18, title_src="References")], blocks=blocks, sentences=[])
+
+
+class ReferenceEntryQaTests(unittest.TestCase):
+    ENTRY = "[2] Introducing Code Llama, a state-of-the-art large language model for coding.\n(2023, August 24). Meta. https://mng.bz/RNX0"
+
+    def _runs(self, blocks: list[QaBlock]) -> dict[str, list]:
+        runs = pilot_qa.check_purity(_qa_inputs(blocks))
+        return {run.check_id: run.findings for run in runs}
+
+    def test_a_kept_entry_is_not_untranslated_prose(self) -> None:
+        self.assertEqual(self._runs([_qa_entry(self.ENTRY)])["L7.untranslated_prose"], [])
+        self.assertEqual(len(self._runs([_qa_entry(self.ENTRY, reference_entry=False)])["L7.untranslated_prose"]), 1)
+
+    def test_an_entry_wrapped_link_is_no_glued_heading(self) -> None:
+        headings = [
+            QaBlock(block_id=f"h{i}", chapter_id="c18", block_type="heading", render_mode="zh_primary_with_optional_source",
+                    artifact_kind=None, source_text=f"Chapter {i}", target_text=f"第 {i} 章", html="", font_names=("Dem",))
+            for i in (1, 2)
+        ]
+        entry = _qa_entry("[1] Denk, T. (2019). Linear relationships in the transformer’s positional encoding.\nhttps://mng.bz/oKxd", font_names=("Dem", "Body"))
+        run = pilot_qa.check_heading_glued_to_text_end(_qa_inputs([*headings, entry]))
+        self.assertEqual(run.findings, [])
 
 
 if __name__ == "__main__":
