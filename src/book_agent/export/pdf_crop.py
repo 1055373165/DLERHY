@@ -600,12 +600,31 @@ def probe_pdf_original_asset(
     image_bytes = extracted_image.get("image")
     if not isinstance(image_bytes, (bytes, bytearray)) or not image_bytes:
         return {"availability": "embedded_image_extract_failed"}
+    extension = normalize_asset_extension(extracted_image.get("ext") or ".png")
+    if extension not in WEB_IMAGE_EXTENSIONS:
+        # JPEG 2000 or JBIG2: a browser cannot show it, and the crop renderer cannot write it.
+        image_bytes = _as_png(bytes(image_bytes))
+        if image_bytes is None:
+            return {"availability": "embedded_image_not_web_format"}
+        extension = ".png"
     return {
         "image_bytes": bytes(image_bytes),
-        "extension": normalize_asset_extension(extracted_image.get("ext") or ".png"),
+        "extension": extension,
         "materialized_via": "pdf_original_image",
         "availability": "single_embedded_image",
     }
+
+
+def _as_png(image_bytes: bytes) -> bytes | None:
+    try:
+        import fitz
+
+        pixmap = fitz.Pixmap(image_bytes)
+        if pixmap.n - pixmap.alpha > 3:  # CMYK: PNG holds RGB
+            pixmap = fitz.Pixmap(fitz.csRGB, pixmap)
+        return pixmap.tobytes("png")
+    except Exception:  # an image fitz cannot decode: the region is rendered instead
+        return None
 
 
 def _image_fills_crop(crop: list[float], image: list[float]) -> bool:
@@ -632,6 +651,12 @@ def extract_pdf_original_image(
 
 
 def document_image_asset_suffix(document_image: object | None, *, default_ext: str) -> str:
+    """The file suffix of a figure's picture; a format a browser cannot show (an earlier import's
+    ".jpx") is written as a PNG."""
+    return _web_suffix(_recorded_asset_suffix(document_image, default_ext=default_ext))
+
+
+def _recorded_asset_suffix(document_image: object | None, *, default_ext: str) -> str:
     if document_image is None:
         return normalize_asset_extension(default_ext)
     storage_path = str(getattr(document_image, "storage_path", "") or "").strip()
@@ -641,6 +666,14 @@ def document_image_asset_suffix(document_image: object | None, *, default_ext: s
             return storage_suffix
     metadata = dict(getattr(document_image, "metadata_json", {}) or {})
     return normalize_asset_extension(metadata.get("image_ext") or default_ext)
+
+
+def _web_suffix(suffix: str) -> str:
+    return suffix if suffix in WEB_IMAGE_EXTENSIONS else ".png"
+
+
+# Picture formats every browser shows; any other embedded format is written as a PNG.
+WEB_IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"})
 
 
 def normalize_asset_extension(extension: object) -> str:
