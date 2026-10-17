@@ -211,16 +211,40 @@ _LIST_ITEM_MARKERS = frozenset({"bullet", "dash", "number"})
 
 
 # "AI fairness and bias mitigation 325", "• Predictive AI 61", "GDPR 115, 254, 257, 306".
-_LISTING_ENTRY_LINE = re.compile(r"[A-Za-z].*\s\d{1,4}(?:[–-]\d{1,4})?(?:,\s*\d{1,4}(?:[–-]\d{1,4})?)*\s*$")
+_LISTING_ENTRY_LINE = re.compile(r"[A-Za-z].*\s\d{1,4}(?:[–-]\d{1,4})?(?:,\s*\d{1,4}(?:[–-]\d{1,4})?)*,?\s*$")
+# An index entry's page list going on from the line above ("157–158", "112, 115–116, 141, 154").
+_PAGE_LIST_LINE = re.compile(r"^\s*\d{1,4}(?:[–-]\d{1,4})?(?:,\s*\d{1,4}(?:[–-]\d{1,4})?)*,?\s*$")
+# An index cross-reference: an entry without page numbers.
+_SEE_ALSO_LINE = re.compile(r"^\s*See(?: also)?\s", re.IGNORECASE)
 _BARE_NUMBER_LINE = re.compile(r"^\s*\d{1,3}\s*$")
+# A contents page's running head with its folio: "CONTENTS vii", "vi CONTENTS".
+_CONTENTS_RUNNING_HEAD = re.compile(r"(?:[ivxlc]{1,7}\s+)?contents(?:\s+[ivxlc]{1,7})?", re.IGNORECASE)
+# A line that is only a page or section number: "18", "xii" (front matter), "2.3" (a section's number).
+_PAGE_OR_SECTION_NUMBER_LINE = re.compile(r"^\s*(?:\d{1,4}(?:\.\d{1,3})*|[ivxlc]{1,7})\s*$", re.IGNORECASE)
 
 
 def _reads_as_listing_entries(line_texts: Sequence[str]) -> bool:
-    """Most lines are a contents or index entry ending in page numbers (bare chapter numbers aside)."""
-    lines = [line for line in line_texts if line.strip() and not _BARE_NUMBER_LINE.match(line)]
-    if not lines:
-        return False
-    return sum(1 for line in lines if _LISTING_ENTRY_LINE.search(line)) >= len(lines) * 0.6
+    """Most lines are a contents or index entry ending in page numbers (bare chapter numbers aside).
+
+    An entry may put its page number on a line of its own ("preface" / "x" / "acknowledgments" /
+    "xii" in How Large Language Models Work's contents, whose entries became tables the export could
+    not draw): a title line followed by a number line is an entry too.
+    """
+    lines = [line.strip() for line in line_texts if line.strip()]
+    titles = 0
+    entries = 0
+    for index, line in enumerate(lines):
+        if _BARE_NUMBER_LINE.match(line) or _PAGE_OR_SECTION_NUMBER_LINE.match(line) or _PAGE_LIST_LINE.match(line):
+            continue
+        titles += 1
+        following = lines[index + 1] if index + 1 < len(lines) else ""
+        if (
+            _LISTING_ENTRY_LINE.search(line)
+            or _SEE_ALSO_LINE.match(line)
+            or (following and (_PAGE_OR_SECTION_NUMBER_LINE.match(following) or _PAGE_LIST_LINE.match(following)))
+        ):
+            entries += 1
+    return titles > 0 and entries >= titles * 0.6
 
 
 class PdfStructureRecoveryService:
@@ -1262,11 +1286,22 @@ class PdfStructureRecoveryService:
         content_texts: list[str] = []
         dense_toc_line_total = 0
         dense_toc_block_count = 0
+        contents_running_head = False
         for block in ordered_blocks:
             text = _normalize_text(block.text)
             if not text:
                 continue
             zone = self._page_zone(block.bbox, page.height)
+            head_lines = [line.strip() for line in (block.text or "").splitlines() if line.strip()][:2]
+            if (zone == "top" and _CONTENTS_RUNNING_HEAD.fullmatch(text)) or (
+                # The running head joined to the entries below it in one block ("viii / CONTENTS / 6 ...").
+                block.bbox[1] <= page.height * 0.06 and any(
+                    _CONTENTS_RUNNING_HEAD.fullmatch(" ".join(head_lines[:count])) for count in (1, 2)
+                )
+            ):
+                # "CONTENTS vii" over a page of entries: the contents go on (How Large Language
+                # Models Work's split-line entries did not read as a contents page by themselves).
+                contents_running_head = True
             if zone != "bottom" and len(text) <= 120 and (
                 _HEADING_PATTERN.match(text) or block.font_size_avg >= page_font_median * 1.25
             ):
@@ -1309,6 +1344,7 @@ class PdfStructureRecoveryService:
             or dense_toc_line_total >= 3
             or (heading_present and dense_toc_block_count >= 1)
             or dense_toc_block_count >= 2
+            or contents_running_head
         )
         # A figure caption that credits its source ("Figure 1.2 ... Source:
         # https://...") has a reference's shape but is not a bibliography entry.
@@ -1440,6 +1476,11 @@ class PdfStructureRecoveryService:
         # AI's brief contents and index came out as tables).
         listing_page = (page_context.is_toc_page or page_context.page_family == "index") and _reads_as_listing_entries(
             raw_block.line_texts
+        )
+        # Numbered reference entries ("[1] Yong, E. (2012). ...") on a references page are a list too.
+        listing_page = listing_page or (
+            bool(re.match(r"^\s*\[\d{1,3}\]\s", raw_block.text or ""))
+            and bool(re.search(r"\((?:19|20)\d{2}[a-z]?[,)]", raw_block.text or ""))
         )
         if not listing_page and (
             _looks_like_table(raw_block.line_count, raw_block.line_texts)
@@ -5667,6 +5708,44 @@ def _heading_face_pieces(block: _RecoveredBlock, candidates: dict[str, float]) -
     return pieces
 
 
+def _absorb_tables_inside_figures_pass(service, blocks, context):
+    """A table that lies inside a figure's region is the figure's text, not a table of its own.
+
+    How Large Language Models Work's figures 6.2 and 6.3 show code with a coloured box around each
+    token: the figures were measured, and their code also came out as tables of pipes and tokens that
+    the export could not draw (blocking) and the reader would have seen twice.
+    """
+    figures_by_page: dict[int, list[tuple[_RecoveredBlock, tuple[float, float, float, float]]]] = {}
+    for block in blocks:
+        if block.block_type in {BlockType.FIGURE, BlockType.IMAGE} and block.page_start == block.page_end:
+            bbox = service._page_bbox(block, block.page_start)
+            if bbox is not None:
+                figures_by_page.setdefault(block.page_start, []).append((block, bbox))
+    if not figures_by_page:
+        return blocks
+    kept: list[_RecoveredBlock] = []
+    for block in blocks:
+        figure = None
+        if block.block_type == BlockType.TABLE and block.page_start == block.page_end:
+            bbox = service._page_bbox(block, block.page_start)
+            if bbox is not None:
+                area = max((bbox[2] - bbox[0]) * (bbox[3] - bbox[1]), 1e-6)
+                for candidate, region in figures_by_page.get(block.page_start, []):
+                    overlap_w = min(bbox[2], region[2]) - max(bbox[0], region[0])
+                    overlap_h = min(bbox[3], region[3]) - max(bbox[1], region[1])
+                    if overlap_w > 0 and overlap_h > 0 and overlap_w * overlap_h >= area * 0.9:
+                        figure = candidate
+                        break
+        if figure is None:
+            kept.append(block)
+            continue
+        cluster = dict(figure.metadata.get("figure_cluster") or {})
+        cluster["absorbed_label_anchors"] = [*cluster.get("absorbed_label_anchors", []), block.anchor]
+        figure.metadata = {**figure.metadata, "figure_cluster": cluster}
+        figure.flags = list(dict.fromkeys([*figure.flags, "figure_absorbed_inner_table"]))
+    return kept
+
+
 def _rejoin_split_identifiers_pass(service, blocks, context):
     """Remove spaces that split an identifier ("final_ answer"), using the book's own identifiers as evidence."""
     identifier_counts = inline_identifier_counts(
@@ -5721,6 +5800,7 @@ _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
     BlockRecoveryPass("figure_clustering", _returning("_apply_figure_clustering")),
     BlockRecoveryPass("recover_text_only_figures", _returning("_recover_text_only_figures")),
     BlockRecoveryPass("complete_figure_regions", _returning("_complete_figure_regions", "file_path")),
+    BlockRecoveryPass("absorb_tables_inside_figures", _absorb_tables_inside_figures_pass),
     BlockRecoveryPass("link_artifact_captions", _in_place("_link_artifact_captions")),
     BlockRecoveryPass("link_figure_captions_to_tables", _in_place("_link_figure_captions_to_tables")),
     BlockRecoveryPass("link_artifact_group_contexts", _in_place("_link_artifact_group_contexts", academic_paper="academic_lane")),
