@@ -218,6 +218,13 @@ _PAGE_LIST_LINE = re.compile(r"^\s*\d{1,4}(?:[–-]\d{1,4})?(?:,\s*\d{1,4}(?:[�
 _SEE_ALSO_LINE = re.compile(r"^\s*See(?: also)?\s", re.IGNORECASE)
 _BARE_NUMBER_LINE = re.compile(r"^\s*\d{1,3}\s*$")
 # A contents page's running head with its folio: "CONTENTS vii", "vi CONTENTS".
+# A section's running head with its folio ("PREFACE xi", "164 REFERENCES"), the two set on one
+# baseline but often handed over as two lines. Capitals only: a heading at a page's top is set in
+# title case; "CHAPTER 3" opens a chapter.
+_FOLIO_RUNNING_HEAD = re.compile(
+    r"(?!(?:CHAPTER|PART|APPENDIX|SECTION|STEP|FIGURE|TABLE|LISTING)\b)"
+    r"(?:(?:[ivxlc]{1,7}|\d{1,4})\s+[A-Z][A-Z’'&\- ]{3,40}|[A-Z][A-Z’'&\- ]{3,40}\s+(?:[ivxlc]{1,7}|\d{1,4}))"
+)
 _CONTENTS_RUNNING_HEAD = re.compile(r"(?:[ivxlc]{1,7}\s+)?contents(?:\s+[ivxlc]{1,7})?", re.IGNORECASE)
 # A line that is only a page or section number: "18", "xii" (front matter), "2.3" (a section's number).
 _PAGE_OR_SECTION_NUMBER_LINE = re.compile(r"^\s*(?:\d{1,4}(?:\.\d{1,3})*|[ivxlc]{1,7})\s*$", re.IGNORECASE)
@@ -1427,6 +1434,12 @@ class PdfStructureRecoveryService:
             # part of the figure, not page furniture.
             zone = "middle"
         if zone == "top" and ((zone, signature) in repeated_edge_text) and not _is_heading_at_page_top(raw_block, text, page_font_median):
+            return "header"
+        if zone == "top" and _FOLIO_RUNNING_HEAD.fullmatch(" ".join(text.split())) and not re.match(
+            r"(?:\d{1,4}\s+)?(?:CHAPTER|PART|APPENDIX|SECTION|STEP|FIGURE|TABLE|LISTING)\b", " ".join(text.split())
+        ):
+            # How Large Language Models Work's "PREFACE" / "xi" was body text: "前言 xi" in the reading
+            # copy, splitting the preface's paragraph the page break had cut.
             return "header"
         if zone == "bottom" and (_is_page_number_text(text) or (zone, signature) in repeated_edge_text):
             return "footer"
