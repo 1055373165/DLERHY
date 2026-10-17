@@ -51,7 +51,6 @@ from book_agent.translation.output_validation import (
     OutputCorrection,
     OutputRejection,
     OutputValidator,
-    callout_line_sentence_ids,
 )
 from book_agent.workers.failures import classify_failure
 from book_agent.workers.translator import (
@@ -666,13 +665,9 @@ class TranslationService:
                 **_cache_fields(_usage),
             },
         )
-        validation = self.output_validator.validate(
-            [sentence.id for sentence in bundle.current_sentences],
-            worker_result.output,
-            source_texts={sentence.id: sentence.source_text or "" for sentence in bundle.current_sentences},
-            locked_terms=prepared.locked_terms,
-            line_locked=callout_line_sentence_ids(bundle.current_sentences),
-        )
+        # The same judgment as the repair loop's (validate_task): a citation entry's pieces are not held
+        # to locked terms here either (How Large Language Models Work's references were saved as failed).
+        validation = self.output_validator.validate_task(prepared.task, worker_result.output, locked_terms=prepared.locked_terms)
         artifacts = self._build_artifacts(bundle, worker_result, compiled_context_packet, worker_metadata)
         artifacts.translation_run.error_code = validation.error_code
         if worker_result.polish is not None:
