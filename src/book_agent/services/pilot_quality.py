@@ -610,7 +610,9 @@ class PilotQualityService:
         )
         self.session.add(report)
         self.session.flush()
+        withdraw_answered_questions(self.session, document_id, layers)
         return report
+
 
     def run_for_pilot(
         self,
@@ -713,3 +715,32 @@ def overview_summary(report: PilotQualityReport | None) -> dict[str, Any] | None
         ],
     }
 
+
+def withdraw_answered_questions(session: Session, document_id: str, layers: Sequence[dict[str, Any]]) -> list[str]:
+    """Pending repair questions about a check that no longer finds anything: withdrawn (expired).
+
+    A question asks the reader about a problem the repair could not solve; once a fix made outside
+    the repair (a parser change, an edit) leaves the check with no finding, the question asks about
+    nothing. How Large Language Models Work kept asking about heading levels and a caption after
+    both were fixed, and its page still counted them as serious problems.
+    """
+    from book_agent.domain.enums import ApprovalStatus
+    from book_agent.domain.models.agent import Approval
+    from book_agent.services.pilot_repair import QUESTION_KIND
+
+    found = {str(finding.get("check_id")) for layer in layers for finding in layer.get("findings") or []}
+    withdrawn: list[str] = []
+    for approval in session.scalars(
+        select(Approval).where(
+            Approval.document_id == document_id, Approval.kind == QUESTION_KIND, Approval.status == ApprovalStatus.PENDING
+        )
+    ).all():
+        check_id = str((approval.payload_json or {}).get("check_id") or "")
+        if check_id and check_id not in found:
+            approval.status = ApprovalStatus.EXPIRED
+            approval.decided_by = "pilot_quality"
+            approval.decided_at = datetime.now(timezone.utc)
+            approval.decision_note = "质检已不再发现这个问题，问题自动撤回。"
+            withdrawn.append(approval.id)
+    session.flush()
+    return withdrawn
