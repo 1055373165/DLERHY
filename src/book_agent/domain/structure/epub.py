@@ -385,6 +385,76 @@ def _sanitize_xml_text(text: str) -> str:
     return text
 
 
+_BARE_CHAPTER_LABEL = re.compile(
+    r"^(?:chapter|part)\s+(?:\d{1,3}|[ivxlc]{1,7}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)$",
+    re.IGNORECASE,
+)
+
+
+def _named_chapter_label(title: str | None, blocks: list[ParsedBlock]) -> str | None:
+    """"CHAPTER 1" with the name the chapter gives itself next ("CHAPTER 1: SWING TRADING BASICS"): a book
+    whose contents list the label and the name as two entries titles the file by the label alone."""
+    if not title or not _BARE_CHAPTER_LABEL.match(_normalize_text(title)):
+        return title
+    headings = [_normalize_text(block.text) for block in blocks if block.block_type == "heading"]
+    for index, text in enumerate(headings[:-1]):
+        if text.casefold() == _normalize_text(title).casefold():
+            name = headings[index + 1]
+            if name and len(name) <= 80 and not _BARE_CHAPTER_LABEL.match(name):
+                return f"{_normalize_text(title)}: {name}"
+    return title
+
+
+def _title_pages_before_the_contents(chapters: list[ParsedChapter], nav_map: dict[str, str]) -> list[ParsedChapter]:
+    """Title the untitled pages ahead of the first chapter the book's contents list (its title page,
+    its copyright page). Later untitled files are pieces of a chapter split mid-way, not pages."""
+    if not nav_map:
+        return chapters
+    titled: list[ParsedChapter] = []
+    before_contents = True
+    for chapter in chapters:
+        if posixpath.normpath(chapter.href) in nav_map:
+            before_contents = False
+        if before_contents and not chapter.title:
+            chapter = replace(chapter, title=_untitled_page_title(chapter.blocks))
+        titled.append(chapter)
+    return titled
+
+
+def _untitled_page_title(blocks: list[ParsedBlock]) -> str | None:
+    """A title for a page the book's contents do not list (its title page, its copyright page): its
+    own first short line. Review cannot work on a chapter without one ("missing_chapter_title")."""
+    words: list[str] = []
+    for block in blocks:
+        text = _normalize_text(block.text)
+        if not text:
+            continue
+        if not words and text.casefold().startswith(("copyright", "©")):
+            return "Copyright"
+        if len(text.split()) > 10 or len(text) > 60 or text.startswith("["):
+            break
+        # A title page sets its title over short lines ("HOW TO" / "SWING TRADE").
+        words.extend(text.split())
+        if len(words) >= 3:
+            break
+    return " ".join(words) or None
+
+
+def _qualify_xhtml(root: ET.Element) -> ET.Element:
+    """A page whose ``<html>`` declares no namespace, read as XHTML.
+
+    Amazon's EPUB export (How to Swing Trade) opens every chapter with a bare ``<html>``: its
+    ``<body>`` was in no namespace, the chapters came out empty and the book imported with none.
+    """
+    if root.tag != "html":
+        return root
+    namespace = _XHTML_NS["xhtml"]
+    for element in root.iter():
+        if isinstance(element.tag, str) and not element.tag.startswith("{"):
+            element.tag = f"{{{namespace}}}{element.tag}"
+    return root
+
+
 def _parse_xml_document(raw: bytes) -> ET.Element:
     text = raw.decode("utf-8", errors="replace")
 
@@ -797,6 +867,7 @@ class EPUBParser:
             self._styled_heading_levels = _styled_heading_levels(archive, manifest)
             metadata = self._read_metadata(opf_root)
             chapters = self._read_spine_chapters(archive, opf_root, manifest, nav_map)
+            chapters = _title_pages_before_the_contents(chapters, nav_map)
             chapters = _drop_ornament_images(chapters)
             chapters = self._normalize_spine_chapters(chapters, book_title=metadata.get("title"))
 
@@ -890,7 +961,7 @@ class EPUBParser:
 
         nav_path = nav_items[0]["href"]
         try:
-            nav_root = _parse_xml_document(archive.read(nav_path))
+            nav_root = _qualify_xhtml(_parse_xml_document(archive.read(nav_path)))
         except ET.ParseError:
             logger.warning("Failed to parse EPUB nav document %s; proceeding without TOC", nav_path)
             return {}
@@ -986,6 +1057,7 @@ class EPUBParser:
         raw = archive.read(href)
         try:
             chapter_root = _parse_xml_document(raw)
+            chapter_root = _qualify_xhtml(chapter_root)
             body = chapter_root.find(".//xhtml:body", _XHTML_NS)
             if body is None:
                 return ParsedChapter(chapter_id=f"chapter-{chapter_index}", href=href, title=None, blocks=[])
@@ -995,7 +1067,7 @@ class EPUBParser:
         blocks = _normalize_chapter_heading_levels(_dense_styled_heading_levels(blocks))
         nav_title = nav_map.get(posixpath.normpath(href))
         heading_title = next((block.text for block in blocks if block.block_type == "heading"), None)
-        chapter_title = self._resolve_chapter_title(nav_title, heading_title)
+        chapter_title = _named_chapter_label(self._resolve_chapter_title(nav_title, heading_title), blocks)
 
         return ParsedChapter(
             chapter_id=f"chapter-{chapter_index}",
@@ -1037,7 +1109,13 @@ class EPUBParser:
     def _should_drop_toc_like_spine_chapter(self, chapter: ParsedChapter) -> bool:
         normalized_title = _normalize_text(chapter.title or "").casefold()
         href = posixpath.basename(chapter.href).casefold()
-        if normalized_title not in _TOC_LIKE_TITLES and not any(token in href for token in _TOC_LIKE_PATH_TOKENS):
+        # A contents page the book's own TOC does not list opens with its title ("TABLE OF CONTENTS").
+        first_text = _normalize_text(chapter.blocks[0].text).casefold() if chapter.blocks else ""
+        if (
+            normalized_title not in _TOC_LIKE_TITLES
+            and first_text not in _TOC_LIKE_TITLES
+            and not any(token in href for token in _TOC_LIKE_PATH_TOKENS)
+        ):
             return False
         block_types = {block.block_type for block in chapter.blocks}
         if block_types - {"heading", "paragraph", "list_item"}:
