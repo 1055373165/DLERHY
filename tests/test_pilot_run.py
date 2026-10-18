@@ -95,7 +95,7 @@ class ChapterTitleTests(unittest.TestCase):
             [1, 3, 3, 12],
         )
         self.assertEqual([chapter_number(title) for title in ("3.2 Retrieval", "2024 was a year", "Chapter One")], [None] * 3)
-        for title in ("Front Matter", "brief contents", "preface", "about the cover illustration", "Part 2 Creating RAG systems", "appendix OpenAI API Key", "index"):
+        for title in ("Front Matter", "brief contents", "preface", "about the cover illustration", "Part 2 Creating RAG systems", "appendix OpenAI API Key", "index", "Foreward", "Acknowledgments & Trader Resources"):
             self.assertTrue(is_surrounding_matter(title), title)
         for title in ("Introduction", "1 What is an AI agent?", "Chapter One"):
             self.assertFalse(is_surrounding_matter(title), title)
