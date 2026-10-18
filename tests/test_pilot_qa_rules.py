@@ -1011,6 +1011,18 @@ class ReadingStructureTests(unittest.TestCase):
         )
         self.assertEqual(self.hits(styled_pilot(titled, member, after), "L1.sidebar_as_text"), [])
 
+    def test_a_chapter_title_over_its_epigraph_is_not_a_sidebar(self) -> None:
+        # A Complete Guide To Volume Price Analysis: "Chapter One" / "There's Nothing New in Trading" over an
+        # italic quotation, before any text. The repair made them a sidebar's title.
+        label = styled(rendered("b-c1", C1, "heading", "Chapter One", "第一章", page=15), DEM)
+        name = styled(rendered("b-c1n", C1, "heading", "There's Nothing New in Trading", "交易中没有新鲜事", page=15), DEM)
+        epigraph = styled(
+            rendered("b-epi", C1, "paragraph", "Nihil sub sole (there is nothing new under the sun)", "太阳底下没有新鲜事", page=15),
+            SIDEBAR_FACE,
+        )
+        text = styled(rendered("b-text", C1, "paragraph", BODY_TEXT, "智能体决定下一步调用哪个工具。", page=15), BODY)
+        self.assertEqual(self.hits([label, name, epigraph, text], "L1.sidebar_as_text"), [])
+
     def test_section_heading_over_body_text_is_not_a_sidebar(self) -> None:
         self.assertEqual(self.hits(styled_pilot(), "L1.sidebar_as_text"), [])
 
