@@ -74,6 +74,10 @@ def reimport_refusal(session: Session, document: Document) -> str | None:
                 DocumentRun.document_id == document.id,
                 DocumentRun.run_type.not_in((DocumentRunType.BOOTSTRAP, DocumentRunType.EXPORT_FULL)),
                 DocumentRun.id.not_in([run.id for run in pilots]),
+                # A run stopped or failed before translating anything leaves nothing to lose (How to
+                # Swing Trade's whole-book run, cancelled on a book imported with no chapters); what
+                # one did translate, the check below still finds.
+                DocumentRun.status.not_in((DocumentRunStatus.CANCELLED, DocumentRunStatus.FAILED)),
             )
         )
     )

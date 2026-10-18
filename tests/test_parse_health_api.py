@@ -185,6 +185,17 @@ class ParseHealthApiTests(unittest.TestCase):
             self.assertIsNone(session.get(DocumentRun, pilot_id))
         self.assertFalse(self.client.get(f"/v1/documents/{document_id}/overview").json()["reimport_discards_pilot"])
 
+        # A whole-book run cancelled before it translated anything leaves nothing to lose (How to Swing
+        # Trade's, on a book imported with no chapters).
+        cancelled = self.client.post("/v1/runs", json={"document_id": document_id, "run_type": "translate_full", "requested_by": "test"})
+        self.assertIn(cancelled.status_code, (200, 201), cancelled.text)
+        with self.session_factory() as session:
+            for queued in session.scalars(select(DocumentRun).where(DocumentRun.document_id == document_id)).all():
+                if queued.run_type == DocumentRunType.TRANSLATE_FULL and queued.status != DocumentRunStatus.SUCCEEDED:
+                    queued.status = DocumentRunStatus.CANCELLED
+            session.commit()
+        self.assertTrue(self.client.get(f"/v1/documents/{document_id}/overview").json()["can_reimport"])
+
         # Once the whole book is asked for, the parse holds work: no re-import.
         run = self.client.post("/v1/runs", json={"document_id": document_id, "run_type": "translate_full", "requested_by": "test"})
         self.assertIn(run.status_code, (200, 201), run.text)
