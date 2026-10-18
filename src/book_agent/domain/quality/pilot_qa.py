@@ -663,9 +663,9 @@ def _chapters_vs_outline(health: HealthInputs, pilot: Sequence[QaChapter]) -> Ch
                 evidence={"source": entry.title, "detail": "missing_chapter"},
             )
         )
-    outline_pages = {entry.page for entry in health.outline}
     for chapter in pilot_health:
-        if chapter.page_start in outline_pages or any(parse_health._title_matches(chapter, entry) for entry in health.outline):
+        # The same rule as parse health's (the leading front-matter pages are no extra chapter).
+        if not parse_health.is_extra_chapter(chapter, health.outline):
             continue
         run.findings.append(
             Finding(

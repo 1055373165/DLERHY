@@ -313,6 +313,23 @@ def split_outline(outline: Sequence[OutlineEntry], document_title: str | None = 
     return front, body
 
 
+def is_extra_chapter(chapter: HealthChapter, outline: Sequence[OutlineEntry]) -> bool:
+    """A chapter no bookmark starts or names: a contents line turned chapter, say. The parse's own
+    "Front Matter" chapter, the pages before the first bookmark (title page, copyright, praise), is
+    none; a contents line before the first bookmark still is."""
+    if not outline:
+        return False
+    outline_pages = {entry.page for entry in outline}
+    if chapter.page_start in outline_pages or any(_title_matches(chapter, entry) for entry in outline):
+        return False
+    leading_front_matter = (
+        " ".join((chapter.title or "").split()).casefold() == "front matter"
+        and chapter.page_start is not None
+        and chapter.page_start < min(outline_pages)
+    )
+    return not leading_front_matter
+
+
 def check_chapters_vs_outline(
     chapters: Sequence[HealthChapter], outline: Sequence[OutlineEntry], document_title: str | None = None
 ) -> CheckResult | None:
@@ -323,17 +340,7 @@ def check_chapters_vs_outline(
     missing = [entry for entry in expected if _chapter_for(entry, chapters) is None]
     for entry in missing:
         samples.append(Sample(text=_snippet(entry.title), page=entry.page, detail="missing_chapter"))
-    outline_pages = {entry.page for entry in outline}
-    first_outline_page = min(outline_pages)
-    extra = [
-        chapter
-        for chapter in chapters
-        if chapter.page_start not in outline_pages
-        and not any(_title_matches(chapter, entry) for entry in outline)
-        # The pages before the first bookmark (title page, copyright, praise) are the parse's own
-        # front-matter chapter, not a contents line turned chapter.
-        and not (chapter.page_start is not None and chapter.page_start < first_outline_page)
-    ]
+    extra = [chapter for chapter in chapters if is_extra_chapter(chapter, outline)]
     for chapter in extra:
         samples.append(Sample(text=_snippet(chapter.title), page=chapter.page_start, chapter_id=chapter.id, detail="extra_chapter"))
     # Extra chapters first: a contents line turned chapter is the more telling sample.
