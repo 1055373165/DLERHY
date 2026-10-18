@@ -26,6 +26,7 @@ OPF = """<?xml version="1.0" encoding="utf-8"?>
   <manifest>
     <item href="text/part0001.html" id="c1" media-type="application/xhtml+xml"/>
     <item href="stylesheet.css" id="css" media-type="text/css"/>
+    <item href="images/quote.jpeg" id="q" media-type="image/jpeg"/>
     <item href="toc.ncx" id="ncx" media-type="application/x-dtbncx+xml"/>
   </manifest>
   <spine toc="ncx"><itemref idref="c1"/></spine>
@@ -51,7 +52,7 @@ CHAPTER = """<?xml version="1.0" encoding="utf-8"?>
   <p class="heading1">Trading: A Different Kind of Business</p>
   <p class="heading">Traders as Businesspeople</p>
   <p class="normal"><span class="_idGenDropcap">I</span>n my classes and books, I always emphasize that trading must be treated as a business.</p>
-  <p class="heading2">Figure 1.1: Hockey stick forecast for your new venture.</p>
+<div class="_idgenobjectlayout"><div class="icon"><img src="../images/quote.jpeg" alt="A screenshot of a cell phone  Description automatically generated"/></div></div>\n  <p class="quote">“Quoted forum post.”</p>\n<div class="_idgenobjectlayout"><div class="icon"><img src="../images/quote.jpeg" alt="A screenshot of a cell phone  Description automatically generated"/></div></div>\n  <p class="quote">“Quoted forum post.”</p>\n<div class="_idgenobjectlayout"><div class="icon"><img src="../images/quote.jpeg" alt="A screenshot of a cell phone  Description automatically generated"/></div></div>\n  <p class="quote">“Quoted forum post.”</p>\n<div class="_idgenobjectlayout"><div class="icon"><img src="../images/quote.jpeg" alt="A screenshot of a cell phone  Description automatically generated"/></div></div>\n  <p class="quote">“Quoted forum post.”</p>\n<div class="_idgenobjectlayout"><div class="icon"><img src="../images/quote.jpeg" alt="A screenshot of a cell phone  Description automatically generated"/></div></div>\n  <p class="quote">“Quoted forum post.”</p>\n  <p class="heading2">Figure 1.1: Hockey stick forecast for your new venture.</p>
   <p class="heading">Why Start Trading? A paragraph the stylesheet sets in the heading face but which runs on far longer than any heading would, so it is text, not a title for what follows it.</p>
 </body></html>"""
 
@@ -78,6 +79,11 @@ class Epub2NcxAndStyledHeadingsTests(unittest.TestCase):
     def test_large_bold_paragraph_classes_are_headings_ranked_by_size(self) -> None:
         headings = [(block.text, block.metadata.get("heading_level")) for block in self.chapter.blocks if block.block_type == "heading"]
         self.assertEqual(headings, [("Trading: A Different Kind of Business", 1), ("Traders as Businesspeople", 2)])
+
+    def test_an_image_repeated_without_a_caption_is_an_ornament(self) -> None:
+        # The book's 197 quotation-mark icons came out as image boxes, their generated alt text translated.
+        self.assertFalse([block for block in self.chapter.blocks if block.metadata.get("image_src")])
+        self.assertEqual(sum(block.text == "“Quoted forum post.”" for block in self.chapter.blocks), 5)
 
     def test_small_captions_and_long_paragraphs_stay_text(self) -> None:
         texts = {block.text[:20]: block.block_type for block in self.chapter.blocks}

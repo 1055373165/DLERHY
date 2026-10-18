@@ -515,6 +515,37 @@ def _dense_styled_heading_levels(blocks: list[ParsedBlock]) -> list[ParsedBlock]
     ]
 
 
+# An image the book sets this many times is an ornament, not a figure.
+_ORNAMENT_IMAGE_MIN_USES = 5
+
+
+def _drop_ornament_images(chapters: list[ParsedChapter]) -> list[ParsedChapter]:
+    """Leave out an uncaptioned image the book repeats (Mastering Trading Psychology opens each of its
+    197 quoted forum posts with the same 100x100 quotation mark): every copy came out as an image box,
+    and its generated alt text ("A screenshot of a cell phone ...") went to translation each time."""
+    uses: dict[str, int] = {}
+    for chapter in chapters:
+        for block in chapter.blocks:
+            path = block.metadata.get("image_path") or block.metadata.get("image_src")
+            if path:
+                uses[str(path)] = uses.get(str(path), 0) + 1
+
+    def ornament(block: ParsedBlock) -> bool:
+        path = block.metadata.get("image_path") or block.metadata.get("image_src")
+        return (
+            bool(path)
+            and uses.get(str(path), 0) >= _ORNAMENT_IMAGE_MIN_USES
+            and block.metadata.get("image_caption_generated") in {"alt", "placeholder"}
+        )
+
+    if not any(count >= _ORNAMENT_IMAGE_MIN_USES for count in uses.values()):
+        return chapters
+    return [
+        replace(chapter, blocks=[block for block in chapter.blocks if not ornament(block)])
+        for chapter in chapters
+    ]
+
+
 def _block_type_for_html(tag: str, attrs: dict[str, str]) -> str | None:
     class_tokens = _class_tokens(attrs.get("class", ""))
     if tag == "div" and "figure-container" in class_tokens:
@@ -766,6 +797,7 @@ class EPUBParser:
             self._styled_heading_levels = _styled_heading_levels(archive, manifest)
             metadata = self._read_metadata(opf_root)
             chapters = self._read_spine_chapters(archive, opf_root, manifest, nav_map)
+            chapters = _drop_ornament_images(chapters)
             chapters = self._normalize_spine_chapters(chapters, book_title=metadata.get("title"))
 
         return ParsedDocument(
