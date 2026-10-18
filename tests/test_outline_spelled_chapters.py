@@ -41,6 +41,12 @@ class SpelledOutlineTests(unittest.TestCase):
         # "Chapter One" starts the body: the chapters are checked (it was 0 of 0).
         self.assertEqual(result.denominator, 3)
 
+    def test_only_the_parse_s_own_front_matter_is_exempt(self) -> None:
+        # Book QA blocked the finished book on "Front Matter" too (its own copy of the rule).
+        self.assertFalse(ph.is_extra_chapter(_chapter(1, "Front Matter", 1), OUTLINE))
+        # A contents line taken for a chapter before the first bookmark (the RAG book) still is extra.
+        self.assertTrue(ph.is_extra_chapter(_chapter(1, "1 LLMs and the need for RAG ........ 3", 8), OUTLINE))
+
     def test_a_spelled_chapter_folded_away_is_missing(self) -> None:
         chapters = [_chapter(1, "Front Matter", 1), _chapter(2, "Foreward", 11), _chapter(3, OUTLINE[1].title, 15)]
         result = ph.check_chapters_vs_outline(chapters, OUTLINE)
