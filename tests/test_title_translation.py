@@ -159,6 +159,22 @@ class ChapterLabelTests(unittest.TestCase):
             "赞誉：《AI 智能体图解指南》（An Illustrated Guide to AI Agents）",
         )
 
+    def test_a_bare_chapter_label_takes_the_name_heading_after_it(self) -> None:
+        # A Complete Guide To Volume Price Analysis: "Chapter Six" over "Volume Price Analysis – The Next Level",
+        # two headings; the reading copy titled the chapter "第 6 章" and showed the name as its first line.
+        from types import SimpleNamespace
+
+        from book_agent.export.titles import resolve_chapter_title
+
+        document = SimpleNamespace(source_type=SourceType.PDF_TEXT)
+        chapter = SimpleNamespace(title_src="Chapter Six : Volume Price Analysis - The Next Level", title_tgt=None)
+        blocks = [
+            SimpleNamespace(block_type="heading", source_text="Chapter Six", target_text="第六章"),
+            SimpleNamespace(block_type="heading", source_text="Volume Price Analysis – The Next Level", target_text="量价分析——更进一层"),
+            SimpleNamespace(block_type="paragraph", source_text="I never argue with the tape.", target_text="我从不与行情纸带争辩。"),
+        ]
+        self.assertEqual(resolve_chapter_title(document, chapter, blocks), "第 6 章 量价分析——更进一层")
+
     def test_the_title_heading_with_emphasis_is_not_repeated_in_the_body(self) -> None:
         from book_agent.export.models import MergedRenderBlock
         from book_agent.services.export import ExportService
