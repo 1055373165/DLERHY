@@ -51,7 +51,7 @@
 
 - `.env`（不入库，模板 `.env.example`）。所有设置在 `src/book_agent/core/config.py`，环境变量前缀 `BOOK_AGENT_`。
 - `BOOK_AGENT_SECRET_KEY`：Fernet 密钥，加密数据库里存的服务商 API key。**丢失则已存的 key 无法解密。**
-- 模型服务商**以数据库为准**（表 `provider_credentials`，界面「设置 → 服务商」，API `/v1/providers`）；`.env` 只是首次启动时的种子。当前启用：DeepSeek，`deepseek-v4-flash`，base_url `https://api.deepseek.com`，`request_overrides={"thinking":{"type":"disabled"}}`（**必须关思考模式**，否则输出额度被思考耗尽）。
+- 模型服务商**以数据库为准**（表 `provider_credentials`，界面「设置 → 服务商」，API `/v1/providers`）；`.env` 只是首次启动时的种子。当前启用：DeepSeek，`deepseek-flash`（2026-10-18 起；DeepSeek 只接受 `deepseek-flash` 与 `deepseek-v4-pro`，旧名 `deepseek-v4-flash` 是同一模型的别名），base_url `https://api.deepseek.com`，`request_overrides={"thinking":{"type":"disabled"}}`（**必须关思考模式**，否则输出额度被思考耗尽）。
 - 单价（每百万 token，美元）：输入 0.15、缓存命中 0.003、输出 0.60；`peak_price_multiplier=2`，`off_peak_window_utc="16:30-00:30"`（北京时间 00:30–08:30 为优惠时段）。每次调用按完成时刻计价（`workers/providers/pricing.py`）。优惠时段时间窗是按 DeepSeek 以往公告设的，用户给的价目表没写时段，若有变化只改数据库。
 - 其它常用开关：`translation_polish_enabled`（润色二道，默认开）、`translation_prompt_profile`（默认 `tech-column-meta-v1`）、`run_executor_enabled`、`auth_mode`（本地 disabled）、`billing_price_multiplier`。
 
