@@ -197,9 +197,9 @@
 .reimport {
   margin: 0 0 var(--sp-4);
   padding: var(--sp-3) var(--sp-4);
-  border: 1px solid var(--border, #e3e5e8);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--surface-2, #f7f8fa);
+  background: var(--bg-panel-alt);
   font-size: var(--text-sm);
 }
 
