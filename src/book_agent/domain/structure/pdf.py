@@ -221,6 +221,11 @@ _BARE_NUMBER_LINE = re.compile(r"^\s*\d{1,3}\s*$")
 # A section's running head with its folio ("PREFACE xi", "164 REFERENCES"), the two set on one
 # baseline but often handed over as two lines. Capitals only: a heading at a page's top is set in
 # title case; "CHAPTER 3" opens a chapter.
+# Words a sentence cannot end on: a page that ends on one breaks the sentence.
+_CONTINUING_FUNCTION_WORDS = frozenset(
+    {"a", "an", "the", "of", "to", "in", "on", "for", "with", "by", "from", "into", "and", "or", "but", "nor",
+     "than", "that", "as", "at", "its", "their", "our", "your", "is", "are", "was", "were", "be"}
+)
 _FOLIO_RUNNING_HEAD = re.compile(
     r"(?!(?:CHAPTER|PART|APPENDIX|SECTION|STEP|FIGURE|TABLE|LISTING)\b)"
     r"(?:(?:[ivxlc]{1,7}|\d{1,4})\s+[A-Z][A-Z’'&\- ]{3,40}|[A-Z][A-Z’'&\- ]{3,40}\s+(?:[ivxlc]{1,7}|\d{1,4}))"
@@ -1428,6 +1433,11 @@ class PdfStructureRecoveryService:
         signature = _header_footer_signature(text)
         if raw_block.ruled_table:
             return "table_like"
+        # Before a figure at the page's top claims it: the running head sits above the figure.
+        if zone == "top" and _is_section_running_head(raw_block, raw_block.text or "", page_font_median):
+            # "1.7 Why LLMs perform so well" / "11": the section's running head and its folio, which
+            # came out as a second 1.7 heading (and a stray "11" under it in the reading copy).
+            return "header"
         if zone in {"top", "bottom"} and _inside_page_figure(page, raw_block.bbox):
             # A figure's own label near the top or bottom of the page ("Step 1"
             # on every pipeline diagram) repeats like a running header but is
@@ -2561,6 +2571,8 @@ class PdfStructureRecoveryService:
         for current in recovered_blocks:
             target_index = self._cross_page_prose_merge_target_index(merged, current, pages)
             if target_index is not None:
+                # A sidebar's second page opens with "(continued)": the box runs on, the label goes.
+                current.text = _without_continued_label(current.text or "")
                 merged_block = self._merge_blocks(merged[target_index], current)
                 merged_block.flags = list(
                     dict.fromkeys(
@@ -2805,7 +2817,7 @@ class PdfStructureRecoveryService:
             return False
 
         prev_text = (previous.text or "").rstrip()
-        curr_text = (current.text or "").lstrip()
+        curr_text = _without_continued_label(current.text or "").lstrip()
         if not prev_text or not curr_text:
             return False
         # Strip trailing whitespace and quote-pairs so the terminator
@@ -2824,6 +2836,10 @@ class PdfStructureRecoveryService:
             return False
 
         first_char = curr_text[0]
+        # A quotation opening the next page ("“forget” that older information"): its first letter decides.
+        quoted_lead = curr_text.lstrip("“\"‘'(")
+        if quoted_lead and quoted_lead is not curr_text:
+            first_char = quoted_lead[0]
         # Hyphenated break — accept any reasonable continuation lead.
         if last_char == "-":
             return first_char.isalnum()
@@ -2837,6 +2853,10 @@ class PdfStructureRecoveryService:
             and re.match(r"^[A-Z][\w'’.\-]*,\s", curr_text)
             and prev_tail[-160:].count(", ") >= 3
         ):
+            return True
+        # No sentence ends on an article, preposition or conjunction ("... the process of training an" /
+        # "LLM on incredible amounts of text"): what the next page starts with goes on, capital or not.
+        if prev_tail.rsplit(None, 1)[-1].casefold() in _CONTINUING_FUNCTION_WORDS and first_char.isalnum():
             return True
         # Standard continuation: current begins with lowercase letter.
         # A digit or capital-letter lead almost always signals a new
@@ -5276,6 +5296,28 @@ def _opens_sidebar_panel(block: _RecoveredBlock) -> bool:
     return top - panel[1][1] <= _SIDEBAR_TITLE_TOP_GAP and len(block.text or "") <= 120
 
 
+_CONTINUED_LABEL = re.compile(r"^\s*\(continued\)\s*", re.IGNORECASE)
+_SECTION_RUNNING_HEAD = re.compile(r"(?:\d{1,4}\s+)?\d{1,2}(?:\.\d{1,2})+\s+\S.{0,90}?(?:\s+\d{1,4})?")
+
+
+def _without_continued_label(text: str) -> str:
+    return _CONTINUED_LABEL.sub("", text, count=1)
+
+
+def _is_section_running_head(raw_block, text: str, page_font_median: float) -> bool:
+    """A numbered section's title with the page's folio atop the page ("1.7 Why LLMs perform so well 11",
+    "70 5.1 ..."): set smaller than the text, or with the folio on a line of its own."""
+    lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
+    if not 1 <= len(lines) <= 2:
+        return False
+    joined = " ".join(lines)
+    if not _SECTION_RUNNING_HEAD.fullmatch(joined) or not re.search(r"(?:^\d{1,4}\s+\d{1,2}\.|\s\d{1,4}$)", joined):
+        return False
+    folio_line = len(lines) == 2 and any(re.fullmatch(r"\d{1,4}", line) for line in lines)
+    smaller = bool(raw_block.font_size_avg) and raw_block.font_size_avg < page_font_median * 0.95
+    return folio_line or smaller
+
+
 def _is_figure_between_prose(block: _RecoveredBlock) -> bool:
     """A figure, its caption or its labels: set where the page had room, even inside a sentence."""
     return (
@@ -5830,6 +5872,10 @@ _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
     BlockRecoveryPass("recover_text_only_figures", _returning("_recover_text_only_figures")),
     BlockRecoveryPass("complete_figure_regions", _returning("_complete_figure_regions", "file_path")),
     BlockRecoveryPass("absorb_tables_inside_figures", _absorb_tables_inside_figures_pass),
+    # Again once figures hold their own labels and code: a sentence cut by a page break with a figure
+    # set at the top of the next page ("will not accurately capture or" / figure 5.11 / "represent ...")
+    # had the figure's loose words in between the first time.
+    BlockRecoveryPass("merge_cross_page_prose_after_figures", _returning("_merge_cross_page_prose_continuations", "ordered_pages")),
     BlockRecoveryPass("link_artifact_captions", _in_place("_link_artifact_captions")),
     BlockRecoveryPass("link_figure_captions_to_tables", _in_place("_link_figure_captions_to_tables")),
     BlockRecoveryPass("link_artifact_group_contexts", _in_place("_link_artifact_group_contexts", academic_paper="academic_lane")),
