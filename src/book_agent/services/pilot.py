@@ -94,6 +94,8 @@ _FRONT_OR_BACK_MATTER = {
     "table of contents",
     "brief contents",
     "foreword",
+    # A misspelling a book may print (A Complete Guide To Volume Price Analysis).
+    "foreward",
     "preface",
     "prologue",
     "acknowledgment",
@@ -161,7 +163,8 @@ def is_surrounding_matter(title: str | None) -> bool:
         return False
     if _PART_TITLE.match(normalized) or _APPENDIX_TITLE.match(normalized):
         return True
-    label = re.split(r"\s*[:：–—]\s*|\s+-\s+", normalized, maxsplit=1)[0]
+    # "Introduction: ...", "Acknowledgments & Trader Resources": the label before the subtitle or the join.
+    label = re.split(r"\s*[:：–—]\s*|\s+-\s+|\s+&\s+", normalized, maxsplit=1)[0]
     return normalized in _FRONT_OR_BACK_MATTER or label in _FRONT_OR_BACK_MATTER or normalized.startswith("about the ")
 
 
