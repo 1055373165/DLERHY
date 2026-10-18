@@ -1320,8 +1320,16 @@ def _find_sublists(blocks: Sequence[QaBlock], run: CheckRun) -> None:
 
 
 def _find_sidebars(blocks: Sequence[QaBlock], body_font: str, run: CheckRun) -> None:
+    body_seen = False
     for index, block in enumerate(blocks):
         text = " ".join((block.source_text or "").split())
+        opening = not body_seen
+        body_seen = body_seen or (block.block_type == "paragraph" and body_font in block.font_names)
+        if opening:
+            # Before the chapter's first paragraph of text: its title and epigraph ("Chapter One",
+            # "There's Nothing New in Trading", an italic quotation), not a sidebar. The repair made
+            # A Complete Guide To Volume Price Analysis's chapter titles sidebar titles.
+            continue
         if (
             block.block_type not in {"heading", "paragraph"}
             or "sidebar-title" in block.html
