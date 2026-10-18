@@ -246,9 +246,18 @@ def _norm_title(title: str) -> str:
 # Structure: chapters against the outline
 
 
-_PART_RE = re.compile(r"^\s*part\s+(?:\d+|[ivxlc]+)\b", re.IGNORECASE)
-_NUMBERED_CHAPTER_RE = re.compile(r"^\s*(?:chapter\s+)?\d{1,2}(?:\s|:|\.\s)|^\s*appendix\b", re.IGNORECASE)
-_BODY_START_RE = re.compile(r"^\s*(?:part|chapter)\s+(?:\d+|[ivxlc]+)\b|^\s*\d{1,2}(?:\s|:|\.\s)", re.IGNORECASE)
+# "Chapter One" spells its number out (A Complete Guide To Volume Price Analysis).
+_NUMBER_WORD = (
+    r"(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|"
+    r"sixteen|seventeen|eighteen|nineteen|twenty)"
+)
+_PART_RE = re.compile(rf"^\s*part\s+(?:\d+|[ivxlc]+|{_NUMBER_WORD})\b", re.IGNORECASE)
+_NUMBERED_CHAPTER_RE = re.compile(
+    rf"^\s*(?:chapter\s+)?\d{{1,2}}(?:\s|:|\.\s)|^\s*chapter\s+{_NUMBER_WORD}\b|^\s*appendix\b", re.IGNORECASE
+)
+_BODY_START_RE = re.compile(
+    rf"^\s*(?:part|chapter)\s+(?:\d+|[ivxlc]+|{_NUMBER_WORD})\b|^\s*\d{{1,2}}(?:\s|:|\.\s)", re.IGNORECASE
+)
 _COVER_RE = re.compile(r"\bcover\b(?!\s+illustration)", re.IGNORECASE)
 
 
@@ -315,10 +324,15 @@ def check_chapters_vs_outline(
     for entry in missing:
         samples.append(Sample(text=_snippet(entry.title), page=entry.page, detail="missing_chapter"))
     outline_pages = {entry.page for entry in outline}
+    first_outline_page = min(outline_pages)
     extra = [
         chapter
         for chapter in chapters
-        if chapter.page_start not in outline_pages and not any(_title_matches(chapter, entry) for entry in outline)
+        if chapter.page_start not in outline_pages
+        and not any(_title_matches(chapter, entry) for entry in outline)
+        # The pages before the first bookmark (title page, copyright, praise) are the parse's own
+        # front-matter chapter, not a contents line turned chapter.
+        and not (chapter.page_start is not None and chapter.page_start < first_outline_page)
     ]
     for chapter in extra:
         samples.append(Sample(text=_snippet(chapter.title), page=chapter.page_start, chapter_id=chapter.id, detail="extra_chapter"))

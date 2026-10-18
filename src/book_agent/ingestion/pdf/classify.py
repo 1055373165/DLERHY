@@ -49,6 +49,8 @@ _TOC_HEADING_TITLES = {"contents", "table of contents"}
 _FRONTMATTER_HEADING_TITLES = {
     "preface",
     "foreword",
+    # A common misspelling a book may print and bookmark ("A Complete Guide To Volume Price Analysis").
+    "foreward",
     "introduction",
     "acknowledgments",
     "acknowledgements",
@@ -84,6 +86,8 @@ _OUTLINED_BOOK_FRONTMATTER_TITLES = {
     "acknowledgements",
     "dedication",
     "foreword",
+    # A common misspelling a book may print and bookmark ("A Complete Guide To Volume Price Analysis").
+    "foreward",
     "introduction",
     "preface",
     "prologue",
@@ -350,12 +354,19 @@ def _should_keep_book_top_level_outline_title(text: str) -> bool:
     lowered = normalized.casefold()
     if _looks_like_book_primary_outline_title(normalized):
         return True
-    return lowered in _BOOK_SPECIAL_OUTLINE_TITLES or _outline_title_label(lowered) in _BOOK_SPECIAL_OUTLINE_TITLES
+    label = _outline_title_label(lowered)
+    return (
+        lowered in _BOOK_SPECIAL_OUTLINE_TITLES
+        or label in _BOOK_SPECIAL_OUTLINE_TITLES
+        or lowered in _OUTLINED_BOOK_FRONTMATTER_TITLES
+        or label in _OUTLINED_BOOK_FRONTMATTER_TITLES
+    )
 
 
 def _outline_title_label(title: str) -> str:
-    """The label of a subtitled outline title: "introduction: why rsi is so magical?" -> "introduction"."""
-    return re.split(r"\s*(?::|\s[-\u2013\u2014]\s)", title, maxsplit=1)[0]
+    """The label of a subtitled or joined outline title: "introduction: why rsi is so magical?" ->
+    "introduction", "acknowledgments & trader resources" -> "acknowledgments"."""
+    return re.split(r"\s*(?::|\s[-\u2013\u2014&]\s)", title, maxsplit=1)[0]
 
 
 def _extract_book_main_chapter_number(text: str) -> int | None:
