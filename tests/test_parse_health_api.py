@@ -208,6 +208,40 @@ class ParseHealthApiTests(unittest.TestCase):
         self.assertEqual(refused.status_code, 409)
         self.assertIn("已经开始翻译全书", refused.json()["detail"])
 
+    def test_uploading_a_book_again_replaces_it_until_it_is_translated(self) -> None:
+        # How to Swing Trade, uploaded again after its cancelled run: the import wrote the new parse over
+        # the old rows, the cancelled run stayed, and the page still said "翻译已取消".
+        from book_agent.domain.enums import DocumentRunStatus, DocumentRunType
+        from book_agent.domain.models.ops import DocumentRun
+
+        source = self.root / "parted.pdf"
+        _write_parted_book(source)
+
+        def upload():
+            with source.open("rb") as handle:
+                return self.client.post("/v1/documents/bootstrap-upload", files={"source_file": ("parted.pdf", handle, "application/pdf")})
+
+        first = upload()
+        self.assertEqual(first.status_code, 201, first.text)
+        document_id = first.json()["document_id"]
+        with self.session_factory() as session:
+            session.add(DocumentRun(document_id=document_id, run_type=DocumentRunType.TRANSLATE_FULL, status=DocumentRunStatus.CANCELLED, requested_by="test", status_detail_json={}))
+            session.commit()
+
+        again = upload()
+        self.assertEqual(again.status_code, 201, again.text)
+        self.assertEqual(again.json()["document_id"], document_id)
+        with self.session_factory() as session:
+            self.assertEqual(session.scalars(select(DocumentRun).where(DocumentRun.document_id == document_id)).all(), [])
+            # Once the whole book is under way, uploading it again overwrites nothing.
+            session.add(DocumentRun(document_id=document_id, run_type=DocumentRunType.TRANSLATE_FULL, status=DocumentRunStatus.SUCCEEDED, requested_by="test", status_detail_json={}))
+            session.commit()
+        refused = upload()
+        self.assertEqual(refused.status_code, 409)
+        self.assertIn("已经在书库里", refused.json()["detail"])
+        with self.session_factory() as session:
+            self.assertEqual(len(session.scalars(select(DocumentRun).where(DocumentRun.document_id == document_id)).all()), 1)
+
     def test_a_pdf_import_writes_a_report_the_api_and_the_overview_read(self) -> None:
         pdf_path = self.root / "parted.pdf"
         _write_parted_book(pdf_path)

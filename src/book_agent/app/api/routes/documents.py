@@ -176,6 +176,7 @@ def bootstrap_uploaded_document(
     try:
         with target_path.open("wb") as buffer:
             shutil.copyfileobj(source_file.file, buffer)
+        _clear_the_same_book(request, session, target_path, current_principal(request).org_id)
         summary = _workflow_service(request, session).bootstrap_document(
             target_path, org_id=current_principal(request).org_id
         )
@@ -199,6 +200,33 @@ def bootstrap_uploaded_document(
         source_file.file.close()
     return DocumentSummaryResponse.model_validate(summary, from_attributes=True)
 
+
+
+def _clear_the_same_book(request: Request, session: Session, path: Path, org_id: str | None) -> None:
+    """Make room for a book uploaded again: the import used to write the new parse over the old one's
+    rows, so How to Swing Trade kept its cancelled run and its page still said "翻译已取消". Before
+    anything is translated the old book goes (as a re-import does); after, the upload is refused."""
+    from book_agent.domain.models import Document
+    from book_agent.services.bootstrap import document_id_for_file
+    from book_agent.services.document_reimport import reimport_refusal
+
+    existing = session.get(Document, document_id_for_file(path, org_id))
+    if existing is None:
+        return
+    refusal = reimport_refusal(session, existing)
+    if refusal:
+        cleanup_path(path)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"这本书已经在书库里了，重新上传不会覆盖它：{refusal}",
+        )
+    try:
+        files = _workflow_service(request, session).delete_document(existing.id)
+    except DocumentBusyError as exc:
+        cleanup_path(path)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    session.commit()
+    remove_document_files(session, files, upload_root=_upload_root(request))
 
 def _web_url_guard():
     """With auth on or in prod, pages (and every redirect and stylesheet) must be on public hosts (SSRF, R1)."""

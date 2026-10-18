@@ -202,6 +202,20 @@ def _pdf_chapter_risk_level(
     return Severity.LOW if layout_risk == "low" else None
 
 
+def document_id_for_fingerprint(fingerprint: str, org_id: str | None) -> str:
+    """A book's id: the file's content (and the organisation's, outside the default one).
+
+    The default org keeps the original id formula, so existing ids do not move; other orgs get their
+    own document for the same file.
+    """
+    org_id = org_id or DEFAULT_ORG_ID
+    return stable_id("document", fingerprint) if org_id == DEFAULT_ORG_ID else stable_id("document", org_id, fingerprint)
+
+
+def document_id_for_file(path: str | Path, org_id: str | None) -> str:
+    return document_id_for_fingerprint(sha256(Path(path).read_bytes()).hexdigest(), org_id)
+
+
 class IngestService:
     def __init__(self, pdf_profiler: PdfFileProfiler | None = None):
         self.pdf_profiler = pdf_profiler or PdfFileProfiler()
@@ -214,9 +228,7 @@ class IngestService:
         org_id = org_id or DEFAULT_ORG_ID
 
         document = Document(
-            # The default org keeps the original id formula, so existing ids do not move;
-            # other orgs get their own document for the same file.
-            id=stable_id("document", fingerprint) if org_id == DEFAULT_ORG_ID else stable_id("document", org_id, fingerprint),
+            id=document_id_for_fingerprint(fingerprint, org_id),
             org_id=org_id,
             source_type=source_type,
             file_fingerprint=fingerprint,
