@@ -6,6 +6,7 @@ import logging
 import posixpath
 import re
 import zipfile
+from dataclasses import replace
 from html.parser import HTMLParser
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -453,6 +454,67 @@ def _parse_xml_document(raw: bytes) -> ET.Element:
     return ET.fromstring(raw.decode("utf-8", errors="replace"))
 
 
+_STYLED_HEADING_MAX_CHARS = 140
+_CSS_RULE = re.compile(r"([^{}]+)\{([^}]*)\}")
+_CSS_CLASS_SELECTOR = re.compile(r"^\s*(?:p)?\.([A-Za-z_][\w-]*)\s*$")
+_CSS_FONT_SIZE = re.compile(r"font-size\s*:\s*([\d.]+)\s*(em|rem|%)", re.IGNORECASE)
+_CSS_FONT_WEIGHT = re.compile(r"font-weight\s*:\s*(bold|bolder|\d{3})", re.IGNORECASE)
+
+
+def _styled_heading_levels(archive: zipfile.ZipFile, manifest: dict[str, dict[str, str]]) -> dict[str, int]:
+    """Classes the book's stylesheets set bold and at least 1.15 times the text size, ranked by size
+    (the largest is level 1). InDesign exports set headings as ``<p class="heading1">``."""
+    sizes: dict[str, float] = {}
+    for item in manifest.values():
+        if item["media_type"] != "text/css":
+            continue
+        try:
+            css = archive.read(item["href"]).decode("utf-8", errors="replace")
+        except KeyError:
+            continue
+        css = re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL)
+        for selectors, body in _CSS_RULE.findall(css):
+            size = _CSS_FONT_SIZE.search(body)
+            weight = _CSS_FONT_WEIGHT.search(body)
+            if size is None or weight is None:
+                continue
+            value = float(size.group(1)) / (100.0 if size.group(2) == "%" else 1.0)
+            bold = weight.group(1).lower() in {"bold", "bolder"} or int(weight.group(1) if weight.group(1).isdigit() else 0) >= 600
+            if not bold or value < 1.15:
+                continue
+            for selector in selectors.split(","):
+                match = _CSS_CLASS_SELECTOR.match(selector)
+                if match:
+                    sizes[match.group(1)] = max(value, sizes.get(match.group(1), 0.0))
+    # Rank only the classes paragraphs wear: a drop cap's or an inline override's large bold span is no heading.
+    paragraph_classes: set[str] = set()
+    for item in manifest.values():
+        if item["media_type"] not in {"application/xhtml+xml", "text/html"}:
+            continue
+        try:
+            markup = archive.read(item["href"]).decode("utf-8", errors="replace")
+        except KeyError:
+            continue
+        for match in re.finditer(r"<p\b[^>]*\bclass=[\"']([^\"']*)[\"']", markup):
+            paragraph_classes.update(match.group(1).split())
+    sizes = {name: value for name, value in sizes.items() if name in paragraph_classes}
+    ranked = sorted(set(sizes.values()), reverse=True)
+    return {name: min(ranked.index(value) + 1, 4) for name, value in sizes.items()}
+
+
+def _dense_styled_heading_levels(blocks: list[ParsedBlock]) -> list[ParsedBlock]:
+    """A chapter's stylesheet headings numbered 1, 2, ... by size: a size the chapter does not use (the
+    contents page's title) leaves no gap between its title and its sections."""
+    used = sorted({block.metadata["heading_level"] for block in blocks if block.metadata.get("styled_heading")})
+    dense = {level: rank for rank, level in enumerate(used, start=1)}
+    return [
+        replace(block, metadata={**block.metadata, "heading_level": dense[block.metadata["heading_level"]]})
+        if block.metadata.get("styled_heading")
+        else block
+        for block in blocks
+    ]
+
+
 def _block_type_for_html(tag: str, attrs: dict[str, str]) -> str | None:
     class_tokens = _class_tokens(attrs.get("class", ""))
     if tag == "div" and "figure-container" in class_tokens:
@@ -700,7 +762,8 @@ class EPUBParser:
             opf_dir = posixpath.dirname(opf_path)
 
             manifest = self._read_manifest(opf_root, opf_dir)
-            nav_map = self._read_nav_map(archive, manifest)
+            nav_map = self._read_nav_map(archive, manifest) or self._read_ncx_map(archive, opf_root, manifest)
+            self._styled_heading_levels = _styled_heading_levels(archive, manifest)
             metadata = self._read_metadata(opf_root)
             chapters = self._read_spine_chapters(archive, opf_root, manifest, nav_map)
             chapters = self._normalize_spine_chapters(chapters, book_title=metadata.get("title"))
@@ -821,6 +884,39 @@ class EPUBParser:
             nav_map.setdefault(posixpath.normpath(normalized_href), title)
         return nav_map
 
+    def _read_ncx_map(
+        self,
+        archive: zipfile.ZipFile,
+        opf_root: ET.Element,
+        manifest: dict[str, dict[str, str]],
+    ) -> dict[str, str]:
+        """An EPUB 2 book's table of contents (``toc.ncx``, the spine's ``toc``): a file's first entry
+        titles its chapter. Mastering Trading Psychology has no nav document, and every chapter came
+        out untitled ("missing_chapter_title" blocked its review)."""
+        spine = opf_root.find(".//opf:spine", _OPF_NS)
+        item = manifest.get(spine.attrib.get("toc", "")) if spine is not None else None
+        if item is None:
+            item = next((entry for entry in manifest.values() if entry["media_type"] == "application/x-dtbncx+xml"), None)
+        if item is None:
+            return {}
+        try:
+            ncx_root = _parse_xml_document(archive.read(item["href"]))
+        except (KeyError, ET.ParseError):
+            logger.warning("Failed to read EPUB NCX %s; proceeding without TOC", item["href"])
+            return {}
+        ncx_dir = posixpath.dirname(item["href"])
+        ncx_map: dict[str, str] = {}
+        for nav_point in ncx_root.iter():
+            if _local_name(nav_point.tag) != "navPoint":
+                continue
+            label = next((child for child in nav_point.iter() if _local_name(child.tag) == "text"), None)
+            content = next((child for child in nav_point if _local_name(child.tag) == "content"), None)
+            title = _normalize_text("".join(label.itertext())) if label is not None else ""
+            src = content.attrib.get("src", "") if content is not None else ""
+            if title and src:
+                ncx_map.setdefault(posixpath.normpath(_join_path(ncx_dir, src.split("#", 1)[0])), title)
+        return ncx_map
+
     def _read_spine_chapters(
         self,
         archive: zipfile.ZipFile,
@@ -864,7 +960,7 @@ class EPUBParser:
             blocks = self._extract_blocks(body, href)
         except ET.ParseError:
             blocks = _FallbackHTMLBlockExtractor(href).extract(raw.decode("utf-8", errors="replace"))
-        blocks = _normalize_chapter_heading_levels(blocks)
+        blocks = _normalize_chapter_heading_levels(_dense_styled_heading_levels(blocks))
         nav_title = nav_map.get(posixpath.normpath(href))
         heading_title = next((block.text for block in blocks if block.block_type == "heading"), None)
         chapter_title = self._resolve_chapter_title(nav_title, heading_title)
@@ -1147,6 +1243,8 @@ class EPUBParser:
             return "caption"
         if local_name in _HEADING_TAGS:
             return "heading"
+        if local_name == "p" and self._styled_heading_level(element, class_tokens) is not None:
+            return "heading"
         if local_name in _BLOCK_TAGS:
             return _BLOCK_TAGS[local_name]
         epub_type = element.attrib.get("{http://www.idpf.org/2007/ops}type", "")
@@ -1155,6 +1253,18 @@ class EPUBParser:
         if local_name == "aside" and "footnote" in epub_type:
             return "footnote"
         return None
+
+    def _styled_heading_level(self, element: ET.Element, class_tokens) -> int | None:
+        """A paragraph the book's stylesheet sets as a heading (``<p class="heading1">``, bold and
+        enlarged): its level, or None. A long one is a paragraph with a run-in title, not a heading."""
+        levels = getattr(self, "_styled_heading_levels", None) or {}
+        level = min((levels[token] for token in class_tokens if token in levels), default=None)
+        if level is None:
+            return None
+        text = _normalize_text("".join(element.itertext()))
+        if not text or len(text) > _STYLED_HEADING_MAX_CHARS:
+            return None
+        return level
 
     def _block_text_and_metadata(
         self,
@@ -1166,6 +1276,9 @@ class EPUBParser:
         if local_name in _HEADING_TAGS and len(local_name) == 2 and local_name[1].isdigit():
             metadata["heading_level"] = int(local_name[1])
         class_tokens = _element_class_tokens(element)
+        if local_name == "p" and (styled_level := self._styled_heading_level(element, class_tokens)) is not None:
+            metadata["heading_level"] = styled_level
+            metadata["styled_heading"] = True
         if _figure_like_container(local_name, class_tokens, element):
             image = _first_descendant(element, {"img"})
             if image is not None:
