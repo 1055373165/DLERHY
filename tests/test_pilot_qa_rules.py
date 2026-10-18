@@ -577,6 +577,14 @@ class KnownIssueTests(unittest.TestCase):
         self.assertFound(inputs, "L1.chapter_folded", BLOCKING, target_id="b-h2")
         self.assertFound(inputs, "L1.chapters_vs_outline", BLOCKING, target_id=C1)
 
+
+    def test_a_numbered_section_in_a_labelled_chapter_is_not_another_chapter(self) -> None:
+        # How to Swing Trade's "CHAPTER 5: TRADING PSYCGOLOGY" has a section "4 Basic Rules of Trading
+        # psychology": taken for chapter 4 folded in, the pilot asked to split it out.
+        chapters = [QaChapter(C1, 10, "CHAPTER 5: TRADING PSYCGOLOGY", "第 5 章 交易心理", 20, 40)]
+        blocks = replace_block(clean_blocks(), "b-h2", chapter_id=C1, source_text="4 Basic Rules of Trading psychology")
+        hits = [f for f in findings(build(blocks, chapters=chapters)) if f["check_id"] == "L1.chapter_folded"]
+        self.assertEqual(hits, [])
     def test_a_pilot_chapter_missing_from_the_reading_copy(self) -> None:
         # Both books' pilots: the export folded chapter 2 into chapter 1's section.
         inputs = build(exported=[ExportedChapter(C1, "第 1 章 为什么需要智能体", "")])

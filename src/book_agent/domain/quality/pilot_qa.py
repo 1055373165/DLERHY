@@ -800,6 +800,10 @@ def check_pilot_chapters(inputs: PilotQaInputs) -> list[CheckRun]:
             heading = " ".join(block.source_text.split())
             if number is None or number == own_number or _norm(heading) == _norm(title) or _is_sentence(heading):
                 continue
+            if _CHAPTER_LABELLED.match(title) and not _CHAPTER_LABELLED.match(heading):
+                # A book that labels its chapters ("CHAPTER 5: TRADING PSYCHOLOGY") labels every one: a
+                # bare "4 Basic Rules of Trading psychology" inside it is a numbered section.
+                continue
             if parse_health.title_page_number(heading) is not None or len(heading.split()) > 14:
                 continue
             folded.findings.append(
@@ -811,6 +815,9 @@ def check_pilot_chapters(inputs: PilotQaInputs) -> list[CheckRun]:
                 )
             )
     return [not_body, contents, folded]
+
+
+_CHAPTER_LABELLED = re.compile(r"^\s*(?:chapter\b|第\s*[0-9一二三四五六七八九十百]+\s*章)", re.IGNORECASE)
 
 
 def check_sections_vs_outline(inputs: PilotQaInputs) -> CheckRun:
