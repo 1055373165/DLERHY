@@ -142,11 +142,17 @@ def _resolve_chapter_title(
     return heading_target
 
 
-_BARE_PART_SOURCE = re.compile(r"^\s*part\s+(?:\d{1,2}|[ivx]{1,4}|one|two|three|four|five|six|seven|eight|nine|ten)\s*$", re.IGNORECASE)
+# A bare "Part 2" or "Chapter Six" heading whose name is set as the next heading (A Complete Guide To
+# Volume Price Analysis: "Chapter Six" / "Volume Price Analysis – The Next Level").
+_BARE_PART_SOURCE = re.compile(
+    r"^\s*(?:part|chapter)\s+(?:\d{1,2}|[ivx]{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|"
+    r"thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s*$",
+    re.IGNORECASE,
+)
 
 
 def _part_name_heading(blocks: Sequence[TitleBlock], first: TitleBlock) -> str | None:
-    """The translated name heading right after a bare "Part N" heading, if there is one."""
+    """The translated name heading right after a bare "Part N" or "Chapter N" heading, if there is one."""
     if not _BARE_PART_SOURCE.match(str(first.source_text or "")):
         return None
     following = [block for block in blocks if _normalize_render_text(block.target_text or block.source_text)]
