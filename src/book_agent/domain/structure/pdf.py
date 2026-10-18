@@ -1921,6 +1921,26 @@ class PdfStructureRecoveryService:
                 # outline names the part differently.
                 part_name = display_rest and bool(_BARE_PART_LABEL_RE.match(_normalize_text(previous.text)))
                 title_rest = current.role == "heading" or (display_rest and any(joined_tokens == title for title in page_titles))
+                # The title's rest set at the label's size atop the paragraph after it ("Chapter One" /
+                # "There's Nothing New in Trading" and the epigraph below, one block): the emphasized
+                # lead completes the outline title, the rest stays text.
+                emphasis = str(current.metadata.get("pdf_leading_emphasis_text") or "")
+                split = (
+                    styled_heading_and_remainder(current.text, emphasis)
+                    if previous.role == "heading" and current.role == "body" and emphasis
+                    and previous.page_end == current.page_start
+                    else None
+                )
+                if split and any(_title_tokens(f"{previous.text} {split[0]}") == title for title in page_titles):
+                    heading_part, body_part = self._heading_and_body_segments(
+                        current, split[0], split[1], "outline_title_fragments_merged", None
+                    )
+                    combined = self._merge_heading_blocks(previous, heading_part)
+                    combined.text = " ".join(combined.text.split())
+                    combined.flags = list(dict.fromkeys([*combined.flags, "outline_title_fragments_merged"]))
+                    merged[previous_index] = combined
+                    merged.append(body_part)
+                    continue
                 if (
                     previous.role == "heading"
                     and previous.page_end == current.page_start == current.page_end
