@@ -19,6 +19,7 @@ from book_agent.export.common import (
     _FRONTMATTER_TITLE_TRANSLATIONS,
     _FRONTMATTER_TITLES,
     _MAIN_CHAPTER_TITLE_PATTERN,
+    CHAPTER_NUMBER_WORDS,
     _is_pdf_document,
     _normalize_render_text,
 )
@@ -260,10 +261,8 @@ def extract_main_chapter_number(title: str | None) -> int | None:
         normalized_remainder[:1].isupper() or normalized_remainder[:1].isdigit() or normalized_remainder[:1] in "\"'\u201c\u2018"
     ):
         return None
-    try:
-        return int(match.group(1))
-    except ValueError:
-        return None
+    number = match.group(1).casefold()
+    return int(number) if number.isdigit() else CHAPTER_NUMBER_WORDS.get(number)
 
 
 def looks_like_part_title(title: str | None) -> bool:

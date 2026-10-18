@@ -115,6 +115,11 @@ class ChapterLabelTests(unittest.TestCase):
         self.assertEqual(extract_main_chapter_number("CHAPTER 9: 20 POPULAR RSI TRADING STRATEGIES"), 9)
         self.assertEqual(extract_main_chapter_number("Chapter 2: Birth of RSI"), 2)
         self.assertIsNone(extract_main_chapter_number("Chapter 3 of this book explains the formula"))
+        # A Complete Guide To Volume Price Analysis spells its numbers out: read as no chapter, "Chapter One"
+        # was folded into the "Foreward" before it in the reading copy.
+        self.assertEqual(extract_main_chapter_number("Chapter One : There’s Nothing New In Trading"), 1)
+        self.assertEqual(extract_main_chapter_number("CHAPTER TWELVE: Volume And Price"), 12)
+        self.assertIsNone(extract_main_chapter_number("Chapter one of this book explains the formula"))
         # Manning outlines number a chapter without the word "Chapter"; the merged export folded the
         # RAG book's chapter 2 into chapter 1 until this was read as a chapter number.
         self.assertEqual(extract_main_chapter_number("2 RAG systems and their design"), 2)

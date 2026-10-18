@@ -217,7 +217,19 @@ _CODE_ASSIGNMENT_PATTERN = re.compile(
 _OCR_TOLERANT_CODE_ASSIGNMENT_PATTERN = re.compile(
     r"^[A-Za-z_][A-Za-z0-9_ ]{0,80}\s*=\s*.+$"
 )
-_MAIN_CHAPTER_TITLE_PATTERN = re.compile(r"^\s*chapter\s+(\d+)(?=\b|_)", re.IGNORECASE)
+# "Chapter One : There's Nothing New In Trading" spells its number out (A Complete Guide To Volume Price
+# Analysis): read as no chapter, each one was folded into the section before it.
+CHAPTER_NUMBER_WORDS = {
+    word: number
+    for number, word in enumerate(
+        "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
+        "seventeen eighteen nineteen twenty".split(),
+        start=1,
+    )
+}
+_MAIN_CHAPTER_TITLE_PATTERN = re.compile(
+    r"^\s*chapter\s+(\d+|" + "|".join(CHAPTER_NUMBER_WORDS) + r")(?=\b|_)", re.IGNORECASE
+)
 _APPENDIX_TITLE_PATTERN = re.compile(r"^\s*appendix\b", re.IGNORECASE)
 _FIGURE_CAPTION_PATTERN = re.compile(r"^\s*(?:fig(?:ure)?\.?|image|diagram|chart)\b", re.IGNORECASE)
 _ACADEMIC_CITATION_PATTERN = re.compile(r"\[[^\]]+\d{4}[^\]]*\]")
@@ -320,9 +332,12 @@ EXPORT_RENDERER_VERSION = 9
 
 _FRONTMATTER_TITLES = {
     "acknowledgment",
+    "acknowledgments",
     "acknowledgements",
     "dedication",
     "foreword",
+    # A misspelling a book may print and bookmark.
+    "foreward",
     "preface",
     "prologue",
     "introduction",
@@ -333,6 +348,7 @@ _FRONTMATTER_TITLE_TRANSLATIONS = {
     "acknowledgments": "致谢",
     "dedication": "献词",
     "foreword": "前言",
+    "foreward": "前言",
     "preface": "前言",
     "prologue": "序章",
     "introduction": "引言",
