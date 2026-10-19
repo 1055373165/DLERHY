@@ -117,8 +117,54 @@ def _intersection(a: Bbox, b: Bbox) -> Bbox | None:
     return (x0, y0, x1, y1)
 
 
-def page_text_lines(text_dict: dict[str, Any], page_width: float, page_height: float) -> list[PageTextLine]:
-    """Non-empty text lines of a ``page.get_text("dict")`` result, classified."""
+# A font's ascender and descender as a share of its size; beyond these the font's metrics are broken.
+_MAX_ASCENDER = 1.5
+_MIN_DESCENDER = -1.0
+
+
+def _glyph_height_bbox(bbox: Bbox, spans: Sequence[dict[str, Any]]) -> Bbox:
+    """The line's box, its height cut to its glyphs when a font's metrics are broken.
+
+    PyMuPDF sizes a line by its fonts' ascender and descender. Fonts an OCR tool embeds may carry
+    nonsense ones (The Wall Street Gang: ascender 3.06), which made a 7pt line 27pt tall, reaching
+    into the figure above it. Such a span is boxed from its baseline instead: 0.9 of its size above,
+    0.25 below.
+    """
+    tops: list[float] = []
+    bottoms: list[float] = []
+    for span in spans:
+        if not str(span.get("text") or "").strip():
+            continue
+        try:
+            size = float(span.get("size") or 0.0)
+            ascender = float(span.get("ascender") if span.get("ascender") is not None else 0.8)
+            descender = float(span.get("descender") if span.get("descender") is not None else -0.2)
+            span_box = [float(value) for value in span.get("bbox") or ()]
+            baseline = float((span.get("origin") or (0.0, span_box[3] if span_box else 0.0))[1])
+        except (TypeError, ValueError, IndexError):
+            return bbox
+        if len(span_box) != 4:
+            return bbox
+        if size > 0 and (ascender > _MAX_ASCENDER or descender < _MIN_DESCENDER):
+            tops.append(baseline - 0.9 * size)
+            bottoms.append(baseline + 0.25 * size)
+        else:
+            tops.append(span_box[1])
+            bottoms.append(span_box[3])
+    if not tops:
+        return bbox
+    top, bottom = max(bbox[1], min(tops)), min(bbox[3], max(bottoms))
+    return (bbox[0], top, bbox[2], bottom) if bottom > top else bbox
+
+
+def page_text_lines(
+    text_dict: dict[str, Any], page_width: float, page_height: float, *, glyph_heights: bool = False
+) -> list[PageTextLine]:
+    """Non-empty text lines of a ``page.get_text("dict")`` result, classified.
+
+    ``glyph_heights``: a line set in a font with broken metrics is as tall as its glyphs
+    (``_glyph_height_bbox``), for checking a figure's edge against the text around it.
+    """
     blocks: list[tuple[int, list[tuple[Bbox, str]], float]] = []
     size_weights: dict[float, int] = {}
     for block_index, block in enumerate(text_dict.get("blocks", []) or []):
@@ -137,6 +183,8 @@ def page_text_lines(text_dict: dict[str, Any], page_width: float, page_height: f
                 continue
             if len(bbox) != 4 or bbox[2] <= bbox[0] or bbox[3] <= bbox[1]:
                 continue
+            if glyph_heights:
+                bbox = _glyph_height_bbox(bbox, spans)
             block_lines.append((bbox, text))  # type: ignore[arg-type]
             sizes: dict[float, int] = {}
             for span in spans:
@@ -853,7 +901,7 @@ def complete_figure_region(
     """
     page_width = float(page.rect.width)
     page_height = float(page.rect.height)
-    lines = page_text_lines(page.get_text("dict"), page_width, page_height)
+    lines = page_text_lines(page.get_text("dict"), page_width, page_height, glyph_heights=True)
     try:
         _paths, visible = split_extended_drawings(page.get_drawings(extended=True))
     except Exception:
@@ -892,7 +940,80 @@ def complete_figure_region(
         if grown == box:
             break
         box = grown
-    return box
+    return _clear_of_outside_prose(box, lines, paths, forbidden)
+
+
+# Past the check's touch gap (``figure_region_problems``), so the moved edge no longer touches the line.
+_EDGE_CLEARANCE_PT = 2.5
+
+
+def _clear_of_outside_prose(
+    box: Bbox,
+    lines: Sequence[PageTextLine],
+    paths: Sequence[Bbox],
+    forbidden: Callable[[PageTextLine], bool],
+) -> Bbox:
+    """``box`` with its top or bottom edge moved off a line of the text around it.
+
+    A scanned picture's box can reach a few points into the line of body text above or below it
+    (The Wall Street Gang's charts): the crop would carry a slice of that line. A line that sits
+    mostly outside the box and runs past its side is the page's text, as is any line that only
+    grazes the edge; the edge moves to clear it, unless that would cut a drawing or take more than
+    a line's height off the figure.
+    """
+    x0, y0, x1, y1 = box
+    for line in lines:
+        zone = (x0, y0 - _EDGE_CLEARANCE_PT, x1, y1 + _EDGE_CLEARANCE_PT)
+        if not _intersects(zone, line.bbox):
+            continue
+        lx0, ly0, lx1, ly1 = line.bbox
+        height = ly1 - ly0
+        if height <= 0:
+            continue
+        overlap = min(ly1, y1) - max(ly0, y0)
+        # A line that only grazes the edge was not taken into the figure (``complete_figure_region``
+        # takes the labels that cross it); deeper, only the page's text running past its side.
+        grazes = overlap < 0.25 * height
+        page_text = forbidden(line) and (lx0 < x0 - 4.0 or lx1 > x1 + 4.0) and overlap < 0.75 * height
+        if not (grazes or page_text):
+            continue
+        if ly0 < y0 + _EDGE_CLEARANCE_PT and ly1 <= y0 + height:
+            band = (x0, y0, x1, ly1)
+            if not any(_intersects(band, path) for path in paths):
+                y0 = ly1 + _EDGE_CLEARANCE_PT
+        elif y1 - height <= ly0 and y1 - _EDGE_CLEARANCE_PT < ly1:
+            band = (x0, ly0, x1, y1)
+            if not any(_intersects(band, path) for path in paths):
+                y1 = ly0 - _EDGE_CLEARANCE_PT
+    return (x0, y0, x1, y1) if y1 - y0 > 10.0 else box
+
+
+def is_printed_text_patch(page: Any, region: Sequence[float]) -> bool:
+    """``region`` is a piece of the page's printed text set as a picture, not a figure.
+
+    A scan turned into text and pictures can leave a stretch of a paragraph as an image (The Wall
+    Street Gang, p. xii: three lines of the foreword) while its words are in the text layer as
+    well. Two or more lines of the page's prose run through the picture and past its side (a
+    figure's own text stays inside it), and between them cover 40% of its height.
+    """
+    x0, y0, x1, y1 = (float(value) for value in region)
+    height = y1 - y0
+    if height <= 0:
+        return False
+    lines = page_text_lines(page.get_text("dict"), float(page.rect.width), float(page.rect.height), glyph_heights=True)
+    crossing = 0
+    covered = 0.0
+    for line in lines:
+        lx0, ly0, lx1, ly1 = line.bbox
+        line_height = ly1 - ly0
+        overlap = min(ly1, y1) - max(ly0, y0)
+        if line_height <= 0 or overlap < 0.75 * line_height or lx1 <= x0 or lx0 >= x1:
+            continue
+        if not (line.prose or _is_sentence(line.text)) or (lx0 >= x0 - 10.0 and lx1 <= x1 + 10.0):
+            continue
+        crossing += 1
+        covered += overlap
+    return crossing >= 2 and covered >= 0.4 * height
 
 
 # ---------------------------------------------------------------------------
@@ -934,7 +1055,7 @@ def figure_region_problems(
     zone: Bbox = (x0 - touch_gap, y0 - touch_gap, x1 + touch_gap, y1 + touch_gap)
     page_width = float(page.rect.width)
     page_height = float(page.rect.height)
-    lines = page_text_lines(page.get_text("dict"), page_width, page_height)
+    lines = page_text_lines(page.get_text("dict"), page_width, page_height, glyph_heights=True)
     problems: list[FigureRegionProblem] = []
 
     furniture = list(furniture_bboxes) if furniture_bboxes is not None else [
