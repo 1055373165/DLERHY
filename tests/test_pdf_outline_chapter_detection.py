@@ -102,6 +102,17 @@ def test_ordinal_form_is_rejected():
     assert _extract_book_main_chapter_number("2nd printing") is None
 
 
+def test_number_and_period_form_extracts_number():
+    """The Wall Street Gang's outline: "1. Confessions of a Croupier" ... "15. How to Sue the Stock
+    Exchange". Unrecognised, all fifteen chapters folded into "Acknowledgments"."""
+    assert _extract_book_main_chapter_number("1. Confessions of a Croupier ") == 1
+    assert _extract_book_main_chapter_number("15. How to Sue the Stock Exchange") == 15
+    assert _should_start_outlined_book_top_level_chapter("2. Who Owns America?")
+    # Still not sections, nor a number on its own.
+    assert _extract_book_main_chapter_number("1.1 Confessions") is None
+    assert _extract_book_main_chapter_number("1.") is None
+
+
 # ---- Frontmatter / appendix / glossary unchanged -----------------------
 
 def test_frontmatter_titles_unchanged():

@@ -5069,6 +5069,43 @@ class PdfStructureRecoveryService:
             return candidate_index
         return None
 
+    def _drop_printed_text_patches(self, recovered_blocks: list[_RecoveredBlock], file_path: str | Path) -> list[_RecoveredBlock]:
+        """Pictures that are a stretch of the page's printed text (``figure_extent.is_printed_text_patch``).
+
+        Their words are in the text layer too; as figures they would show the same lines twice,
+        cut through at the picture's edges.
+        """
+        from book_agent.ingestion.pdf.figure_extent import is_printed_text_patch
+
+        targets = [
+            index
+            for index, block in enumerate(recovered_blocks)
+            if block.role == "image"
+            and len(block.bbox_regions or []) == 1
+            and not block.metadata.get("linked_caption_block_id")
+            and not block.metadata.get("linked_caption_text")
+        ]
+        if not targets:
+            return recovered_blocks
+        try:
+            import fitz
+
+            document = fitz.open(str(file_path))
+        except Exception:  # pragma: no cover - no PDF to read: the pictures stay
+            return recovered_blocks
+        dropped: set[int] = set()
+        try:
+            for index in targets:
+                region = recovered_blocks[index].bbox_regions[0]
+                page_number = int(region.get("page_number") or recovered_blocks[index].page_start)
+                if 1 <= page_number <= document.page_count and is_printed_text_patch(
+                    document[page_number - 1], [float(value) for value in region["bbox"]]
+                ):
+                    dropped.add(index)
+        finally:
+            document.close()
+        return [block for index, block in enumerate(recovered_blocks) if index not in dropped]
+
     def _complete_figure_regions(self, recovered_blocks: list[_RecoveredBlock], file_path: str | Path) -> list[_RecoveredBlock]:
         """Every figure region grown to the drawing it cuts through (``figure_extent.complete_figure_region``).
 
@@ -5888,6 +5925,7 @@ _BLOCK_RECOVERY_PASSES: tuple[BlockRecoveryPass, ...] = (
     BlockRecoveryPass("promote_late_table_bodies", _returning("_promote_late_table_like_bodies")),
     BlockRecoveryPass("merge_table_fragments", _returning("_merge_adjacent_table_fragments", "ordered_pages")),
     BlockRecoveryPass("lock_listing_scope", _returning("_lock_listing_scope")),
+    BlockRecoveryPass("drop_printed_text_patches", _returning("_drop_printed_text_patches", "file_path")),
     BlockRecoveryPass("figure_clustering", _returning("_apply_figure_clustering")),
     BlockRecoveryPass("recover_text_only_figures", _returning("_recover_text_only_figures")),
     BlockRecoveryPass("complete_figure_regions", _returning("_complete_figure_regions", "file_path")),
