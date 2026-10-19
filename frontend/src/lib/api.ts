@@ -1077,7 +1077,7 @@ export function blogPublishResultText(result: BlogPublishResult): string {
       : result.cover === "reused"
         ? "，已设置封面"
         : "";
-  const skipped = result.images_skipped.length ? `；${result.images_skipped.length} 张图片超过博客限制没有上传` : "";
+  const skipped = result.images_skipped.length ? `；${result.images_skipped.length} 张图片没能上传到博客（超过大小限制或下载不到）` : "";
   return `${head}「${result.title}」${images}${cover}${skipped}。`;
 }
 
