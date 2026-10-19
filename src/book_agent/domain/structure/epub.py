@@ -154,8 +154,20 @@ def _local_name(tag: str) -> str:
     return tag
 
 
+# Word documents set ®, © and ™ in the Symbol font, and exports keep its private-use code points (U+F0xx).
+_SYMBOL_FONT_MARKS = {"\uf0d2": "®", "\uf0e2": "®", "\uf0d3": "©", "\uf0e3": "©", "\uf0d4": "™", "\uf0e4": "™"}
+_SYMBOL_FONT_MARK_RE = re.compile(r"(\s*)([\uf0d2-\uf0d4\uf0e2-\uf0e4])")
+
+
+def _symbol_font_mark(match: re.Match[str]) -> str:
+    mark = _SYMBOL_FONT_MARKS[match.group(2)]
+    # ® and ™ sit against the name they mark ("Apple \uf0e2" -> "Apple®"); © keeps its space.
+    return mark if mark in "®™" else match.group(1) + mark
+
+
 def _normalize_text(text: str | None) -> str:
-    return re.sub(r"\s+", " ", text or "").strip()
+    text = _SYMBOL_FONT_MARK_RE.sub(_symbol_font_mark, text or "")
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _normalize_preformatted_text(text: str) -> str:
