@@ -223,6 +223,10 @@ class WebPageWorkflowTests(unittest.TestCase):
                             document_id, export_type
                         )
                     reading[export_type] = Path(exported.file_path).read_text(encoding="utf-8")
+                with session_scope(session_factory) as session:
+                    title_tgt = DocumentWorkflowService(session, export_root=exports).export_repository.get_document(
+                        document_id
+                    ).title_tgt
             finally:
                 engine.dispose()
 
@@ -238,13 +242,24 @@ class WebPageWorkflowTests(unittest.TestCase):
         for export_type, text in reading.items():
             self.assertIn("accelerating fast", text, export_type)
             self.assertNotIn("][1]", text, export_type)
-            self.assertNotIn("**", text, export_type)
             self.assertNotIn("Terms of service", text, export_type)
             self.assertNotIn("ZH::Research", text, export_type)
+        self.assertNotIn("**", reading[ExportType.MERGED_HTML])
+        # The Markdown is read from the translated page: its links, emphasis, code and pictures stay.
+        markdown = reading[ExportType.MERGED_MARKDOWN]
+        self.assertTrue(markdown.startswith("# ZH::When AI builds itself\n\n"), markdown[:80])
+        self.assertEqual(markdown.count("When AI builds itself"), 1)
+        self.assertIn("ZH::The rate is [accelerating fast](https://metr.org/), and **bold claims** need *care*.", markdown)
+        self.assertIn('```\nprint("code stays")\n```', markdown)
+        self.assertIn("![Chart](https://example.com/articles/chart.png)", markdown)
+        # The page is titled in Chinese as its own heading reads.
+        self.assertEqual(title_tgt, "ZH::When AI builds itself")
         # The article's own heading titles the chapter once; the <title> with the site name is gone.
         merged = reading[ExportType.MERGED_HTML]
         self.assertIn("<h2>ZH::When AI builds itself</h2>", merged)
-        self.assertEqual(merged.count("ZH::When AI builds itself<"), 1)
+        self.assertEqual(merged.count("<h2>ZH::When AI builds itself</h2>"), 1)
+        # The page's Chinese title is that heading's translation (the document title, the <title>).
+        self.assertIn("<title>ZH::When AI builds itself</title>", merged)
         self.assertNotIn("<div class='zh'>ZH::When AI builds itself \\ Example", merged)
 
 

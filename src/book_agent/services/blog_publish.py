@@ -127,13 +127,15 @@ class BlogClient:
 
     def upload_image(self, path: Path) -> str:
         content_type = _IMAGE_TYPES.get(path.suffix.lower()) or mimetypes.guess_type(path.name)[0] or "image/png"
-        with path.open("rb") as handle:
-            response = self._request("POST", "/api/upload/image", files={"file": (path.name, handle, content_type)})
+        return self.upload_image_data(path.name, path.read_bytes(), content_type)
+
+    def upload_image_data(self, name: str, data: bytes, content_type: str) -> str:
+        response = self._request("POST", "/api/upload/image", files={"file": (name, data, content_type)})
         if response.status_code != 200:
-            raise BlogPublishError(f"图片 {path.name} 上传失败（{response.status_code}）：{self._message(response)}")
+            raise BlogPublishError(f"图片 {name} 上传失败（{response.status_code}）：{self._message(response)}")
         url = ((response.json() or {}).get("data") or {}).get("url")
         if not url:
-            raise BlogPublishError(f"图片 {path.name} 上传后博客没有返回地址")
+            raise BlogPublishError(f"图片 {name} 上传后博客没有返回地址")
         return str(url)
 
     def upload_cover(self, cover: BookCover) -> str:
@@ -177,6 +179,50 @@ class BlogClient:
         return True
 
 
+@dataclass(frozen=True)
+class RemotePicture:
+    name: str
+    data: bytes
+    content_type: str
+
+
+def download_picture(url: str, *, transport: httpx.BaseTransport | None = None) -> RemotePicture | None:
+    """A picture a web page links to, for the blog to keep its own copy; None when it cannot be had
+    (not a public address, not a picture the blog takes, too large, or unreachable)."""
+    from urllib.parse import urlsplit
+
+    from book_agent.services.url_guard import UnsafeUrlError, ensure_public_http_url
+
+    try:
+        ensure_public_http_url(url)
+        with httpx.Client(timeout=30.0, follow_redirects=True, transport=transport) as client:
+            response = client.get(url)
+    except (UnsafeUrlError, httpx.HTTPError):
+        return None
+    content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
+    if response.status_code != 200 or content_type not in _IMAGE_TYPES.values() or len(response.content) > _IMAGE_MAX_BYTES:
+        return None
+    name = Path(urlsplit(url).path).name or "picture"
+    suffix = next(ext for ext, kind in _IMAGE_TYPES.items() if kind == content_type)
+    if Path(name).suffix.lower() not in _IMAGE_TYPES:
+        name = f"{Path(name).stem or 'picture'}{suffix}"
+    return RemotePicture(name=name, data=response.content, content_type=content_type)
+
+
+# The reading copies' model usage under the title (``usage_statement.DocumentUsage.lines_zh``): ours, not the readers'.
+_USAGE_LINE = re.compile(r"^- (?:翻译用量：模型调用 [\d,]+ 次|Token [\d,]+（输入 [\d,]+ · 输出 [\d,]+）|花费 US\$ [\d,.]+)\n", re.MULTILINE)
+
+
+def without_usage_lines(markdown: str) -> str:
+    """The Markdown without the usage lines, and the blank line they leave."""
+    stripped = _USAGE_LINE.sub("", markdown)
+    return re.sub(r"\n{3,}", "\n\n", stripped) if stripped != markdown else markdown
+
+
+def _is_remote(src: str) -> bool:
+    return src.startswith(("http://", "https://"))
+
+
 def _local_image_path(src: str, base_dir: Path) -> Path | None:
     if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", src) or src.startswith(("/", "#")):
         return None  # already a web address, or not a file
@@ -198,30 +244,44 @@ def publish_markdown(
     cover: Callable[[], BookCover | None] | None = None,
     client_factory: Callable[[BlogTarget], BlogClient] = BlogClient,
     progress: Callable[[str, int, int], None] | None = None,
+    fetch_picture: Callable[[str], RemotePicture | None] = download_picture,
 ) -> tuple[PublishResult, dict[str, Any]]:
     """Upload the pictures, then create the article or update its body. Returns the result and the new state.
 
     ``state``: what earlier publishes to this blog left (``document.metadata_json["blog_publish"]``).
     ``cover``: makes the book's cover, called only when the article needs one.
     ``progress(stage, done, total)``: "login", then "images" after each picture, then "saving".
+    ``fetch_picture``: downloads a picture the Markdown links on the web (a web page's), so the
+    article shows the blog's own copy; one it cannot get stays linked where it was.
     A ``BlogPublishError`` carries the state with what was uploaded before it.
     """
+    markdown = without_usage_lines(markdown)
     report = progress or (lambda stage, done, total: None)
     state = {key: dict(value) if isinstance(value, dict) else value for key, value in (state or {}).items()}
     blog_state = dict(state.get(target.api_url) or {})
     images: dict[str, str] = dict(blog_state.get("images") or {})
     covers: dict[str, str] = dict(blog_state.get("covers") or {})
     articles: dict[str, Any] = dict(blog_state.get("articles") or {})
+    # A web picture's address -> the hash of what was uploaded for it, so a republish does not download it again.
+    remote: dict[str, str] = dict(blog_state.get("remote_images") or {})
     result = PublishResult(article_id=0, action="", title=metadata.title, edit_url=None)
 
     def new_state() -> dict[str, Any]:
-        return {**state, target.api_url: {"images": images, "covers": covers, "articles": articles}}
+        return {
+            **state,
+            target.api_url: {"images": images, "covers": covers, "articles": articles, "remote_images": remote},
+        }
 
-    # Every picture file the Markdown links to, once.
-    pictures: dict[str, Path] = {}
+    # Every picture the Markdown links to, once: files beside it, and pictures on the web.
+    pictures: dict[str, Path | None] = {}
     for match in _IMAGE_LINK.finditer(markdown):
         src = match.group("src")
-        path = pictures.get(src) or _local_image_path(src, base_dir)
+        if src in pictures:
+            continue
+        if _is_remote(src):
+            pictures[src] = None
+            continue
+        path = _local_image_path(src, base_dir)
         if path is not None:
             pictures[src] = path
 
@@ -233,7 +293,25 @@ def publish_markdown(
             uploaded_by_src: dict[str, str] = {}
             report("images", 0, len(pictures))
             for done, (src, path) in enumerate(pictures.items(), start=1):
-                if path.stat().st_size > _IMAGE_MAX_BYTES or path.suffix.lower() not in _IMAGE_TYPES:
+                if path is None:
+                    digest = remote.get(src)
+                    if digest in images:
+                        result.images_reused += 1
+                    else:
+                        picture = fetch_picture(src)
+                        if picture is None:
+                            result.images_skipped.append(src)
+                            report("images", done, len(pictures))
+                            continue
+                        digest = hashlib.sha256(picture.data).hexdigest()
+                        if digest in images:
+                            result.images_reused += 1
+                        else:
+                            images[digest] = client.upload_image_data(picture.name, picture.data, picture.content_type)
+                            result.images_uploaded += 1
+                        remote[src] = digest
+                    uploaded_by_src[src] = images[digest]
+                elif path.stat().st_size > _IMAGE_MAX_BYTES or path.suffix.lower() not in _IMAGE_TYPES:
                     result.images_skipped.append(src)
                 else:
                     digest = hashlib.sha256(path.read_bytes()).hexdigest()

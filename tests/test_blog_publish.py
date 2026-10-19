@@ -139,6 +139,69 @@ class PublishProgressTest(unittest.TestCase):
         self.assertEqual(result.images_uploaded, 3)
 
 
+class WebPagePublishTest(unittest.TestCase):
+    """A web article's Markdown links the site's pictures; the article gets the blog's own copies,
+    and never the model usage the reading copies show under their title."""
+
+    def test_web_pictures_are_uploaded_once_and_the_usage_lines_left_out(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        from book_agent.services.blog_publish import RemotePicture, publish_markdown
+
+        target = BlogTarget(api_url="http://blog.test", email="admin@blog.test", password="secret")
+        markdown = (
+            "# 文章\n\n- 翻译用量：模型调用 128 次\n- Token 519,628（输入 486,800 · 输出 32,828）\n- 花费 US$ 0.04\n\n"
+            "正文。\n\n![](https://cdn.example.com/a.png)\n\n![](https://cdn.example.com/gone.png)\n"
+        )
+        fetched: list[str] = []
+
+        def fetch(url: str):
+            fetched.append(url)
+            return RemotePicture("a.png", b"png-bytes", "image/png") if url.endswith("/a.png") else None
+
+        meta = build_blog_metadata(markdown=markdown, title="文章", source_title=None, authors=None)
+        blog = FakeBlog()
+        transport = httpx.MockTransport(blog.handle)
+        with tempfile.TemporaryDirectory() as tmp:
+            def publish(state: dict):
+                return publish_markdown(
+                    target=target, state=state, markdown=markdown, base_dir=Path(tmp), metadata=meta, edition="zh",
+                    client_factory=lambda t: BlogClient(t, transport=transport), fetch_picture=fetch,
+                )
+
+            result, state = publish({})
+            content = blog.articles[result.article_id]["content"]
+            again, _state = publish(state)
+        self.assertEqual(blog.uploads, ["a.png"])
+        self.assertIn("![](http://blog.test/api/upload/image/1-a.png)", content)
+        # One it could not download stays linked where it was.
+        self.assertIn("![](https://cdn.example.com/gone.png)", content)
+        self.assertEqual(result.images_skipped, ["https://cdn.example.com/gone.png"])
+        self.assertNotIn("翻译用量", content)
+        self.assertNotIn("US$", content)
+        self.assertTrue(content.startswith("# 文章\n\n正文。"))
+        # Publishing again neither downloads nor uploads the picture it already has.
+        self.assertEqual(fetched.count("https://cdn.example.com/a.png"), 1)
+        self.assertEqual((again.images_uploaded, again.images_reused, again.action), (0, 1, "unchanged"))
+
+    def test_a_picture_is_downloaded_only_from_a_public_address(self) -> None:
+        from book_agent.services.blog_publish import download_picture
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith(".png"):
+                return httpx.Response(200, headers={"content-type": "image/png"}, content=b"png")
+            return httpx.Response(200, headers={"content-type": "text/html"}, text="<html>")
+
+        transport = httpx.MockTransport(handler)
+        with patch("book_agent.services.url_guard.socket.getaddrinfo", return_value=[(2, 1, 6, "", ("93.184.216.34", 443))]):
+            picture = download_picture("https://cdn.example.com/x/chart.png?w=1", transport=transport)
+            page = download_picture("https://cdn.example.com/x/page", transport=transport)
+        self.assertEqual((picture.name, picture.data, picture.content_type), ("chart.png", b"png", "image/png"))
+        self.assertIsNone(page)
+        self.assertIsNone(download_picture("http://127.0.0.1/a.png", transport=transport))
+
+
 class PublishStateTest(unittest.TestCase):
     def test_pictures_uploaded_before_a_failure_are_not_uploaded_again(self) -> None:
         import tempfile

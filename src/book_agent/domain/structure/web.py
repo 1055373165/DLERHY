@@ -386,14 +386,15 @@ def _source_text(element: Element, tags: InlineTags, wrappers: tuple[Element, ..
         if not inner.strip():
             parts.append(inner)
             continue
+        # Spaces just inside a tag ("our<a> Labs</a>") separate words, so they stay outside the marker.
+        leading = inner[: len(inner) - len(inner.lstrip())]
+        trailing = inner[len(inner.rstrip()):]
         if referenced:
             tags.references.append(Reference(child, wrappers))
-            parts.append(f"[{inner.strip()}][{len(tags.references)}]")
+            parts.append(f"{leading}[{inner.strip()}][{len(tags.references)}]{trailing}")
         elif child.tag in _MARKERS:
             marker = _MARKERS[child.tag]
             tags.by_marker.setdefault(marker, []).append(child)
-            leading = inner[: len(inner) - len(inner.lstrip())]
-            trailing = inner[len(inner.rstrip()):]
             parts.append(f"{leading}{marker}{inner.strip()}{marker}{trailing}")
         else:
             parts.append(inner)

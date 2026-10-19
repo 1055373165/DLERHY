@@ -38,6 +38,7 @@ from book_agent.domain.enums import (
 from book_agent.domain.models.review import Export, ReviewIssue
 from book_agent.domain.structure import book_outline, inline_marks
 from book_agent.domain.structure import web as web_page
+from book_agent.export import web_markdown
 from book_agent.domain.structure.artifact_grouping import resolve_artifact_group_context_ids
 from book_agent.domain.structure.callouts import CALLOUT_ICON_KEY, is_callout_metadata
 from book_agent.domain.structure.table_cells import split_shared_cell_translations, table_grid
@@ -379,6 +380,9 @@ class ExportService:
 
     def _sync_document_title_tgt(self, bundle: DocumentExportBundle) -> None:
         current_title_tgt = _normalize_render_text(bundle.document.title_tgt)
+        if bundle.document.source_type == SourceType.WEB:
+            self._sync_web_title_tgt(bundle, current_title_tgt)
+            return
         if current_title_tgt:
             return
         derived_title_tgt = self._derive_document_title_tgt(bundle)
@@ -398,6 +402,28 @@ class ExportService:
         document_title_metadata.setdefault("resolution_source", "translated_frontmatter_heading")
         metadata["document_title"] = document_title_metadata
         bundle.document.title_tgt = derived_title_tgt
+        bundle.document.metadata_json = metadata
+        bundle.document.updated_at = _utcnow()
+        self.repository.session.merge(bundle.document)
+
+    # Titles a person did not set: the title model call's, or this sync's own.
+    _DERIVED_TITLE_SOURCES = frozenset({None, "model_title_translation", "web_article_heading"})
+
+    def _sync_web_title_tgt(self, bundle: DocumentExportBundle, current_title_tgt: str) -> None:
+        """A web page is titled as its article heading reads in Chinese.
+
+        The title model call translates the heading on its own and can word it differently from the
+        page ("长期" above, "长周期" in the heading); a title someone set by hand stays.
+        """
+        metadata = dict(bundle.document.metadata_json or {})
+        if current_title_tgt and metadata.get("document_title_tgt_resolution_source") not in self._DERIVED_TITLE_SOURCES:
+            return
+        heading_title = self._web_article_title(bundle)
+        if not heading_title or heading_title == current_title_tgt:
+            return
+        metadata["document_title_tgt"] = heading_title
+        metadata["document_title_tgt_resolution_source"] = "web_article_heading"
+        bundle.document.title_tgt = heading_title
         bundle.document.metadata_json = metadata
         bundle.document.updated_at = _utcnow()
         self.repository.session.merge(bundle.document)
@@ -1390,6 +1416,10 @@ class ExportService:
         *,
         bilingual: bool = False,
     ) -> str:
+        if bundle.document.source_type == SourceType.WEB:
+            article = self._web_article_markdown(bundle, bilingual=bilingual)
+            if article is not None:
+                return article
         visible_chapters = self._reading_copy_chapters(bundle)
         title = (document_display_title(bundle.document) or bundle.document.id or "Merged Reading Edition").strip()
         author = display_author_value(bundle.document.author)
@@ -1425,6 +1455,69 @@ class ExportService:
                 )
             )
         return "\n".join(lines).rstrip() + "\n"
+
+    def _web_article_markdown(self, bundle: DocumentExportBundle, *, bilingual: bool) -> str | None:
+        """A web page's Markdown read from the translated page itself, so its pictures, tables, code
+        and links stay; None without the captured snapshot."""
+        source_path = Path(bundle.document.source_path or "")
+        if not source_path.is_file():
+            return None
+        translations = self._web_page_translations(bundle)
+        title = (
+            self._web_article_title(bundle, translations)
+            or document_display_title(bundle.document)
+            or bundle.document.id
+        ).strip()
+        lines: list[str] = [f"# {title}", ""]
+        source_title = " ".join(str(document_source_title(bundle.document) or "").split())
+        if bilingual and source_title and source_title != title:
+            lines.extend([markup.markdown_blockquote(source_title), ""])
+        usage = self._document_usage_text(bundle)
+        if usage:
+            lines.extend([*(f"- {line}" for line in usage.splitlines()), ""])
+        body = web_markdown.translated_page_markdown(
+            source_path.read_text(encoding="utf-8"),
+            translations,
+            base_url=(bundle.document.metadata_json or {}).get("source_url"),
+            sources=self._web_page_sources(bundle) if bilingual else None,
+            skip_title=title,
+        )
+        return "\n".join(lines) + "\n" + body
+
+    @staticmethod
+    def _web_article_heading_node(bundle: DocumentExportBundle) -> int | None:
+        """The page's article heading (its first <h1> outside the site's menus)."""
+        for chapter_bundle in bundle.chapters:
+            for block in sorted(chapter_bundle.blocks, key=lambda item: item.ordinal):
+                metadata = block.source_span_json or {}
+                if (
+                    getattr(block.block_type, "value", block.block_type) == BlockType.HEADING.value
+                    and metadata.get("heading_level") == 1
+                    and metadata.get("web_region") != web_page.WEB_REGION_CHROME
+                    and isinstance(metadata.get("web_node"), int)
+                ):
+                    return int(metadata["web_node"])
+        return None
+
+    def _web_article_title(self, bundle: DocumentExportBundle, translations: dict[int, str] | None = None) -> str | None:
+        """The article heading's own translation, so the title reads as the page's heading does."""
+        node_id = self._web_article_heading_node(bundle)
+        if node_id is None:
+            return None
+        translations = translations if translations is not None else self._web_page_translations(bundle)
+        title = " ".join(web_page.plain_text(translations.get(node_id) or "").split())
+        return title or None
+
+    @staticmethod
+    def _web_page_sources(bundle: DocumentExportBundle) -> dict[int, str]:
+        """Each marked node's English, markers as words (the bilingual edition's quotes)."""
+        sources: dict[int, str] = {}
+        for chapter_bundle in bundle.chapters:
+            for block in chapter_bundle.blocks:
+                node_id = (block.source_span_json or {}).get("web_node")
+                if isinstance(node_id, int) and block.source_text:
+                    sources[node_id] = web_page.plain_text(block.source_text)
+        return sources
 
     def _build_bilingual_document_markdown(
         self,
