@@ -1366,16 +1366,18 @@ class ExportService:
         bundle: DocumentExportBundle,
         asset_path_by_block_id: dict[str, str] | None = None,
     ) -> str:
-        visible_chapters = self._reading_copy_chapters(bundle)
-        # A book in parts: a part's chapters are titled one level below it (<h3>), so the contents,
-        # the EPUB's navigation and the PDF's bookmarks nest them under the part.
-        depths = book_parts.part_depths([title_text for _o, _b, _r, title_text in visible_chapters])
-        chapters_html = "".join(
-            self._render_chapter_for_merged_html(
-                chapter_bundle, visible_ordinal, render_blocks, title_text, asset_path_by_block_id, depth=depth
+        chapters_html = self._web_article_html(bundle) if bundle.document.source_type == SourceType.WEB else None
+        if chapters_html is None:
+            visible_chapters = self._reading_copy_chapters(bundle)
+            # A book in parts: a part's chapters are titled one level below it (<h3>), so the contents,
+            # the EPUB's navigation and the PDF's bookmarks nest them under the part.
+            depths = book_parts.part_depths([title_text for _o, _b, _r, title_text in visible_chapters])
+            chapters_html = "".join(
+                self._render_chapter_for_merged_html(
+                    chapter_bundle, visible_ordinal, render_blocks, title_text, asset_path_by_block_id, depth=depth
+                )
+                for (visible_ordinal, chapter_bundle, render_blocks, title_text), depth in zip(visible_chapters, depths)
             )
-            for (visible_ordinal, chapter_bundle, render_blocks, title_text), depth in zip(visible_chapters, depths)
-        )
         title = html.escape(document_display_title(bundle.document) or bundle.document.id)
         author_value = display_author_value(bundle.document.author)
         author = html.escape(author_value) if author_value is not None else ""
@@ -1387,6 +1389,7 @@ class ExportService:
             "<style>"
             f"{stylesheets.load('merged_document.css')}"
             f"{markup.usage_summary_css()}"
+            f"{_WEB_ARTICLE_CSS if bundle.document.source_type == SourceType.WEB else ''}"
             "</style>"
             "<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css'>"
             "</head><body>"
@@ -1483,6 +1486,22 @@ class ExportService:
             skip_title=title,
         )
         return "\n".join(lines) + "\n" + body
+
+    def _web_article_html(self, bundle: DocumentExportBundle) -> str | None:
+        """A web page's reading copy body read from the translated page itself, so its pictures,
+        tables, code and links stay (as in its Markdown); None without the captured snapshot."""
+        source_path = Path(bundle.document.source_path or "")
+        if not source_path.is_file():
+            return None
+        translations = self._web_page_translations(bundle)
+        title = (self._web_article_title(bundle, translations) or document_display_title(bundle.document) or "").strip()
+        body = web_markdown.translated_page_html(
+            source_path.read_text(encoding="utf-8"),
+            translations,
+            base_url=(bundle.document.metadata_json or {}).get("source_url"),
+            skip_title=title or None,
+        )
+        return f"<section class='chapter web-article' id='article'>{body}</section>"
 
     @staticmethod
     def _web_article_heading_node(bundle: DocumentExportBundle) -> int | None:
@@ -3503,6 +3522,22 @@ class DocumentRenderer:
     uses_upstream_exports: bool = False
     syncs_document_title: bool = True
     apply_status_updates: Callable[[ExportService, DocumentExportBundle], None] | None = None
+
+
+# The reading copy of a web page is the page's own article markup (``_web_article_html``).
+_WEB_ARTICLE_CSS = (
+    ".web-article{line-height:1.85}"
+    ".web-article h2,.web-article h3,.web-article h4{margin:1.6em 0 .6em;line-height:1.4}"
+    ".web-article p,.web-article ul,.web-article ol,.web-article blockquote{margin:.8em 0}"
+    ".web-article ul,.web-article ol{padding-left:1.6em}"
+    ".web-article blockquote{border-left:3px solid var(--border, #d0d7de);padding-left:1em;color:var(--muted, #57606a)}"
+    ".web-article figure{margin:1.4em 0;text-align:center}"
+    ".web-article img,.web-article video{max-width:100%;height:auto;border-radius:6px}"
+    ".web-article figcaption{font-size:.9em;color:var(--muted, #57606a);margin-top:.5em}"
+    ".web-article pre{overflow:auto;padding:1em;border-radius:6px;background:rgba(127,127,127,.12);line-height:1.5;font-size:.88em}"
+    ".web-article table{border-collapse:collapse;margin:1em 0;display:block;overflow-x:auto}"
+    ".web-article th,.web-article td{border:1px solid rgba(127,127,127,.35);padding:.4em .7em;text-align:left;vertical-align:top}"
+)
 
 
 def _web_page_reading_blocks(render_blocks: list[MergedRenderBlock]) -> list[MergedRenderBlock]:
