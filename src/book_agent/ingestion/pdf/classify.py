@@ -329,10 +329,9 @@ def _normalize_outline_heading_text(text: str) -> str:
 _BOOK_OUTLINE_CHAPTER_LABEL_RE = re.compile(
     r"^\s*chapter\s+(\d+)\b", re.IGNORECASE
 )
-# Bare integer + whitespace + non-digit. The lookahead `(?=\s)` ensures
-# we don't match "1.1" (next char is "." not whitespace) or "1st" (next
-# char is "s" not whitespace).
-_BOOK_OUTLINE_CHAPTER_BARE_RE = re.compile(r"^\s*(\d+)(?=\s)")
+# Bare integer, or integer and a period ("1. Confessions of a Croupier"), then whitespace. The
+# lookahead `(?=\s)` ensures we don't match "1.1" (a digit follows the period) or "1st".
+_BOOK_OUTLINE_CHAPTER_BARE_RE = re.compile(r"^\s*(\d+)\.?(?=\s)")
 
 
 def _looks_like_book_primary_outline_title(text: str) -> bool:
