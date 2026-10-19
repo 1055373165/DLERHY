@@ -991,29 +991,36 @@ def _clear_of_outside_prose(
 def is_printed_text_patch(page: Any, region: Sequence[float]) -> bool:
     """``region`` is a piece of the page's printed text set as a picture, not a figure.
 
-    A scan turned into text and pictures can leave a stretch of a paragraph as an image (The Wall
-    Street Gang, p. xii: three lines of the foreword) while its words are in the text layer as
-    well. Two or more lines of the page's prose run through the picture and past its side (a
-    figure's own text stays inside it), and between them cover 40% of its height.
+    A scan turned into text and pictures can leave words of the page as images (The Wall Street
+    Gang: three lines of the foreword, a word in a sentence, the contents page's roman numerals)
+    while those words are in the text layer as well. Lines run through the picture and past its
+    side (a figure's own text stays inside it): two that between them cover 40% of its height, or
+    one that covers 60%. Or the picture is small (under 2,500pt², an inline patch, not a figure)
+    and holds half of a text line.
     """
     x0, y0, x1, y1 = (float(value) for value in region)
     height = y1 - y0
-    if height <= 0:
+    if height <= 0 or x1 <= x0:
         return False
     lines = page_text_lines(page.get_text("dict"), float(page.rect.width), float(page.rect.height), glyph_heights=True)
+    small = (x1 - x0) * height < 2500.0
     crossing = 0
     covered = 0.0
     for line in lines:
         lx0, ly0, lx1, ly1 = line.bbox
         line_height = ly1 - ly0
         overlap = min(ly1, y1) - max(ly0, y0)
-        if line_height <= 0 or overlap < 0.75 * line_height or lx1 <= x0 or lx0 >= x1:
+        if line_height <= 0 or overlap <= 0 or lx1 <= x0 or lx0 >= x1 or not line.text.strip():
             continue
-        if not (line.prose or _is_sentence(line.text)) or (lx0 >= x0 - 10.0 and lx1 <= x1 + 10.0):
+        if small:
+            inside = (min(lx1, x1) - max(lx0, x0)) * overlap
+            if inside >= 0.5 * (lx1 - lx0) * line_height:
+                return True
+        if overlap < 0.75 * line_height or (lx0 >= x0 - 10.0 and lx1 <= x1 + 10.0):
             continue
         crossing += 1
         covered += overlap
-    return crossing >= 2 and covered >= 0.4 * height
+    return (crossing >= 2 and covered >= 0.4 * height) or (crossing >= 1 and covered >= 0.6 * height)
 
 
 # ---------------------------------------------------------------------------

@@ -73,5 +73,18 @@ class ScannedFigureEdgeTests(unittest.TestCase):
         self.assertFalse(is_printed_text_patch(self.page, (120, 117, 340, 300)))
 
 
+    def test_a_word_or_a_column_of_page_numbers_set_as_a_picture_is_not_a_figure(self) -> None:
+        # One line runs through a word-sized picture; page numbers sit inside a narrow one.
+        self.page.insert_text((60, 520), LINE, fontsize=10)
+        self.assertTrue(is_printed_text_patch(self.page, (150, 511, 186, 522)))
+        self.page.insert_text((380, 600), "xiii", fontsize=8)
+        self.assertTrue(is_printed_text_patch(self.page, (378, 592, 392, 640)))
+
+    def test_lines_set_smaller_than_the_body_still_count(self) -> None:
+        # A quotation's indented lines (not body prose) running through the picture.
+        for y in (560, 572, 584):
+            self.page.insert_text((80, y), "Wall Street made a pilgrimage to Washington trying to find somebody", fontsize=8)
+        self.assertTrue(is_printed_text_patch(self.page, (120, 552, 134, 590)))
+
 if __name__ == "__main__":
     unittest.main()
