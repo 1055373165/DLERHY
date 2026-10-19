@@ -11,7 +11,7 @@ from __future__ import annotations
 import unittest
 
 from book_agent.domain.structure import web
-from book_agent.export.web_markdown import translated_page_markdown
+from book_agent.export.web_markdown import translated_page_html, translated_page_markdown
 
 PAGE = """<!DOCTYPE html><html lang="en"><head><title>Harness design \\ Anthropic</title></head><body>
 <header><nav><a href="/news">News</a></nav></header>
@@ -104,6 +104,21 @@ class WebArticleMarkdownTests(unittest.TestCase):
         self.assertIn("## 为什么朴素实现难以奏效\n\n> Why naive implementations fall short", md)
         self.assertIn("- 原创性\n   > Originality\n   - 嵌套要点\n      > Nested point", md)
         self.assertNotIn("> Harness design\n", md)
+
+    def test_the_reading_copy_html_keeps_the_page_markup_without_its_site(self) -> None:
+        page = translated_page_html(
+            self.page, self.translations, base_url="https://www.anthropic.com/engineering/harness", skip_title="harness 设计"
+        )
+        self.assertIn('<figure><img src="https://cdn.example.com/images/solo.png" alt="" loading=\'lazy\'> <figcaption>单代理 harness 的初始界面。</figcaption></figure>', page)
+        self.assertIn("<table><tbody><tr><th><strong>Harness</strong></th><th><strong>成本</strong></th></tr>", page)
+        self.assertIn('<pre><code class="python">print(&quot;plan&quot;)\nprint(&quot;done&quot;)</code></pre>'.replace("&quot;", '"'), page)
+        self.assertIn('<a href="https://www.anthropic.com/engineering/context" target="_blank" rel="noopener">上下文工程</a>', page)
+        self.assertIn('<video src="https://cdn.example.com/museum.mp4" controls></video>', page)
+        self.assertIn("<ul><li><strong>设计质量：</strong>是否浑然一体？</li><li>原创性<ul><li>嵌套要点</li></ul></li></ul>", page)
+        self.assertIn("<h2>为什么朴素实现难以奏效</h2>", page)
+        for site in ("News", "Terms of service", "订阅开发者资讯", "Copy", "harness 设计<", "工程团队", "style=", "<p><br></p>"):
+            self.assertNotIn(site, page)
+        self.assertTrue(page.startswith("<p>发布于 2026 年 3 月 24 日</p>"), page[:80])
 
     def test_a_space_just_inside_a_link_stays_between_the_words(self) -> None:
         root = web.parse_html('<p>a member of our<a href="/labs"> Labs</a> team, see<em> this </em>now.</p>')

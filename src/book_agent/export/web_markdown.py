@@ -9,6 +9,7 @@ is read. The bilingual edition sets each translated passage's English, as a quot
 
 from __future__ import annotations
 
+import html
 import re
 from urllib.parse import parse_qs, urljoin, urlsplit
 
@@ -295,6 +296,19 @@ class _Writer:
         return "\n".join(lines)
 
 
+def _translated_article(snapshot: str, translations: dict[int, str]) -> web.Element:
+    """The snapshot's article (``_article_root``) with each marked node's content replaced by its translation."""
+    root = web.parse_html(snapshot)
+    for node_id, element in web.marked_nodes(root):
+        translation = (translations.get(node_id) or "").strip()
+        if not translation:
+            continue
+        _source, tags = web.node_source_text(element)
+        rendered = web.render_translation(translation, tags)
+        element.children = web.parse_html(rendered).children
+    return _article_root(root)
+
+
 def translated_page_markdown(
     snapshot: str,
     translations: dict[int, str],
@@ -309,15 +323,7 @@ def translated_page_markdown(
     ``skip_title``: the article's title as the caller already set it above the body; its first
     heading with this text is left out, with what stands above it (a section label, breadcrumbs).
     """
-    root = web.parse_html(snapshot)
-    for node_id, element in web.marked_nodes(root):
-        translation = (translations.get(node_id) or "").strip()
-        if not translation:
-            continue
-        _source, tags = web.node_source_text(element)
-        rendered = web.render_translation(translation, tags)
-        element.children = web.parse_html(rendered).children
-    article = _article_root(root)
+    article = _translated_article(snapshot, translations)
     writer = _Writer(base_url=base_url, sources=sources)
     writer.children(article)
     blocks = writer.blocks
@@ -331,3 +337,114 @@ def translated_page_markdown(
                     del blocks[0]  # the title's English, under it
                 break
     return "\n\n".join(block for block in blocks if block.strip()) + "\n"
+
+
+# The reading copy (merged HTML) -------------------------------------------------------------
+
+# Tags kept, with the attributes kept on each; any other element gives up its tag and keeps its content.
+_HTML_TAGS: dict[str, tuple[str, ...]] = {
+    **{tag: () for tag in ("p", "h2", "h3", "h4", "h5", "h6", "ul", "li", "blockquote", "pre", "figure", "figcaption")},
+    **{tag: () for tag in ("table", "thead", "tbody", "tfoot", "tr", "strong", "b", "em", "i", "sup", "sub", "hr", "br")},
+    "ol": ("start",),
+    "td": ("colspan", "rowspan"),
+    "th": ("colspan", "rowspan"),
+    "code": ("class",),
+    "a": ("href",),
+    "img": ("src", "alt"),
+    "video": ("src",),
+}
+_VOID_TAGS = frozenset({"img", "hr", "br"})
+
+
+def _attributes(element: web.Element, base_url: str | None) -> str:
+    parts: list[str] = []
+    for name in _HTML_TAGS.get(element.tag, ()):
+        value = element.attrs.get(name)
+        if element.tag == "video" and name == "src":
+            value = value or _Writer._video_source(element)
+        if value is None:
+            continue
+        if name in {"href", "src"}:
+            value = _absolute(value, base_url)
+            if not value or value.startswith(("javascript:", "data:")):
+                continue
+        parts.append(f'{name}="{html.escape(str(value), quote=True)}"')
+    if element.tag == "a":
+        parts.append('target="_blank" rel="noopener"')
+    if element.tag == "video":
+        parts.append("controls")
+    return (" " + " ".join(parts)) if parts else ""
+
+
+def _html(node: web.Text | web.Element, base_url: str | None, *, in_pre: bool = False) -> str:
+    if isinstance(node, web.Text):
+        text = web._text_value(node)
+        return html.escape(text if in_pre else _SPACE.sub(" ", text), quote=False)
+    tag = node.tag
+    if tag in _DROPPED:
+        return ""
+    if tag == "img":
+        src = _absolute(node.attrs.get("src"), base_url)
+        if not src or src.startswith("data:") or urlsplit(src).path.lower().endswith(".svg"):
+            return ""  # decoration (an SVG beside the title), or nothing to show
+        return f"<img{_attributes(node, base_url)} loading='lazy'>"
+    if tag == "h1":
+        tag = "h2"  # the reading copy's own title is its <h1>
+    inside_pre = in_pre or tag == "pre"
+    if tag == "pre":
+        # The code itself: its <code> when there is one (a "Copy" button may sit beside it).
+        code = next((child for child in web.iter_elements(node) if child.tag == "code"), None)
+        body = html.escape(web._plain_text(code or node).strip("\n"), quote=False)
+        language = _attributes(code, base_url) if code is not None else ""
+        return f"<pre><code{language}>{body}</code></pre>"
+    inner = "".join(_html(child, base_url, in_pre=inside_pre) for child in node.children)
+    if tag not in _HTML_TAGS and tag != "h2":
+        return inner
+    if tag in _VOID_TAGS:
+        return f"<{tag}{_attributes(node, base_url)}>"
+    if tag in {"p", "li", "figcaption", "h2", "h3", "h4", "h5", "h6", "blockquote", "figure"}:
+        # Empty but for line breaks (a spacer paragraph): nothing to read.
+        if not re.sub(r"<br>|\s", "", inner):
+            return ""
+    return f"<{tag}{_attributes(node, base_url)}>{inner}</{tag}>"
+
+
+def _drop_through(container: web.Element, target: web.Element) -> bool:
+    """Remove ``target`` and everything before it inside ``container``; True when ``target`` was found."""
+    for index, child in enumerate(container.children):
+        if child is target:
+            del container.children[: index + 1]
+            return True
+        if isinstance(child, web.Element) and _drop_through(child, target):
+            del container.children[:index]
+            return True
+    return False
+
+
+def translated_page_html(
+    snapshot: str,
+    translations: dict[int, str],
+    *,
+    base_url: str | None = None,
+    skip_title: str | None = None,
+) -> str:
+    """The article in ``snapshot`` as clean HTML for the reading copy, each marked node translated.
+
+    The page's own markup keeps what it shows (pictures with their captions, tables, code, links,
+    lists, quotes, a video); classes, styles, scripts and the site around the article go.
+    ``skip_title`` as for ``translated_page_markdown``.
+    """
+    article = _translated_article(snapshot, translations)
+    if skip_title:
+        wanted = " ".join(skip_title.split())
+        heading = next(
+            (
+                element
+                for element in web.iter_elements(article)
+                if element.tag in _HEADINGS and " ".join(web._plain_text(element).split()) == wanted
+            ),
+            None,
+        )
+        if heading is not None:
+            _drop_through(article, heading)
+    return "".join(_html(child, base_url) for child in article.children).strip()
