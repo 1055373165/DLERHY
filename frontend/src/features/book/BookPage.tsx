@@ -174,8 +174,8 @@ export function BookPage() {
   }
 
   const bookHeader = (
-    <header className={s.header}>
-      <h1 className={s.title}>{data.title ?? "未命名"}</h1>
+    <header className="page-header">
+      <h1 className={s.bookTitle}>{data.title ?? "未命名"}</h1>
       {data.source_url && (
         <a className={s.source} href={data.source_url} target="_blank" rel="noreferrer noopener">
           原网页 ↗
@@ -196,6 +196,10 @@ export function BookPage() {
   );
 
   const onReader = location.pathname.endsWith("/read");
+  const needsYou = data.needs_you.length > 0
+    ? <NeedsYou documentId={documentId} items={data.needs_you} />
+    : null;
+  const questionsFollowReading = onReader && needsYou !== null && data.needs_you.every((item) => item.kind === "question");
   const showProgressBar = (ACTIVE.has(state) || (state === "paused" && progress.total > 0)) && progress.total > 0;
   // What the card would put under the headline. With none of it, the card is a sentence in a box:
   // on the 阅读 tab of a finished book that is a whole phone screen spent saying "it is ready".
@@ -216,12 +220,14 @@ export function BookPage() {
     return (
       <div className={s.layout}>
         {bookHeader}
-        <p className={s.quietStatus} role="status">
-          {data.headline}
-        </p>
-        {data.needs_you.length > 0 && <NeedsYou documentId={documentId} items={data.needs_you} />}
+        <div className={s.row}>
+          <p className={s.quietStatus} role="status">{data.headline}</p>
+          {questionsFollowReading && <a className={s.source} href="#needs-you">查看 {data.needs_you.length} 个试译问题</a>}
+        </div>
         {bookTabs}
+        {!questionsFollowReading && needsYou}
         <Outlet context={data} />
+        {questionsFollowReading && needsYou}
       </div>
     );
   }
@@ -235,9 +241,7 @@ export function BookPage() {
           {data.headline}
         </div>
         {showProgressBar && (
-          <div className={s.progress} aria-label={`进度 ${pct}%`}>
-            <span className={s.progressFill} style={{ width: `${pct}%` }} />
-          </div>
+          <progress className={s.progress} value={progress.done} max={progress.total} aria-label={`进度 ${pct}%`} />
         )}
         {ACTIVE.has(state) && onPilot && (
           <div className={s.note}>试译免费，费用由我们承担。试译好了，这里会打开试译的两章，再由你决定是否翻译全书。</div>
@@ -335,11 +339,10 @@ export function BookPage() {
         />
       )}
 
-      {data.needs_you.length > 0 && <NeedsYou documentId={documentId} items={data.needs_you} />}
-
       {bookTabs}
-
+      {!questionsFollowReading && needsYou}
       <Outlet context={data} />
+      {questionsFollowReading && needsYou}
     </div>
   );
 }

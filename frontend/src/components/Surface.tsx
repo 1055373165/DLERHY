@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import s from "./Surface.module.css";
 
 interface SurfaceProps {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   description?: string;
   aside?: ReactNode;
@@ -17,8 +17,10 @@ export function Surface({ eyebrow, title, aside, level = 2, children }: SurfaceP
   return (
     <section className={s.surface}>
       <div className={s.head}>
-        <span className={s.eyebrow}>{eyebrow}</span>
-        <Heading className={s.title}>{title}</Heading>
+        <div>
+          {eyebrow && <span className={s.eyebrow}>{eyebrow}</span>}
+          <Heading className={s.title}>{title}</Heading>
+        </div>
         {aside ? <div className={s.aside}>{aside}</div> : null}
       </div>
       <div className={s.body}>{children}</div>

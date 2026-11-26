@@ -3,7 +3,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 
 import { StatusBadge } from "../../components/StatusBadge";
-import { Surface } from "../../components/Surface";
 import {
   type BlogEdition,
   blogPublishProgressText,
@@ -20,7 +19,6 @@ import {
   historyProgress,
   preferredTitle,
   sourceLabel,
-  statusLabel,
 } from "../../lib/workflow";
 import s from "./LibraryPage.module.css";
 
@@ -92,8 +90,18 @@ export function LibraryPage() {
         setOpenMenu(null);
       }
     }
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        menuRef.current?.querySelector("button")?.focus();
+        setOpenMenu(null);
+      }
+    }
     document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
   }, [openMenu]);
 
   const offset = (page - 1) * pageSize;
@@ -203,20 +211,24 @@ export function LibraryPage() {
 
   return (
     <div className={s.layout}>
-      <Surface
-        level={1}
-        eyebrow="书库"
-        title="全部书"
-        aside={
-          historyQuery.data
-            ? `共 ${total} 本${total ? ` · 第 ${rangeStart}–${rangeEnd} 本` : ""}`
-            : null
-        }
-      >
+      <header className="page-header">
+        <div>
+          <h1>书库</h1>
+          {historyQuery.data && <p>{hasFilters ? "找到" : "共"} {total} 本</p>}
+        </div>
+        <Link className="btn btn-primary" to="/">新建翻译</Link>
+      </header>
+      <section className={s.collection} aria-label="全部书">
         <div className={s.filterRow}>
           <div className={s.searchWrap}>
+            <svg className={s.searchIcon} aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+              <circle cx="11" cy="11" r="6" />
+              <path d="m16 16 4 4" />
+            </svg>
             <input
               className={s.searchInput}
+              aria-label="搜索书名、作者或文件名"
               type="search"
               placeholder="搜索书名、作者或文件名…"
               value={query}
@@ -241,7 +253,7 @@ export function LibraryPage() {
             <option value="failed">失败</option>
           </select>
           <select aria-label="按转换状态筛选" className={s.filterSelect} value={runStatus} onChange={(e) => setRunStatus(e.target.value)}>
-            <option value="">全部转换</option>
+            <option value="">全部进度</option>
             <option value="queued">排队中</option>
             <option value="running">进行中</option>
             <option value="paused">已暂停</option>
@@ -255,7 +267,7 @@ export function LibraryPage() {
             value={mergedReady}
             onChange={(e) => setMergedReady(e.target.value as "" | "true" | "false")}
           >
-            <option value="">全部</option>
+            <option value="">全部阅读状态</option>
             <option value="true">可阅读</option>
             <option value="false">未完成</option>
           </select>
@@ -286,35 +298,37 @@ export function LibraryPage() {
           </div>
         )}
 
-        {historyQuery.isLoading ? (
-          <div className={s.loading}>加载中…</div>
+        {historyQuery.isError ? (
+          <div className={s.feedback} data-tone="error" role="alert">
+            书库加载失败。 <button className="btn btn-sm" onClick={() => void historyQuery.refetch()}>重新加载</button>
+          </div>
+        ) : historyQuery.isLoading ? (
+          <div className={s.loading}>正在加载书目…</div>
         ) : historyQuery.data?.entries.length ? (
           <>
-            <div className={s.bookList}>
+            <ul className={s.bookList}>
               {historyQuery.data.entries.map((entry) => {
                 const badge = historyBadge(entry);
                 return (
-                  <div key={entry.document_id} className={s.bookRow}>
+                  <li key={entry.document_id} className={s.bookRow}>
                     <div className={s.bookInfo}>
                       <span className={s.bookTitle}>{preferredTitle(entry)}</span>
                       <span className={s.bookMeta}>
-                        <span className={s.tag}>{entry.author || "—"}</span>
-                        <span className={s.dot}>&middot;</span>
-                        <span className={s.tag}>{sourceLabel(entry.source_type)}</span>
-                        <span className={s.dot}>&middot;</span>
-                        <span className={s.tag}>{statusLabel(entry.status)}</span>
-                        <span className={s.dot}>&middot;</span>
-                        <span className={s.tag}>{formatDate(entry.updated_at)}</span>
+                        <span className={s.source}>{sourceLabel(entry.source_type)}</span>
+                        {entry.author && <span>{entry.author}</span>}
+                        <span>{formatDate(entry.updated_at)}</span>
                       </span>
                     </div>
-                    <span className={s.bookProgress}>{historyProgress(entry)}</span>
-                    <StatusBadge tone={badge.tone} label={badge.label} />
+                    <div className={s.bookState}>
+                      <StatusBadge tone={badge.tone} label={badge.label} />
+                      {!entry.merged_export_ready && <span className={s.bookProgress}>{historyProgress(entry)}</span>}
+                    </div>
                     <div className={s.bookActions}>
                       <button className="btn btn-sm" onClick={() => void handleOpen(entry.document_id)}>
                         打开
                       </button>
                       {entry.merged_export_ready ? (
-                        <Link className="btn btn-sm" to={`/books/${entry.document_id}/read`}>
+                        <Link className="btn btn-sm btn-primary" to={`/books/${entry.document_id}/read`}>
                           阅读
                         </Link>
                       ) : null}
@@ -323,6 +337,7 @@ export function LibraryPage() {
                       <div className={s.dlWrap} ref={openMenu === entry.document_id ? menuRef : undefined}>
                         <button
                           className="btn btn-sm"
+                          aria-expanded={openMenu === entry.document_id}
                           onClick={() => setOpenMenu(openMenu === entry.document_id ? null : entry.document_id)}
                         >
                           下载 ▾
@@ -365,10 +380,10 @@ export function LibraryPage() {
                         删除
                       </button>
                     </div>
-                  </div>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
 
             <div className={s.paginationBar}>
               <div className={s.paginationInfo}>
@@ -469,7 +484,7 @@ export function LibraryPage() {
               <line x1="45" y1="12" x2="51" y2="12" />
               <line x1="45" y1="16" x2="51" y2="16" />
             </svg>
-            <span className={s.emptyTitle}>没有找到</span>
+            <h2 className={s.emptyTitle}>{hasFilters ? "没有找到匹配的书" : "书库暂无书目"}</h2>
             <span className={s.emptySubtitle}>
               {hasFilters
                 ? "没有符合当前条件的书。换个关键词，或清除筛选。"
@@ -482,7 +497,7 @@ export function LibraryPage() {
             )}
           </div>
         )}
-      </Surface>
+      </section>
 
       {pendingDelete && (
         <div

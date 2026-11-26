@@ -130,14 +130,16 @@ export function ReaderPage() {
             </button>
           ))}
         </div>
-        {format === "md" && preview.data?.kind === "markdown" && (
-          <button className="btn btn-sm" onClick={() => setShowSource((value) => !value)}>
-            {showSource ? "看排版" : "看源码"}
+        <div className={s.actions}>
+          {format === "md" && preview.data?.kind === "markdown" && (
+            <button className="btn btn-sm" onClick={() => setShowSource((value) => !value)}>
+              {showSource ? "看排版" : "看源码"}
+            </button>
+          )}
+          <button className="btn btn-sm" onClick={() => void handleDownload()}>
+            下载
           </button>
-        )}
-        <button className="btn btn-sm" onClick={() => void handleDownload()}>
-          下载
-        </button>
+        </div>
       </div>
       {downloadError && <div className={s.error}>{downloadError}</div>}
       {pilotView && book?.pilot && (
@@ -150,7 +152,7 @@ export function ReaderPage() {
         </div>
       )}
 
-      <div className={s.viewer}>
+      <div className={s.viewer} aria-busy={preview.isPending}>
         {preview.isPending ? (
           <div className={s.state}>正在准备{current.label}…第一次阅读某个格式时会先生成导出，可能需要一两分钟。</div>
         ) : preview.isError ? (

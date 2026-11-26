@@ -79,6 +79,9 @@ const PAIRS: [string, string, number][] = [
   ["--text-muted", "--bg-root", 4.5],
   ["--text-muted", "--bg-panel", 4.5],
   ["--text-muted", "--bg-panel-alt", 4.5],
+  ["--text-muted", "--hero-bg", 4.5],
+  ["--text-secondary", "--bg-rail", 4.5],
+  ["--brand", "--brand-soft", 4.5],
   // Status words.
   ["--blue", "--bg-panel", 4.5],
   ["--blue", "--blue-light", 4.5],
@@ -90,6 +93,8 @@ const PAIRS: [string, string, number][] = [
   ["--red", "--red-light", 4.5],
   // Filled controls.
   ["--text-inverse", "--ink", 4.5],
+  ["--on-brand", "--brand", 4.5],
+  ["--on-brand", "--brand-hover", 4.5],
   ["--white", "--red", 4.5],
   // A control's boundary is not text: AA asks 3:1 of it, same as the focus ring.
   ["--border-strong", "--bg-panel", 3],

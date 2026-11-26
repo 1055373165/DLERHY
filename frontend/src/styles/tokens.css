@@ -7,17 +7,17 @@
   color-scheme: light dark;
 
   /* ── Ink scale ── */
-  --ink: #111111;
-  --ink-light: #333333;
-  --gray-900: #1a1a1a;
-  --gray-700: #4a4a4a;
-  --gray-600: #5e5e5e;
+  --ink: #1a2220;
+  --ink-light: #33423d;
+  --gray-900: #202723;
+  --gray-700: #47534c;
+  --gray-600: #59655d;
   --gray-500: #6b6b6b;
   --gray-400: #8a8a8a;
-  --gray-300: #949494;
-  --gray-200: #e5e5e5;
-  --gray-100: #f2f2f2;
-  --gray-50: #fafafa;
+  --gray-300: #88948a;
+  --gray-200: #e1e6df;
+  --gray-100: #eef1eb;
+  --gray-50: #f6f7f2;
   --white: #ffffff;
 
   /* ── Signal colours (status only) ── */
@@ -30,6 +30,14 @@
   --red: #c81e1e;
   --red-light: #fef2f2;
 
+  --brand: #245842;
+  --brand-hover: #194834;
+  --brand-soft: #e3efe6;
+  --on-brand: #ffffff;
+  --bg-rail: #f0f3ed;
+  --hero-bg: #e9f0e7;
+  --hero-line: #c8ddce;
+
   /* ── Surfaces ── */
   --bg-root: var(--gray-50);
   --bg-panel: var(--white);
@@ -37,7 +45,7 @@
   --bg-input: var(--white);
   --bg-hover: var(--gray-100);
   --bg-active: var(--gray-100);
-  --bg-selection: #bfdbfe;
+  --bg-selection: #d3eadb;
   --bg-scrim: rgba(17, 17, 17, 0.35);
 
   /* ── Text ── */
@@ -46,7 +54,7 @@
   /* Still AA on every surface: the old muted grey was not. */
   --text-muted: var(--gray-600);
   --text-bright: var(--ink);
-  --text-accent: var(--blue);
+  --text-accent: var(--brand);
   --text-amber: var(--amber);
   --text-cyan: var(--blue);
   --text-red: var(--red);
@@ -56,8 +64,8 @@
   /* ── Borders ── */
   --border: var(--gray-200);
   --border-strong: var(--gray-300);
-  --border-accent: var(--blue);
-  --focus-ring: var(--blue);
+  --border-accent: var(--brand);
+  --focus-ring: var(--brand);
 
   /* ── Status ── */
   --status-active: var(--blue);
@@ -92,8 +100,9 @@
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", monospace;
   --font-cjk: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --font-body: var(--font-sans);
+  --font-body: var(--font-sans), var(--font-cjk);
   --font-display: var(--font-cjk), var(--font-sans);
+  --font-editorial: Georgia, "Songti SC", "Noto Serif CJK SC", "SimSun", var(--font-cjk);
 
   /* One scale, used everywhere: caption → label → body → lead → titles. */
   --text-xs: 0.75rem;     /* 12px · captions, timestamps */
@@ -111,11 +120,11 @@
   --weight-semibold: 600;
 
   /* ── Layout ── */
-  --sidebar-width: 168px;
-  --sidebar-width-narrow: 168px;
-  --topbar-height: 48px;
-  --content-max: 1180px;
-  --content-pad: var(--sp-6);
+  --sidebar-width: 208px;
+  --mobile-nav-height: 70px;
+  --topbar-height: 60px;
+  --content-max: 1280px;
+  --content-pad: clamp(20px, 3.3vw, 48px);
 }
 
 /* Dark mode: same tokens, different values. Nothing outside this file hard-codes a colour. */
@@ -130,7 +139,7 @@
     --gray-400: #71717a;
     --gray-300: #3f3f46;
     --gray-200: #2e2e35;
-    --gray-100: #26262c;
+    --gray-100: #27312b;
     --gray-50: #18181b;
     --white: #101013;
 
@@ -143,23 +152,31 @@
     --red: #ff8f8f;
     --red-light: #3a1d1d;
 
-    --bg-root: #131316;
-    --bg-panel: #1b1b20;
-    --bg-panel-alt: #23232a;
-    --bg-input: #1b1b20;
-    --bg-hover: #26262c;
-    --bg-active: #2c2c34;
-    --bg-selection: #2b4a7d;
+    --brand: #a6d8b8;
+    --brand-hover: #c4ead1;
+    --brand-soft: #253d30;
+    --on-brand: #13241a;
+    --bg-rail: #18201b;
+    --hero-bg: #202e25;
+    --hero-line: #334b3d;
+
+    --bg-root: #141917;
+    --bg-panel: #1c2420;
+    --bg-panel-alt: #242f29;
+    --bg-input: #1c2420;
+    --bg-hover: #27312b;
+    --bg-active: #2c3a32;
+    --bg-selection: #305641;
     --bg-scrim: rgba(0, 0, 0, 0.6);
 
     --text-primary: #f4f4f5;
-    --text-secondary: #d4d4d8;
-    --text-muted: #a9a9b2;
+    --text-secondary: #d0d9d2;
+    --text-muted: #a9b7ad;
     --text-inverse: #101013;
     --text-on-accent: #101013;
 
-    --border: #32323a;
-    --border-strong: #6e6e7a;
+    --border: #35433a;
+    --border-strong: #79897f;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
     --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.55);
     --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.65);
@@ -177,7 +194,7 @@
   --gray-400: #71717a;
   --gray-300: #3f3f46;
   --gray-200: #2e2e35;
-  --gray-100: #26262c;
+  --gray-100: #27312b;
   --gray-50: #18181b;
   --white: #101013;
 
@@ -190,24 +207,35 @@
   --red: #ff8f8f;
   --red-light: #3a1d1d;
 
-  --bg-root: #131316;
-  --bg-panel: #1b1b20;
-  --bg-panel-alt: #23232a;
-  --bg-input: #1b1b20;
-  --bg-hover: #26262c;
-  --bg-active: #2c2c34;
-  --bg-selection: #2b4a7d;
+  --brand: #a6d8b8;
+  --brand-hover: #c4ead1;
+  --brand-soft: #253d30;
+  --on-brand: #13241a;
+  --bg-rail: #18201b;
+  --hero-bg: #202e25;
+  --hero-line: #334b3d;
+
+  --bg-root: #141917;
+  --bg-panel: #1c2420;
+  --bg-panel-alt: #242f29;
+  --bg-input: #1c2420;
+  --bg-hover: #27312b;
+  --bg-active: #2c3a32;
+  --bg-selection: #305641;
   --bg-scrim: rgba(0, 0, 0, 0.6);
 
   --text-primary: #f4f4f5;
-  --text-secondary: #d4d4d8;
-  --text-muted: #a9a9b2;
+  --text-secondary: #d0d9d2;
+  --text-muted: #a9b7ad;
   --text-inverse: #101013;
   --text-on-accent: #101013;
 
-  --border: #32323a;
-  --border-strong: #6e6e7a;
+  --border: #35433a;
+  --border-strong: #79897f;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.55);
   --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.65);
 }
+
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
