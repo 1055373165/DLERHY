@@ -414,6 +414,20 @@ class PostgresWorkflowIntegrationTests(unittest.TestCase):
                 archive.writestr(f"OEBPS/{href}", content)
         return epub_path
 
+    def test_postgres_document_history_searches_title_and_uuid_prefix(self) -> None:
+        epub_path = self._write_epub(f"history-search-{uuid4()}")
+
+        with session_scope(self.session_factory, commit_on_exit=False) as session:
+            service = DocumentWorkflowService(session, export_root=self.export_root)
+            document = service.bootstrap_epub(epub_path)
+
+            for query in (epub_path.stem, document.document_id[:8]):
+                with self.subTest(query=query):
+                    history = service.list_document_history(query=query.upper())
+                    self.assertEqual([entry.document_id for entry in history.entries], [document.document_id])
+
+            self.assertEqual(service.list_document_history(query=str(uuid4())).total_count, 0)
+
     def test_postgres_document_workflow_happy_path(self) -> None:
         epub_path = self._write_epub("happy-path")
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from book_agent.application import analytics
@@ -181,7 +181,7 @@ class DocumentQueryService:
             like_pattern = f"%{normalized_query}%"
             statement = statement.where(
                 or_(
-                    Document.id.ilike(like_pattern),
+                    cast(Document.id, String).ilike(like_pattern),
                     Document.title.ilike(like_pattern),
                     Document.title_src.ilike(like_pattern),
                     Document.title_tgt.ilike(like_pattern),
